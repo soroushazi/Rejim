@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import DietPlan, FoodItem, FoodLog, ReferenceMeal, ReferenceMealItem
+from .models import DietPlan, FoodItem, FoodLog, QuickLogItem, ReferenceMeal, ReferenceMealItem
 
 
 class FoodItemSerializer(serializers.ModelSerializer):
@@ -21,6 +21,25 @@ class FoodItemSerializer(serializers.ModelSerializer):
         ]
 
 
+class QuickLogItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuickLogItem
+        fields = [
+            "id",
+            "trainee",
+            "name",
+            "calories",
+            "protein_g",
+            "carbs_g",
+            "fat_g",
+            "fiber_g",
+            "sugar_g",
+            "sodium_mg",
+            "created_at",
+        ]
+        read_only_fields = ["trainee", "created_at"]
+
+
 class DietPlanSerializer(serializers.ModelSerializer):
     class Meta:
         model = DietPlan
@@ -37,7 +56,7 @@ class DietPlanSerializer(serializers.ModelSerializer):
 class ReferenceMealSerializer(serializers.ModelSerializer):
     class Meta:
         model = ReferenceMeal
-        fields = ["id", "diet_plan", "label", "order"]
+        fields = ["id", "diet_plan", "label", "day_of_week", "order"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -64,12 +83,27 @@ class ReferenceMealItemSerializer(serializers.ModelSerializer):
 
 
 class FoodLogSerializer(serializers.ModelSerializer):
-    actual_nutrients = serializers.SerializerMethodField()
-
     class Meta:
         model = FoodLog
-        fields = ["id", "trainee", "reference_meal_item", "actual_weight_grams", "logged_at", "actual_nutrients"]
-        read_only_fields = ["trainee"]
+        fields = [
+            "id",
+            "trainee",
+            "source",
+            "reference_meal_item",
+            "food_item",
+            "quick_log_item",
+            "actual_weight_grams",
+            "logged_at",
+            "calories",
+            "protein_g",
+            "carbs_g",
+            "fat_g",
+            "fiber_g",
+            "sugar_g",
+            "sodium_mg",
+        ]
+        read_only_fields = ["trainee", "calories", "protein_g", "carbs_g", "fat_g", "fiber_g", "sugar_g", "sodium_mg"]
+        extra_kwargs = {"source": {"required": True}}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -78,6 +112,16 @@ class FoodLogSerializer(serializers.ModelSerializer):
             self.fields["reference_meal_item"].queryset = ReferenceMealItem.objects.filter(
                 meal__diet_plan__trainee=request.user
             )
+            self.fields["food_item"].queryset = FoodItem.objects.all()
+            self.fields["quick_log_item"].queryset = QuickLogItem.objects.filter(trainee=request.user)
 
-    def get_actual_nutrients(self, obj):
-        return obj.actual_nutrients()
+    def validate(self, attrs):
+        source = attrs.get("source")
+        linked = [attrs.get("reference_meal_item"), attrs.get("food_item"), attrs.get("quick_log_item")]
+        if sum(bool(x) for x in linked) != 1:
+            raise serializers.ValidationError(
+                "Exactly one of reference_meal_item, food_item, or quick_log_item must be set."
+            )
+        if source != FoodLog.Source.QUICK and attrs.get("actual_weight_grams") is None:
+            raise serializers.ValidationError("actual_weight_grams is required unless source is 'quick'.")
+        return attrs

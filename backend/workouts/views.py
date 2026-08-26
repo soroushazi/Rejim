@@ -3,15 +3,29 @@ from rest_framework import viewsets
 from accounts.mixins import TraineeScopedQuerysetMixin
 from accounts.permissions import IsTraineeWriteTrainerReadOnly, IsTrainerWriteTraineeReadOnly
 
-from .models import LoggedExercise, LoggedSet, PlanDay, PlanExercise, WorkoutPlan, WorkoutSession
+from .models import Exercise, LoggedExercise, LoggedSet, MuscleGroup, PlanDay, PlanExercise, WorkoutPlan, WorkoutSession
 from .serializers import (
+    ExerciseSerializer,
     LoggedExerciseSerializer,
     LoggedSetSerializer,
+    MuscleGroupSerializer,
     PlanDaySerializer,
     PlanExerciseSerializer,
     WorkoutPlanSerializer,
     WorkoutSessionSerializer,
 )
+
+
+class MuscleGroupViewSet(viewsets.ModelViewSet):
+    queryset = MuscleGroup.objects.all()
+    serializer_class = MuscleGroupSerializer
+    permission_classes = [IsTrainerWriteTraineeReadOnly]
+
+
+class ExerciseViewSet(viewsets.ModelViewSet):
+    queryset = Exercise.objects.all()
+    serializer_class = ExerciseSerializer
+    permission_classes = [IsTrainerWriteTraineeReadOnly]
 
 
 class WorkoutPlanViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):

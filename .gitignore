@@ -2,5 +2,6 @@ __pycache__/
 *.pyc
 backend/.venv/
 backend/db.sqlite3
+backend/media/
 node_modules/
 .env

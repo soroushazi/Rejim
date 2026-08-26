@@ -1,9 +1,17 @@
 from rest_framework.routers import DefaultRouter
 
-from .views import DietPlanViewSet, FoodItemViewSet, FoodLogViewSet, ReferenceMealItemViewSet, ReferenceMealViewSet
+from .views import (
+    DietPlanViewSet,
+    FoodItemViewSet,
+    FoodLogViewSet,
+    QuickLogItemViewSet,
+    ReferenceMealItemViewSet,
+    ReferenceMealViewSet,
+)
 
 router = DefaultRouter()
 router.register("food-items", FoodItemViewSet, basename="fooditem")
+router.register("quick-log-items", QuickLogItemViewSet, basename="quicklogitem")
 router.register("diet-plans", DietPlanViewSet, basename="dietplan")
 router.register("reference-meals", ReferenceMealViewSet, basename="referencemeal")
 router.register("reference-meal-items", ReferenceMealItemViewSet, basename="referencemealitem")

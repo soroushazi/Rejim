@@ -3,11 +3,12 @@ from rest_framework import viewsets
 from accounts.mixins import TraineeScopedQuerysetMixin
 from accounts.permissions import IsTraineeWriteTrainerReadOnly, IsTrainerWriteTraineeReadOnly
 
-from .models import DietPlan, FoodItem, FoodLog, ReferenceMeal, ReferenceMealItem
+from .models import DietPlan, FoodItem, FoodLog, QuickLogItem, ReferenceMeal, ReferenceMealItem
 from .serializers import (
     DietPlanSerializer,
     FoodItemSerializer,
     FoodLogSerializer,
+    QuickLogItemSerializer,
     ReferenceMealItemSerializer,
     ReferenceMealSerializer,
 )
@@ -17,6 +18,16 @@ class FoodItemViewSet(viewsets.ModelViewSet):
     queryset = FoodItem.objects.all()
     serializer_class = FoodItemSerializer
     permission_classes = [IsTrainerWriteTraineeReadOnly]
+
+
+class QuickLogItemViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
+    queryset = QuickLogItem.objects.all()
+    serializer_class = QuickLogItemSerializer
+    permission_classes = [IsTraineeWriteTrainerReadOnly]
+    trainee_path = "trainee"
+
+    def perform_create(self, serializer):
+        serializer.save(trainee=self.request.user)
 
 
 class DietPlanViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):

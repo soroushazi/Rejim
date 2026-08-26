@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import LoggedExercise, LoggedSet, PlanDay, PlanExercise, WorkoutPlan, WorkoutSession
+from .models import Exercise, LoggedExercise, LoggedSet, MuscleGroup, PlanDay, PlanExercise, WorkoutPlan, WorkoutSession
 
 
 class PlanDayInline(admin.TabularInline):
@@ -23,6 +23,20 @@ class LoggedSetInline(admin.TabularInline):
     extra = 0
 
 
+@admin.register(MuscleGroup)
+class MuscleGroupAdmin(admin.ModelAdmin):
+    list_display = ("name",)
+    search_fields = ("name",)
+
+
+@admin.register(Exercise)
+class ExerciseAdmin(admin.ModelAdmin):
+    list_display = ("name", "difficulty_level")
+    list_filter = ("difficulty_level", "muscle_groups")
+    search_fields = ("name",)
+    filter_horizontal = ("muscle_groups", "alternatives")
+
+
 @admin.register(WorkoutPlan)
 class WorkoutPlanAdmin(admin.ModelAdmin):
     list_display = ("name", "trainee", "created_at")
@@ -31,7 +45,7 @@ class WorkoutPlanAdmin(admin.ModelAdmin):
 
 @admin.register(PlanDay)
 class PlanDayAdmin(admin.ModelAdmin):
-    list_display = ("plan", "label", "order")
+    list_display = ("plan", "label", "day_of_week", "order")
     inlines = [PlanExerciseInline]
 
 

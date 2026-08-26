@@ -1,6 +1,36 @@
 from rest_framework import serializers
 
-from .models import LoggedExercise, LoggedSet, PlanDay, PlanExercise, WorkoutPlan, WorkoutSession
+from .models import (
+    Exercise,
+    LoggedExercise,
+    LoggedSet,
+    MuscleGroup,
+    PlanDay,
+    PlanExercise,
+    WorkoutPlan,
+    WorkoutSession,
+)
+
+
+class MuscleGroupSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MuscleGroup
+        fields = ["id", "name"]
+
+
+class ExerciseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Exercise
+        fields = [
+            "id",
+            "name",
+            "description",
+            "muscle_groups",
+            "difficulty_level",
+            "image",
+            "video_url",
+            "alternatives",
+        ]
 
 
 class WorkoutPlanSerializer(serializers.ModelSerializer):
@@ -19,7 +49,7 @@ class WorkoutPlanSerializer(serializers.ModelSerializer):
 class PlanDaySerializer(serializers.ModelSerializer):
     class Meta:
         model = PlanDay
-        fields = ["id", "plan", "label", "order"]
+        fields = ["id", "plan", "label", "day_of_week", "order"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -31,13 +61,14 @@ class PlanDaySerializer(serializers.ModelSerializer):
 class PlanExerciseSerializer(serializers.ModelSerializer):
     class Meta:
         model = PlanExercise
-        fields = ["id", "day", "name", "target_sets", "target_reps", "default_rest_seconds", "order"]
+        fields = ["id", "day", "exercise", "target_sets", "target_reps", "default_rest_seconds", "order"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         request = self.context.get("request")
         if request is not None:
             self.fields["day"].queryset = PlanDay.objects.filter(plan__trainee__trainer=request.user)
+            self.fields["exercise"].queryset = Exercise.objects.all()
 
 
 class WorkoutSessionSerializer(serializers.ModelSerializer):
@@ -69,7 +100,7 @@ class LoggedExerciseSerializer(serializers.ModelSerializer):
 class LoggedSetSerializer(serializers.ModelSerializer):
     class Meta:
         model = LoggedSet
-        fields = ["id", "logged_exercise", "set_number", "weight", "reps_done", "rest_seconds"]
+        fields = ["id", "logged_exercise", "set_number", "weight", "weight_unit", "reps_done", "rest_seconds"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
