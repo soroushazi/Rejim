@@ -8,6 +8,11 @@ NUTRIENT_FIELDS = (
     "fiber_g",
     "sugar_g",
     "sodium_mg",
+    "potassium_mg",
+    "calcium_mg",
+    "iron_mg",
+    "vitamin_c_mg",
+    "vitamin_a_mcg",
 )
 
 
