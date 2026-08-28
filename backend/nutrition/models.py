@@ -9,7 +9,7 @@ from django.utils import timezone
 from accounts.models import User
 from workouts.models import DayOfWeek
 
-from .services import NUTRIENT_FIELDS, scale_nutrients
+from .services import NUTRIENT_FIELDS, average_nutrients, scale_nutrients, sum_nutrients
 
 
 class FoodItem(models.Model):
@@ -174,6 +174,11 @@ class DietPlan(models.Model):
     def __str__(self):
         return f"{self.name} ({self.trainee})"
 
+    def average_daily_nutrients(self):
+        """Sum of each meal's average across the whole plan - the expected daily
+        total when the trainee picks one option per meal."""
+        return sum_nutrients([meal.average_nutrients() for meal in self.meals.all()])
+
 
 class ReferenceMeal(models.Model):
     diet_plan = models.ForeignKey(DietPlan, on_delete=models.CASCADE, related_name="meals")
@@ -187,17 +192,71 @@ class ReferenceMeal(models.Model):
     def __str__(self):
         return f"{self.diet_plan.name} - {self.label}"
 
+    def average_nutrients(self):
+        """Mean across this meal's options - a trainee picks one option, not all of
+        them, so this is a representative average rather than a sum."""
+        return average_nutrients([option.reference_nutrients() for option in self.options.all()])
+
+
+class MealOption(models.Model):
+    """One alternative for a ReferenceMeal (e.g. "Option A - Smoothie"). A trainee
+    picks exactly one option per meal per day; options are not combined."""
+
+    meal = models.ForeignKey(ReferenceMeal, on_delete=models.CASCADE, related_name="options")
+    label = models.CharField(max_length=100)
+    order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order"]
+
+    def __str__(self):
+        return f"{self.meal} - {self.label}"
+
+    def reference_nutrients(self):
+        return sum_nutrients([item.reference_nutrients() for item in self.items.all()])
+
 
 class ReferenceMealItem(models.Model):
-    meal = models.ForeignKey(ReferenceMeal, on_delete=models.CASCADE, related_name="items")
+    option = models.ForeignKey(MealOption, on_delete=models.CASCADE, related_name="items")
     food_item = models.ForeignKey(FoodItem, on_delete=models.PROTECT, related_name="reference_meal_items")
     reference_weight_grams = models.DecimalField(max_digits=7, decimal_places=2)
 
     def __str__(self):
-        return f"{self.meal} - {self.food_item.name} ({self.reference_weight_grams}g)"
+        return f"{self.option} - {self.food_item.name} ({self.reference_weight_grams}g)"
 
     def reference_nutrients(self):
         return self.food_item.nutrients_for_weight(self.reference_weight_grams)
+
+
+class LoggedMeal(models.Model):
+    """A trainee's log of one meal slot on one date: either the plan's chosen
+    option (weights may be edited from the reference) or a custom, off-plan swap
+    built from the food bank. One per trainee/meal-slot/date - re-logging replaces
+    it rather than adding a second entry for the same meal that day."""
+
+    class Source(models.TextChoices):
+        PLAN = "plan", "From plan"
+        CUSTOM = "custom", "Custom (off plan)"
+
+    trainee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        limit_choices_to={"role": "trainee"},
+        related_name="logged_meals",
+    )
+    reference_meal = models.ForeignKey(ReferenceMeal, on_delete=models.PROTECT, related_name="logged_meals")
+    date = models.DateField()
+    source = models.CharField(max_length=10, choices=Source.choices)
+
+    class Meta:
+        unique_together = ("trainee", "reference_meal", "date")
+        ordering = ["reference_meal__order"]
+
+    def __str__(self):
+        return f"{self.trainee} - {self.reference_meal.label} - {self.date}"
+
+    def total_nutrients(self):
+        return sum_nutrients([item.actual_nutrients() for item in self.items.all()])
 
 
 class FoodLog(models.Model):
@@ -222,6 +281,11 @@ class FoodLog(models.Model):
     food_item = models.ForeignKey(FoodItem, on_delete=models.PROTECT, related_name="logs", null=True, blank=True)
     quick_log_item = models.ForeignKey(
         QuickLogItem, on_delete=models.PROTECT, related_name="logs", null=True, blank=True
+    )
+    # Set when this row is one ingredient of a structured meal-slot log (the Log tab);
+    # left null for ad hoc logs (barcode/manual/quick) that aren't tied to a meal slot.
+    logged_meal = models.ForeignKey(
+        LoggedMeal, on_delete=models.CASCADE, related_name="items", null=True, blank=True
     )
     actual_weight_grams = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
     logged_at = models.DateTimeField(default=timezone.now)

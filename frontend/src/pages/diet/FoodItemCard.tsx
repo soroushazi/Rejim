@@ -5,7 +5,7 @@ import type { FoodItem } from '../../api/types'
 import { SERVING_UNIT_NOUN } from '@/lib/servingUnits'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn, round } from '@/lib/utils'
 
 const MICRO_FIELDS: { key: keyof FoodItem; label: string; unit: string }[] = [
   { key: 'fiber_g_per_100g', label: 'Fiber', unit: 'g' },
@@ -17,10 +17,6 @@ const MICRO_FIELDS: { key: keyof FoodItem; label: string; unit: string }[] = [
   { key: 'vitamin_c_mg_per_100g', label: 'Vitamin C', unit: 'mg' },
   { key: 'vitamin_a_mcg_per_100g', label: 'Vitamin A', unit: 'mcg' },
 ]
-
-function round(value: number) {
-  return Number.isInteger(value) ? value : Math.round(value * 10) / 10
-}
 
 export default function FoodItemCard({
   item,

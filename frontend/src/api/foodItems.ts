@@ -6,6 +6,10 @@ export function listFoodItems(search: string): Promise<FoodItem[]> {
   return apiFetch<FoodItem[]>(`/nutrition/food-items/${query}`)
 }
 
+export function getFoodItem(id: number): Promise<FoodItem> {
+  return apiFetch<FoodItem>(`/nutrition/food-items/${id}/`)
+}
+
 export function createFoodItem(data: NewFoodItem): Promise<FoodItem> {
   return apiFetch<FoodItem>('/nutrition/food-items/', {
     method: 'POST',

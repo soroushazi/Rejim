@@ -47,6 +47,92 @@ export type FoodItem = {
   components: FoodItemComponent[]
 }
 
+export type Nutrients = {
+  calories: number | null
+  protein_g: number | null
+  carbs_g: number | null
+  fat_g: number | null
+  fiber_g: number | null
+  sugar_g: number | null
+  sodium_mg: number | null
+  potassium_mg: number | null
+  calcium_mg: number | null
+  iron_mg: number | null
+  vitamin_c_mg: number | null
+  vitamin_a_mcg: number | null
+}
+
+export type DietPlanSummary = {
+  id: number
+  trainee: number
+  name: string
+  created_at: string
+}
+
+export type ReferenceMealItemDetail = {
+  id: number
+  food_item: number
+  food_item_name: string
+  reference_weight_grams: string
+  reference_nutrients: Nutrients
+}
+
+export type MealOptionDetail = {
+  id: number
+  label: string
+  order: number
+  items: ReferenceMealItemDetail[]
+  nutrients: Nutrients
+}
+
+export type ReferenceMealDetail = {
+  id: number
+  label: string
+  day_of_week: number | null
+  order: number
+  options: MealOptionDetail[]
+  average_nutrients: Nutrients
+}
+
+export type DietPlanDetail = DietPlanSummary & {
+  meals: ReferenceMealDetail[]
+  average_daily_nutrients: Nutrients
+}
+
+export type LoggedMealSource = 'plan' | 'custom'
+
+export type LoggedMealItem = {
+  id: number
+  reference_meal_item: number | null
+  food_item: number | null
+  food_item_name: string
+  actual_weight_grams: string
+  actual_nutrients: Nutrients
+}
+
+export type LoggedMeal = {
+  id: number
+  trainee: number
+  reference_meal: number
+  reference_meal_label: string
+  date: string
+  source: LoggedMealSource
+  meal_option_label: string | null
+  items: LoggedMealItem[]
+  total_nutrients: Nutrients
+}
+
+export type NewLoggedMealItem =
+  | { reference_meal_item: number; actual_weight_grams: string }
+  | { food_item: number; actual_weight_grams: string }
+
+export type NewLoggedMeal = {
+  reference_meal: number
+  date: string
+  source: LoggedMealSource
+  items: NewLoggedMealItem[]
+}
+
 export type NewFoodItemComponent = {
   ingredient: number
   weight_grams: string

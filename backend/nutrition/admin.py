@@ -1,10 +1,15 @@
 from django.contrib import admin
 
-from .models import DietPlan, FoodItem, FoodLog, QuickLogItem, ReferenceMeal, ReferenceMealItem
+from .models import DietPlan, FoodItem, FoodLog, LoggedMeal, MealOption, QuickLogItem, ReferenceMeal, ReferenceMealItem
 
 
 class ReferenceMealInline(admin.TabularInline):
     model = ReferenceMeal
+    extra = 1
+
+
+class MealOptionInline(admin.TabularInline):
+    model = MealOption
     extra = 1
 
 
@@ -36,6 +41,12 @@ class DietPlanAdmin(admin.ModelAdmin):
 @admin.register(ReferenceMeal)
 class ReferenceMealAdmin(admin.ModelAdmin):
     list_display = ("diet_plan", "label", "day_of_week", "order")
+    inlines = [MealOptionInline]
+
+
+@admin.register(MealOption)
+class MealOptionAdmin(admin.ModelAdmin):
+    list_display = ("meal", "label", "order")
     inlines = [ReferenceMealItemInline]
 
 
@@ -43,3 +54,18 @@ class ReferenceMealAdmin(admin.ModelAdmin):
 class FoodLogAdmin(admin.ModelAdmin):
     list_display = ("trainee", "source", "actual_weight_grams", "calories", "logged_at")
     list_filter = ("trainee", "source")
+
+
+class LoggedMealItemInline(admin.TabularInline):
+    model = FoodLog
+    fk_name = "logged_meal"
+    extra = 0
+    fields = ("source", "reference_meal_item", "food_item", "actual_weight_grams", "calories")
+    readonly_fields = ("calories",)
+
+
+@admin.register(LoggedMeal)
+class LoggedMealAdmin(admin.ModelAdmin):
+    list_display = ("trainee", "reference_meal", "date", "source")
+    list_filter = ("trainee", "source")
+    inlines = [LoggedMealItemInline]

@@ -5,12 +5,15 @@ from rest_framework.response import Response
 from accounts.mixins import TraineeScopedQuerysetMixin
 from accounts.permissions import IsTrainer, IsTraineeWriteTrainerReadOnly, IsTrainerWriteTraineeReadOnly
 
-from .models import DietPlan, FoodItem, FoodLog, QuickLogItem, ReferenceMeal, ReferenceMealItem
+from .models import DietPlan, FoodItem, FoodLog, LoggedMeal, MealOption, QuickLogItem, ReferenceMeal, ReferenceMealItem
 from .permissions import FoodItemWritePermission
 from .serializers import (
+    DietPlanDetailSerializer,
     DietPlanSerializer,
     FoodItemSerializer,
     FoodLogSerializer,
+    LoggedMealSerializer,
+    MealOptionSerializer,
     QuickLogItemSerializer,
     ReferenceMealItemSerializer,
     ReferenceMealSerializer,
@@ -53,6 +56,17 @@ class DietPlanViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
     permission_classes = [IsTrainerWriteTraineeReadOnly]
     trainee_path = "trainee"
 
+    def get_serializer_class(self):
+        if self.action == "retrieve":
+            return DietPlanDetailSerializer
+        return DietPlanSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if self.action == "retrieve":
+            queryset = queryset.prefetch_related("meals__options__items__food_item")
+        return queryset
+
 
 class ReferenceMealViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = ReferenceMeal.objects.all()
@@ -61,11 +75,18 @@ class ReferenceMealViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
     trainee_path = "diet_plan__trainee"
 
 
+class MealOptionViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
+    queryset = MealOption.objects.all()
+    serializer_class = MealOptionSerializer
+    permission_classes = [IsTrainerWriteTraineeReadOnly]
+    trainee_path = "meal__diet_plan__trainee"
+
+
 class ReferenceMealItemViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = ReferenceMealItem.objects.all()
     serializer_class = ReferenceMealItemSerializer
     permission_classes = [IsTrainerWriteTraineeReadOnly]
-    trainee_path = "meal__diet_plan__trainee"
+    trainee_path = "option__meal__diet_plan__trainee"
 
 
 class FoodLogViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
@@ -76,3 +97,19 @@ class FoodLogViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(trainee=self.request.user)
+
+
+class LoggedMealViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
+    queryset = LoggedMeal.objects.all()
+    serializer_class = LoggedMealSerializer
+    permission_classes = [IsTraineeWriteTrainerReadOnly]
+    trainee_path = "trainee"
+
+    def get_queryset(self):
+        queryset = super().get_queryset().prefetch_related(
+            "items__food_item", "items__reference_meal_item__food_item", "items__reference_meal_item__option"
+        )
+        date = self.request.query_params.get("date")
+        if date:
+            queryset = queryset.filter(date=date)
+        return queryset
