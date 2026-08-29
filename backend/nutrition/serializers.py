@@ -3,11 +3,13 @@ from rest_framework import serializers
 from accounts.models import User
 
 from .models import (
+    DietaryTag,
     DietPlan,
     FoodItem,
     FoodItemComponent,
     FoodLog,
     LoggedMeal,
+    MacroFilter,
     MealOption,
     QuickLogItem,
     ReferenceMeal,
@@ -15,6 +17,18 @@ from .models import (
 )
 
 MACRO_FIELDS = ["calories_per_100g", "protein_g_per_100g", "carbs_g_per_100g", "fat_g_per_100g"]
+
+
+class MacroFilterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MacroFilter
+        fields = ["id", "name"]
+
+
+class DietaryTagSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DietaryTag
+        fields = ["id", "name"]
 
 
 class FoodItemComponentSerializer(serializers.ModelSerializer):
@@ -51,6 +65,8 @@ class FoodItemSerializer(serializers.ModelSerializer):
             "iron_mg_per_100g",
             "vitamin_c_mg_per_100g",
             "vitamin_a_mcg_per_100g",
+            "macro_filters",
+            "dietary_tags",
             "visibility",
             "approval_status",
             "created_by",
@@ -97,6 +113,8 @@ class FoodItemSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         components_data = validated_data.pop("components", [])
+        macro_filters = validated_data.pop("macro_filters", None)
+        dietary_tags = validated_data.pop("dietary_tags", None)
         user = self.context["request"].user
         validated_data["visibility"], validated_data["approval_status"] = self._visibility_and_approval(
             user, validated_data.get("visibility")
@@ -107,6 +125,10 @@ class FoodItemSerializer(serializers.ModelSerializer):
                 validated_data.setdefault(field, 0)
 
         food_item = FoodItem.objects.create(**validated_data)
+        if macro_filters is not None:
+            food_item.macro_filters.set(macro_filters)
+        if dietary_tags is not None:
+            food_item.dietary_tags.set(dietary_tags)
         for component in components_data:
             FoodItemComponent.objects.create(composite=food_item, **component)
         if food_item.kind == FoodItem.Kind.COMPOSITE:

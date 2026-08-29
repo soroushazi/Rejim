@@ -2,22 +2,10 @@ import { useEffect, useState } from 'react'
 import { getDietPlan, listDietPlans } from '@/api/dietPlan'
 import type { DietPlanDetail } from '@/api/types'
 import { Button } from '@/components/ui/button'
+import { addDays, toDateKey } from '@/lib/date'
 import LogDayCard from './LogDayCard'
 
 const DAYS_PER_PAGE = 6
-
-function toDateKey(d: Date) {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-
-function addDays(dateKey: string, delta: number) {
-  const d = new Date(`${dateKey}T00:00:00`)
-  d.setDate(d.getDate() + delta)
-  return toDateKey(d)
-}
 
 export default function LogPage() {
   const [plan, setPlan] = useState<DietPlanDetail | null>(null)

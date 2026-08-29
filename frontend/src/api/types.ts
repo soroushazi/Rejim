@@ -20,6 +20,16 @@ export type FoodItemComponent = {
   weight_grams: string
 }
 
+export type MacroFilter = {
+  id: number
+  name: string
+}
+
+export type DietaryTag = {
+  id: number
+  name: string
+}
+
 export type FoodItem = {
   id: number
   name: string
@@ -40,6 +50,8 @@ export type FoodItem = {
   iron_mg_per_100g: string | null
   vitamin_c_mg_per_100g: string | null
   vitamin_a_mcg_per_100g: string | null
+  macro_filters: number[]
+  dietary_tags: number[]
   visibility: FoodItemVisibility
   approval_status: FoodItemApprovalStatus
   created_by: number | null
@@ -157,5 +169,131 @@ export type NewFoodItem = {
   iron_mg_per_100g?: string | null
   vitamin_c_mg_per_100g?: string | null
   vitamin_a_mcg_per_100g?: string | null
+  macro_filters?: number[]
+  dietary_tags?: number[]
   components?: NewFoodItemComponent[]
+}
+
+export type ExerciseDifficulty = 'beginner' | 'intermediate' | 'advanced'
+
+export type MuscleGroup = {
+  id: number
+  name: string
+}
+
+export type Exercise = {
+  id: number
+  name: string
+  description: string
+  equipment: string
+  primary_muscle_groups: number[]
+  secondary_muscle_groups: number[]
+  difficulty_level: ExerciseDifficulty
+  image: string | null
+  video_url: string | null
+  alternatives: number[]
+}
+
+export type WorkoutPlanSummary = {
+  id: number
+  trainee: number
+  name: string
+  sessions_per_week: number
+  created_at: string
+}
+
+export type PlanExerciseDetail = {
+  id: number
+  exercise: number
+  exercise_name: string
+  target_sets: number
+  target_reps_min: number
+  target_reps_max: number
+  default_rest_seconds: number
+  order: number
+  notes: string
+}
+
+export type PlanSessionDetail = {
+  id: number
+  label: string
+  order: number
+  notes: string
+  exercises: PlanExerciseDetail[]
+}
+
+export type WorkoutPlanDetail = WorkoutPlanSummary & {
+  sessions: PlanSessionDetail[]
+}
+
+export type WeightUnit = 'kg' | 'lb'
+
+export type LoggedSetEntry = {
+  id: number
+  set_number: number
+  weight: string
+  weight_unit: WeightUnit
+  reps_done: number
+  rest_seconds: number | null
+  is_warmup: boolean
+  rpe: number | null
+}
+
+export type LoggedExerciseEntry = {
+  id: number
+  plan_exercise: number
+  exercise_name: string
+  order: number
+  sets: LoggedSetEntry[]
+}
+
+export type WorkoutSessionLog = {
+  id: number
+  trainee: number
+  plan_session: number
+  plan_session_label: string
+  date: string
+  notes: string
+  duration_minutes: number | null
+  logged_exercises: LoggedExerciseEntry[]
+}
+
+export type NewLoggedSet = {
+  set_number: number
+  weight: string
+  weight_unit: WeightUnit
+  reps_done: number
+  rest_seconds?: number | null
+  is_warmup?: boolean
+  rpe?: number | null
+}
+
+export type NewLoggedExercise = {
+  plan_exercise: number
+  sets: NewLoggedSet[]
+}
+
+export type NewWorkoutSessionLog = {
+  plan_session: number
+  date: string
+  notes?: string
+  duration_minutes?: number | null
+  logged_exercises: NewLoggedExercise[]
+}
+
+/** Flat shape returned by GET /workouts/logged-sets/?exercise=<id> - one row per
+ * set across every past session for that exercise, used for the history list
+ * and chart (and, client-side, weight suggestions + PR detection). */
+export type ExerciseHistorySet = {
+  id: number
+  logged_exercise: number
+  set_number: number
+  weight: string
+  weight_unit: WeightUnit
+  reps_done: number
+  rest_seconds: number | null
+  is_warmup: boolean
+  rpe: number | null
+  session_date: string
+  exercise: number
 }

@@ -56,3 +56,22 @@ export function sumNutrients(list: Nutrients[]): Nutrients {
   }
   return result
 }
+
+/** Means a list of Nutrients objects, field by field, skipping nulls (mirrors the
+ * backend's average_nutrients). Empty input yields all-null. */
+export function averageNutrients(list: Nutrients[]): Nutrients {
+  const result = {} as Nutrients
+  for (const key of NUTRIENT_KEYS) {
+    let total = 0
+    let count = 0
+    for (const n of list) {
+      const value = n[key]
+      if (value !== null) {
+        total += value
+        count += 1
+      }
+    }
+    result[key] = count > 0 ? total / count : null
+  }
+  return result
+}

@@ -1,10 +1,10 @@
 from django.contrib import admin
 
-from .models import Exercise, LoggedExercise, LoggedSet, MuscleGroup, PlanDay, PlanExercise, WorkoutPlan, WorkoutSession
+from .models import Exercise, LoggedExercise, LoggedSet, MuscleGroup, PlanExercise, PlanSession, WorkoutPlan, WorkoutSession
 
 
-class PlanDayInline(admin.TabularInline):
-    model = PlanDay
+class PlanSessionInline(admin.TabularInline):
+    model = PlanSession
     extra = 1
 
 
@@ -31,27 +31,27 @@ class MuscleGroupAdmin(admin.ModelAdmin):
 
 @admin.register(Exercise)
 class ExerciseAdmin(admin.ModelAdmin):
-    list_display = ("name", "difficulty_level")
-    list_filter = ("difficulty_level", "muscle_groups")
+    list_display = ("name", "difficulty_level", "equipment")
+    list_filter = ("difficulty_level", "primary_muscle_groups")
     search_fields = ("name",)
-    filter_horizontal = ("muscle_groups", "alternatives")
+    filter_horizontal = ("primary_muscle_groups", "secondary_muscle_groups", "alternatives")
 
 
 @admin.register(WorkoutPlan)
 class WorkoutPlanAdmin(admin.ModelAdmin):
-    list_display = ("name", "trainee", "created_at")
-    inlines = [PlanDayInline]
+    list_display = ("name", "trainee", "sessions_per_week", "created_at")
+    inlines = [PlanSessionInline]
 
 
-@admin.register(PlanDay)
-class PlanDayAdmin(admin.ModelAdmin):
-    list_display = ("plan", "label", "day_of_week", "order")
+@admin.register(PlanSession)
+class PlanSessionAdmin(admin.ModelAdmin):
+    list_display = ("plan", "label", "order")
     inlines = [PlanExerciseInline]
 
 
 @admin.register(WorkoutSession)
 class WorkoutSessionAdmin(admin.ModelAdmin):
-    list_display = ("trainee", "plan_day", "date")
+    list_display = ("trainee", "plan_session", "date", "duration_minutes")
     inlines = [LoggedExerciseInline]
 
 

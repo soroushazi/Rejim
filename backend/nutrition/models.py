@@ -12,6 +12,34 @@ from workouts.models import DayOfWeek
 from .services import NUTRIENT_FIELDS, average_nutrients, scale_nutrients, sum_nutrients
 
 
+class MacroFilter(models.Model):
+    """Fixed macro-role taxonomy for substitution search (e.g. "show me lean
+    protein options"). Seeded by seed_food_filters_and_tags; shared reference
+    data like MuscleGroup, editable by any trainer."""
+
+    name = models.CharField(max_length=50, unique=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class DietaryTag(models.Model):
+    """Fixed dietary-restriction taxonomy (vegan, keto, gluten-free, ...).
+    Seeded by seed_food_filters_and_tags; shared reference data like MuscleGroup,
+    editable by any trainer."""
+
+    name = models.CharField(max_length=50, unique=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
 class FoodItem(models.Model):
     class Source(models.TextChoices):
         SEEDED = "seeded", "Seeded"
@@ -80,6 +108,16 @@ class FoodItem(models.Model):
     iron_mg_per_100g = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
     vitamin_c_mg_per_100g = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
     vitamin_a_mcg_per_100g = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
+
+    # Substitution-search facets. macro_filters classifies the food's macro role
+    # (e.g. "lean protein", "complex carb") so a trainee can browse alternatives
+    # for one slot of a meal; dietary_tags flags diet-type compatibility (vegan,
+    # keto, gluten-free, ...). Both are a fixed, trainer-editable vocabulary - see
+    # MacroFilter/DietaryTag above. Auto-assigned for the seeded reference table by
+    # seed_food_filters_and_tags; a trainer or trainee picks them by hand for items
+    # they add themselves.
+    macro_filters = models.ManyToManyField(MacroFilter, blank=True, related_name="food_items")
+    dietary_tags = models.ManyToManyField(DietaryTag, blank=True, related_name="food_items")
 
     def __str__(self):
         return self.name

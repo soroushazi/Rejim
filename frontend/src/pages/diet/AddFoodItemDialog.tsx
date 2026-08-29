@@ -1,9 +1,10 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useAuth } from '../../auth/AuthContext'
-import { createFoodItem } from '../../api/foodItems'
-import type { FoodItem, FoodItemKind, FoodItemServingUnit, FoodItemVisibility } from '../../api/types'
+import { createFoodItem, listDietaryTags, listMacroFilters } from '../../api/foodItems'
+import type { DietaryTag, FoodItem, FoodItemKind, FoodItemServingUnit, FoodItemVisibility, MacroFilter } from '../../api/types'
 import IngredientPicker, { type DraftComponent } from './IngredientPicker'
 import { FIXED_GRAMS_PER_UNIT, SERVING_UNIT_NOUN, SERVING_UNIT_OPTIONS } from '@/lib/servingUnits'
+import MultiSelectDropdown from '@/components/MultiSelectDropdown'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -47,6 +48,8 @@ function servingCaption(unit: FoodItemServingUnit, sizeGrams: string) {
 
 export default function AddFoodItemDialog({ open, onOpenChange, onCreated }: AddFoodItemDialogProps) {
   const { user } = useAuth()
+  const [macroFilters, setMacroFilters] = useState<MacroFilter[]>([])
+  const [dietaryTags, setDietaryTags] = useState<DietaryTag[]>([])
   const [name, setName] = useState('')
   const [kind, setKind] = useState<FoodItemKind>('single')
   const [visibility, setVisibility] = useState<FoodItemVisibility>('private')
@@ -55,6 +58,8 @@ export default function AddFoodItemDialog({ open, onOpenChange, onCreated }: Add
   const [values, setValues] = useState(EMPTY_VALUES)
   const [showMicros, setShowMicros] = useState(false)
   const [components, setComponents] = useState<DraftComponent[]>([])
+  const [selectedMacroFilters, setSelectedMacroFilters] = useState<string[]>([])
+  const [selectedDietaryTags, setSelectedDietaryTags] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -67,8 +72,20 @@ export default function AddFoodItemDialog({ open, onOpenChange, onCreated }: Add
     setValues(EMPTY_VALUES)
     setShowMicros(false)
     setComponents([])
+    setSelectedMacroFilters([])
+    setSelectedDietaryTags([])
     setError(null)
   }
+
+  useEffect(() => {
+    if (!open) return
+    listMacroFilters()
+      .then(setMacroFilters)
+      .catch(() => {})
+    listDietaryTags()
+      .then(setDietaryTags)
+      .catch(() => {})
+  }, [open])
 
   function handleOpenChange(next: boolean) {
     if (!next) reset()
@@ -121,6 +138,8 @@ export default function AddFoodItemDialog({ open, onOpenChange, onCreated }: Add
         visibility,
         serving_unit: servingUnit,
         serving_size_grams: servingUnit === 'g' ? null : servingSizeGrams,
+        macro_filters: selectedMacroFilters.map(Number),
+        dietary_tags: selectedDietaryTags.map(Number),
         ...(kind === 'single'
           ? Object.fromEntries(
               [...MACRO_FIELDS, ...MICRO_FIELDS].map(({ key }) => [
@@ -281,6 +300,33 @@ export default function AddFoodItemDialog({ open, onOpenChange, onCreated }: Add
             </>
           ) : (
             <IngredientPicker value={components} onChange={setComponents} visibility={visibility} />
+          )}
+
+          {(macroFilters.length > 0 || dietaryTags.length > 0) && (
+            <div className="flex gap-3">
+              {macroFilters.length > 0 && (
+                <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                  <Label>Category</Label>
+                  <MultiSelectDropdown
+                    label="Category"
+                    options={macroFilters}
+                    selected={selectedMacroFilters}
+                    onChange={setSelectedMacroFilters}
+                  />
+                </div>
+              )}
+              {dietaryTags.length > 0 && (
+                <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                  <Label>Tags</Label>
+                  <MultiSelectDropdown
+                    label="Tags"
+                    options={dietaryTags}
+                    selected={selectedDietaryTags}
+                    onChange={setSelectedDietaryTags}
+                  />
+                </div>
+              )}
+            </div>
           )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}

@@ -1,24 +1,42 @@
 import { useEffect, useState } from 'react'
 import { Plus } from 'lucide-react'
-import { listFoodItems } from '../../api/foodItems'
-import type { FoodItem } from '../../api/types'
+import { listDietaryTags, listFoodItems, listMacroFilters } from '../../api/foodItems'
+import type { DietaryTag, FoodItem, MacroFilter } from '../../api/types'
 import FoodItemCard from './FoodItemCard'
 import AddFoodItemDialog from './AddFoodItemDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import MultiSelectDropdown from '@/components/MultiSelectDropdown'
 
 export default function FoodBankPage() {
   const [search, setSearch] = useState('')
+  const [macroFilters, setMacroFilters] = useState<MacroFilter[]>([])
+  const [dietaryTags, setDietaryTags] = useState<DietaryTag[]>([])
+  const [selectedMacroFilters, setSelectedMacroFilters] = useState<string[]>([])
+  const [selectedDietaryTags, setSelectedDietaryTags] = useState<string[]>([])
   const [items, setItems] = useState<FoodItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
 
   useEffect(() => {
+    listMacroFilters()
+      .then(setMacroFilters)
+      .catch(() => {})
+    listDietaryTags()
+      .then(setDietaryTags)
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
     let cancelled = false
     setLoading(true)
     const timer = setTimeout(() => {
-      listFoodItems(search)
+      listFoodItems({
+        search,
+        macroFilterIds: selectedMacroFilters.map(Number),
+        dietaryTagIds: selectedDietaryTags.map(Number),
+      })
         .then((data) => {
           if (!cancelled) {
             setItems(data)
@@ -36,7 +54,7 @@ export default function FoodBankPage() {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [search])
+  }, [search, selectedMacroFilters, selectedDietaryTags])
 
   function handleUpdated(updated: FoodItem) {
     setItems((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
@@ -58,6 +76,29 @@ export default function FoodBankPage() {
         className="rounded-full"
       />
 
+      {(macroFilters.length > 0 || dietaryTags.length > 0) && (
+        <div className="flex gap-2">
+          {macroFilters.length > 0 && (
+            <MultiSelectDropdown
+              label="Category"
+              options={macroFilters}
+              selected={selectedMacroFilters}
+              onChange={setSelectedMacroFilters}
+              className="flex-1"
+            />
+          )}
+          {dietaryTags.length > 0 && (
+            <MultiSelectDropdown
+              label="Tags"
+              options={dietaryTags}
+              selected={selectedDietaryTags}
+              onChange={setSelectedDietaryTags}
+              className="flex-1"
+            />
+          )}
+        </div>
+      )}
+
       {loading && <p className="mt-6 text-center text-sm text-muted-foreground">Loading…</p>}
       {!loading && error && (
         <p className="mt-6 text-center text-sm text-muted-foreground">Couldn't load the food bank.</p>
@@ -69,7 +110,13 @@ export default function FoodBankPage() {
       {!loading && !error && items.length > 0 && (
         <ul className="flex flex-col gap-2">
           {items.map((item) => (
-            <FoodItemCard key={item.id} item={item} onUpdated={handleUpdated} />
+            <FoodItemCard
+              key={item.id}
+              item={item}
+              macroFilters={macroFilters}
+              dietaryTags={dietaryTags}
+              onUpdated={handleUpdated}
+            />
           ))}
         </ul>
       )}

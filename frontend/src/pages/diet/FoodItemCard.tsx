@@ -1,33 +1,29 @@
 import { useState } from 'react'
 import { useAuth } from '../../auth/AuthContext'
 import { reviewFoodItem } from '../../api/foodItems'
-import type { FoodItem } from '../../api/types'
+import type { DietaryTag, FoodItem, MacroFilter } from '../../api/types'
 import { SERVING_UNIT_NOUN } from '@/lib/servingUnits'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { cn, round } from '@/lib/utils'
-
-const MICRO_FIELDS: { key: keyof FoodItem; label: string; unit: string }[] = [
-  { key: 'fiber_g_per_100g', label: 'Fiber', unit: 'g' },
-  { key: 'sugar_g_per_100g', label: 'Sugar', unit: 'g' },
-  { key: 'sodium_mg_per_100g', label: 'Sodium', unit: 'mg' },
-  { key: 'potassium_mg_per_100g', label: 'Potassium', unit: 'mg' },
-  { key: 'calcium_mg_per_100g', label: 'Calcium', unit: 'mg' },
-  { key: 'iron_mg_per_100g', label: 'Iron', unit: 'mg' },
-  { key: 'vitamin_c_mg_per_100g', label: 'Vitamin C', unit: 'mg' },
-  { key: 'vitamin_a_mcg_per_100g', label: 'Vitamin A', unit: 'mcg' },
-]
+import { round } from '@/lib/utils'
+import FoodItemDetailDialog from './FoodItemDetailDialog'
+import FoodItemNutritionFacts from './FoodItemNutritionFacts'
 
 export default function FoodItemCard({
   item,
+  macroFilters,
+  dietaryTags,
   onUpdated,
 }: {
   item: FoodItem
+  macroFilters: MacroFilter[]
+  dietaryTags: DietaryTag[]
   onUpdated: (item: FoodItem) => void
 }) {
   const { user } = useAuth()
   const [expanded, setExpanded] = useState(false)
   const [reviewing, setReviewing] = useState(false)
+  const [detailOpen, setDetailOpen] = useState(false)
   const isOwner = user?.id === item.created_by
   const isTrainer = user?.role === 'trainer'
 
@@ -41,8 +37,6 @@ export default function FoodItemCard({
   function scaled(value: string) {
     return round(Number(value) * factor)
   }
-
-  const micros = MICRO_FIELDS.filter(({ key }) => item[key] !== null)
 
   async function handleReview(approval_status: 'approved' | 'rejected') {
     setReviewing(true)
@@ -99,40 +93,21 @@ export default function FoodItemCard({
       </button>
 
       {expanded && (
-        <div className="border-t border-border px-3.5 py-3">
-          <p className="mb-1.5 text-xs text-muted-foreground">{servingCaption}</p>
-          {micros.length > 0 ? (
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-              {micros.map(({ key, label, unit }) => (
-                <div key={key} className="flex justify-between text-sm">
-                  <dt className="text-muted-foreground">{label}</dt>
-                  <dd className="font-medium">
-                    {scaled(item[key] as string)}
-                    {unit}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          ) : (
-            <p className="text-xs text-muted-foreground">No micronutrient data.</p>
-          )}
+        <div className="flex flex-col gap-3 border-t border-border px-3.5 py-3">
+          <FoodItemNutritionFacts item={item} macroFilters={macroFilters} dietaryTags={dietaryTags} />
 
-          {item.kind === 'composite' && item.components.length > 0 && (
-            <div className="mt-3 border-t border-border pt-3">
-              <p className="mb-1.5 text-xs text-muted-foreground">Ingredients</p>
-              <ul className="flex flex-col gap-1 text-sm">
-                {item.components.map((c) => (
-                  <li key={c.id} className="flex justify-between">
-                    <span>{c.ingredient_name}</span>
-                    <span className="text-muted-foreground">{round(Number(c.weight_grams))}g</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="self-start"
+            onClick={() => setDetailOpen(true)}
+          >
+            See alternatives
+          </Button>
 
           {isTrainer && item.visibility === 'public' && item.approval_status !== 'approved' && (
-            <div className={cn('mt-3 flex gap-2 border-t border-border pt-3')}>
+            <div className="flex gap-2 border-t border-border pt-3">
               <Button size="sm" disabled={reviewing} onClick={() => handleReview('approved')}>
                 Approve
               </Button>
@@ -148,6 +123,13 @@ export default function FoodItemCard({
           )}
         </div>
       )}
+
+      <FoodItemDetailDialog
+        item={detailOpen ? item : null}
+        macroFilters={macroFilters}
+        dietaryTags={dietaryTags}
+        onOpenChange={setDetailOpen}
+      />
     </li>
   )
 }

@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 
@@ -30,11 +31,22 @@ class Exercise(models.Model):
 
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
-    muscle_groups = models.ManyToManyField(MuscleGroup, related_name="exercises", blank=True)
+    equipment = models.CharField(max_length=100, blank=True)
+    # Split rather than a single muscle_groups M2M so the muscle-diagram
+    # visualization can show primary vs secondary intensity - mirrors
+    # workout_sample.xlsx's own Major/Minor muscle group columns.
+    primary_muscle_groups = models.ManyToManyField(
+        MuscleGroup, related_name="primary_exercises", blank=True
+    )
+    secondary_muscle_groups = models.ManyToManyField(
+        MuscleGroup, related_name="secondary_exercises", blank=True
+    )
     difficulty_level = models.CharField(max_length=15, choices=Difficulty.choices, default=Difficulty.BEGINNER)
     image = models.ImageField(upload_to="exercises/", null=True, blank=True)
     video_url = models.URLField(null=True, blank=True)
-    alternatives = models.ManyToManyField("self", blank=True)
+    # Not symmetrical: each exercise curates its own top alternatives (see
+    # seed_exercises), so B appearing in A's list doesn't force A into B's.
+    alternatives = models.ManyToManyField("self", symmetrical=False, blank=True)
 
     class Meta:
         ordering = ["name"]
@@ -51,17 +63,29 @@ class WorkoutPlan(models.Model):
         related_name="workout_plans",
     )
     name = models.CharField(max_length=255)
+    # Target weekly training frequency (e.g. "3x/week") - used by Progress to
+    # calculate the plan-consistency streak.
+    sessions_per_week = models.PositiveSmallIntegerField(default=3)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"{self.name} ({self.trainee})"
 
 
-class PlanDay(models.Model):
-    plan = models.ForeignKey(WorkoutPlan, on_delete=models.CASCADE, related_name="days")
+class PlanSession(models.Model):
+    """One slot in the plan's rotation (e.g. "Session 1", "Session 2") - purely
+    sequential, not tied to a calendar day. The trainee just does "the next
+    session in the rotation" whenever they train; see WorkoutSession for the
+    logged instance. Deliberately has no day_of_week (unlike the Diet app's
+    ReferenceMeal/old PlanDay), since workout sessions rotate rather than
+    repeat on fixed weekdays."""
+
+    plan = models.ForeignKey(WorkoutPlan, on_delete=models.CASCADE, related_name="sessions")
     label = models.CharField(max_length=100)
-    day_of_week = models.PositiveSmallIntegerField(choices=DayOfWeek.choices, null=True, blank=True)
     order = models.PositiveSmallIntegerField(default=0)
+    # Trainer-authored guidance for this session as a whole (e.g. "focus on
+    # tempo, don't go to failure this week") - shown to the trainee in Log.
+    notes = models.TextField(blank=True)
 
     class Meta:
         ordering = ["order"]
@@ -71,35 +95,44 @@ class PlanDay(models.Model):
 
 
 class PlanExercise(models.Model):
-    day = models.ForeignKey(PlanDay, on_delete=models.CASCADE, related_name="exercises")
+    session = models.ForeignKey(PlanSession, on_delete=models.CASCADE, related_name="exercises")
     exercise = models.ForeignKey(Exercise, on_delete=models.PROTECT, related_name="plan_exercises")
     target_sets = models.PositiveSmallIntegerField()
-    target_reps = models.PositiveSmallIntegerField()
+    target_reps_min = models.PositiveSmallIntegerField(default=8)
+    target_reps_max = models.PositiveSmallIntegerField(default=12)
     default_rest_seconds = models.PositiveSmallIntegerField(default=120)
     order = models.PositiveSmallIntegerField(default=0)
+    # Trainer-authored cue for this specific exercise (e.g. "keep your back
+    # straight, use a spotter") - shown to the trainee in Log.
+    notes = models.TextField(blank=True)
 
     class Meta:
         ordering = ["order"]
 
     def __str__(self):
-        return f"{self.exercise.name} ({self.target_sets}x{self.target_reps})"
+        return f"{self.exercise.name} ({self.target_sets}x{self.target_reps_min}-{self.target_reps_max})"
 
 
 class WorkoutSession(models.Model):
+    """A trainee's logged instance of one PlanSession on a given date."""
+
     trainee = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         limit_choices_to={"role": "trainee"},
         related_name="workout_sessions",
     )
-    plan_day = models.ForeignKey(PlanDay, on_delete=models.CASCADE, related_name="sessions")
+    plan_session = models.ForeignKey(PlanSession, on_delete=models.CASCADE, related_name="logged_sessions")
     date = models.DateField()
+    notes = models.TextField(blank=True)
+    duration_minutes = models.PositiveSmallIntegerField(null=True, blank=True)
 
     class Meta:
         ordering = ["-date"]
+        unique_together = ("trainee", "plan_session", "date")
 
     def __str__(self):
-        return f"{self.trainee} - {self.plan_day.label} - {self.date}"
+        return f"{self.trainee} - {self.plan_session.label} - {self.date}"
 
 
 class LoggedExercise(models.Model):
@@ -125,6 +158,14 @@ class LoggedSet(models.Model):
     weight_unit = models.CharField(max_length=2, choices=WeightUnit.choices, default=WeightUnit.KG)
     reps_done = models.PositiveSmallIntegerField()
     rest_seconds = models.PositiveSmallIntegerField(null=True, blank=True)
+    # Excluded from avg-reps-per-set (weight suggestions) and the Progress
+    # strength score, so warming up doesn't skew either.
+    is_warmup = models.BooleanField(default=False)
+    # Rate of perceived exertion, 1-10. Optional - richer tracking for users
+    # who want it, never required to complete a log.
+    rpe = models.PositiveSmallIntegerField(
+        null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(10)]
+    )
 
     class Meta:
         ordering = ["set_number"]

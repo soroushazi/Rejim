@@ -40,7 +40,7 @@ export default function IngredientPicker({ value, onChange, visibility }: Ingred
     }
     let cancelled = false
     const timer = setTimeout(() => {
-      listFoodItems(query).then((items) => {
+      listFoodItems({ search: query }).then((items) => {
         if (!cancelled) setResults(items)
       })
     }, 250)
