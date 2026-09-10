@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import QAMessage, QAThread, TrainerConnection, TrainerNote
+from .models import PlanChangeLog, QAMessage, QAThread, TrainerConnection, TrainerNote, TrainerPrivateNote
 
 
 class QAMessageInline(admin.TabularInline):
@@ -29,3 +29,15 @@ class TrainerConnectionAdmin(admin.ModelAdmin):
     list_display = ("trainee", "option_selected", "requested_trainer_name", "status", "assigned_trainer", "created_at")
     list_filter = ("option_selected", "status")
     search_fields = ("trainee__username", "requested_trainer_name")
+
+
+@admin.register(TrainerPrivateNote)
+class TrainerPrivateNoteAdmin(admin.ModelAdmin):
+    list_display = ("trainee", "trainer", "created_at")
+    list_filter = ("trainer",)
+
+
+@admin.register(PlanChangeLog)
+class PlanChangeLogAdmin(admin.ModelAdmin):
+    list_display = ("trainee", "plan_type", "summary", "changed_by", "created_at")
+    list_filter = ("plan_type",)

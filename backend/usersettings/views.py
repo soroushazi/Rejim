@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.mixins import TraineeScopedQuerysetMixin
-from accounts.permissions import IsTraineeWriteTrainerReadOnly
+from accounts.permissions import GoalWritePermission
 
 from .models import Goal, Notification, PushSubscription, ReminderSetting, UserPreference
 from .serializers import GoalSerializer, NotificationSerializer, ReminderSettingSerializer, UserPreferenceSerializer
@@ -16,7 +16,7 @@ from .serializers import GoalSerializer, NotificationSerializer, ReminderSetting
 class GoalViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = Goal.objects.all()
     serializer_class = GoalSerializer
-    permission_classes = [IsTraineeWriteTrainerReadOnly]
+    permission_classes = [GoalWritePermission]
     trainee_path = "trainee"
 
     def get_queryset(self):
@@ -27,7 +27,14 @@ class GoalViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
-        serializer.save(trainee=self.request.user)
+        user = self.request.user
+        if user.role == user.Role.TRAINEE:
+            # A trainee's goal is always about themselves - server-set.
+            serializer.save(trainee=user)
+        else:
+            # A trainer must name one of their own trainees (validated_data
+            # already restricted to that queryset by the serializer).
+            serializer.save()
 
 
 class UserPreferenceView(APIView):

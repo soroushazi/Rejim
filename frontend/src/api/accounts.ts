@@ -6,6 +6,13 @@ export function listTrainees(): Promise<User[]> {
   return apiFetch<User[]>('/accounts/trainees/')
 }
 
+/** One trainee's full profile (baseline, BMI, preferences, etc. - everything
+ * UserSerializer returns) - used by TraineeDetailPage instead of a bespoke
+ * "overview" endpoint, since this already has everything needed. */
+export function getTrainee(id: number): Promise<User> {
+  return apiFetch<User>(`/accounts/trainees/${id}/`)
+}
+
 export type ProfileUpdate = Partial<
   Pick<
     User,

@@ -1,7 +1,7 @@
 from django.db.models import Q
 from rest_framework import serializers
 
-from .models import QAMessage, QAThread, TrainerConnection, TrainerNote
+from .models import PlanChangeLog, QAMessage, QAThread, TrainerConnection, TrainerNote, TrainerPrivateNote
 
 
 class QAThreadSerializer(serializers.ModelSerializer):
@@ -90,3 +90,27 @@ class TrainerConnectionSerializer(serializers.ModelSerializer):
             # Not built yet - the UI disables this option, this is belt-and-suspenders.
             raise serializers.ValidationError({"option_selected": "Train myself isn't available yet."})
         return attrs
+
+
+class TrainerPrivateNoteSerializer(serializers.ModelSerializer):
+    trainee_username = serializers.CharField(source="trainee.username", read_only=True)
+
+    class Meta:
+        model = TrainerPrivateNote
+        fields = ["id", "trainee", "trainee_username", "content", "created_at"]
+        read_only_fields = ["created_at"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        if request is not None:
+            self.fields["trainee"].queryset = request.user.trainees.all()
+
+
+class PlanChangeLogSerializer(serializers.ModelSerializer):
+    changed_by_username = serializers.CharField(source="changed_by.username", read_only=True, default=None)
+
+    class Meta:
+        model = PlanChangeLog
+        fields = ["id", "trainee", "changed_by", "changed_by_username", "plan_type", "summary", "created_at"]
+        read_only_fields = fields

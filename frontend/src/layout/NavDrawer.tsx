@@ -18,9 +18,13 @@ const MENU_ITEMS = [
   { to: '/export', label: 'Data Export' },
 ]
 
+// Trainer-only - the first role-conditional item in this menu.
+const TRAINER_MENU_ITEMS = [{ to: '/trainees', label: 'My Trainees' }]
+
 export default function NavDrawer({ open, onOpenChange }: NavDrawerProps) {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const items = user?.role === 'trainer' ? [...TRAINER_MENU_ITEMS, ...MENU_ITEMS] : MENU_ITEMS
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -37,7 +41,7 @@ export default function NavDrawer({ open, onOpenChange }: NavDrawerProps) {
         </SheetHeader>
         <Separator />
         <div className="flex flex-col px-4">
-          {MENU_ITEMS.map((item) => (
+          {items.map((item) => (
             <Button
               key={item.to}
               variant="ghost"

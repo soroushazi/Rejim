@@ -7,10 +7,17 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.mixins import TraineeScopedQuerysetMixin
-from accounts.permissions import IsTrainerWriteTraineeReadOnly
+from accounts.permissions import IsTrainer, IsTrainerWriteTraineeReadOnly
 
-from .models import QAMessage, QAThread, TrainerConnection, TrainerNote
-from .serializers import QAMessageSerializer, QAThreadSerializer, TrainerConnectionSerializer, TrainerNoteSerializer
+from .models import PlanChangeLog, QAMessage, QAThread, TrainerConnection, TrainerNote, TrainerPrivateNote
+from .serializers import (
+    PlanChangeLogSerializer,
+    QAMessageSerializer,
+    QAThreadSerializer,
+    TrainerConnectionSerializer,
+    TrainerNoteSerializer,
+    TrainerPrivateNoteSerializer,
+)
 
 
 class QAThreadViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
@@ -18,6 +25,13 @@ class QAThreadViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
     serializer_class = QAThreadSerializer
     permission_classes = [IsAuthenticated]
     trainee_path = "trainee"
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        trainee_id = self.request.query_params.get("trainee_id")
+        if trainee_id:
+            queryset = queryset.filter(trainee_id=trainee_id)
+        return queryset
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -95,3 +109,39 @@ class TrainerConnectionView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save(trainee=request.user)
         return Response(serializer.data, status=201)
+
+
+class TrainerPrivateNoteViewSet(viewsets.ModelViewSet):
+    """Trainer-only both ways - unlike every other resource in this app
+    (including TrainerNote above), there is no trainee read path at all here,
+    by design (see TRAINER_DASHBOARD_SPEC.md)."""
+
+    serializer_class = TrainerPrivateNoteSerializer
+    permission_classes = [IsTrainer]
+
+    def get_queryset(self):
+        queryset = TrainerPrivateNote.objects.filter(trainer=self.request.user)
+        trainee_id = self.request.query_params.get("trainee_id")
+        if trainee_id:
+            queryset = queryset.filter(trainee_id=trainee_id)
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(trainer=self.request.user)
+
+
+class PlanChangeLogViewSet(TraineeScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
+    queryset = PlanChangeLog.objects.all()
+    serializer_class = PlanChangeLogSerializer
+    permission_classes = [IsTrainer]
+    trainee_path = "trainee"
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        trainee_id = self.request.query_params.get("trainee_id")
+        if trainee_id:
+            queryset = queryset.filter(trainee_id=trainee_id)
+        plan_type = self.request.query_params.get("plan_type")
+        if plan_type:
+            queryset = queryset.filter(plan_type=plan_type)
+        return queryset

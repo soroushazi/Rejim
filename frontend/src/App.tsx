@@ -12,6 +12,8 @@ import PreferencesPage from './pages/PreferencesPage'
 import RemindersPage from './pages/RemindersPage'
 import ExportPage from './pages/ExportPage'
 import OnboardingWizard from './pages/onboarding/OnboardingWizard'
+import TraineeListPage from './pages/TraineeListPage'
+import TraineeDetailPage from './pages/TraineeDetailPage'
 import TrainerLayout from './pages/trainer/TrainerLayout'
 import NotesPage from './pages/trainer/NotesPage'
 import QAPage from './pages/trainer/QAPage'
@@ -29,10 +31,14 @@ import ExerciseBankPage from './pages/workout/ExerciseBankPage'
 /** Sends a first-time trainee (onboarding_completed=false) into the
  * /onboarding wizard instead of straight to /diet - the actual "right after
  * signup/login" trigger, since this app has no self-service signup flow to
- * hook into (see LOGIN_ONBOARDING_SPEC.md). Everyone else lands on /diet as
- * before. */
+ * hook into (see LOGIN_ONBOARDING_SPEC.md). A trainer's home screen is the
+ * trainee roster (see TRAINER_DASHBOARD_SPEC.md); everyone else lands on
+ * /diet as before. */
 function IndexRedirect() {
   const { user } = useAuth()
+  if (user?.role === 'trainer') {
+    return <Navigate to="/trainees" replace />
+  }
   if (user?.role === 'trainee' && !user.onboarding_completed) {
     return <Navigate to="/onboarding" replace />
   }
@@ -52,6 +58,8 @@ export default function App() {
       >
         <Route index element={<IndexRedirect />} />
         <Route path="/onboarding" element={<OnboardingWizard />} />
+        <Route path="/trainees" element={<TraineeListPage />} />
+        <Route path="/trainees/:id" element={<TraineeDetailPage />} />
         <Route path="/diet" element={<DietLayout />}>
           <Route index element={<Navigate to="/diet/log" replace />} />
           <Route path="log" element={<LogPage />} />

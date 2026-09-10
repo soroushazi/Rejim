@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "progress",
     "usersettings",
     "dataexport",
+    "trainerdashboard",
 ]
 
 AUTH_USER_MODEL = "accounts.User"

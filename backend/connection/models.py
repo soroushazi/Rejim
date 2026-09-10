@@ -109,3 +109,65 @@ class TrainerConnection(models.Model):
         if self.assigned_trainer_id and self.trainee.trainer_id != self.assigned_trainer_id:
             self.trainee.trainer = self.assigned_trainer
             self.trainee.save(update_fields=["trainer"])
+
+
+class TrainerPrivateNote(models.Model):
+    """A trainer's private scratchpad about a trainee - never visible to the
+    trainee, unlike TrainerNote above (which the trainee CAN read). Distinct
+    model rather than a visibility flag on TrainerNote, to avoid silently
+    changing an already-shipped, trainee-facing feature - see
+    TRAINER_DASHBOARD_SPEC.md."""
+
+    trainer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        limit_choices_to={"role": "trainer"},
+        related_name="private_notes",
+    )
+    trainee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        limit_choices_to={"role": "trainee"},
+        related_name="+",
+    )
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Private note on {self.trainee} by {self.trainer} ({self.created_at:%Y-%m-%d})"
+
+
+class PlanChangeLog(models.Model):
+    """An audit trail entry for a trainer's edit to a trainee's diet or
+    workout plan - written by usersettings-adjacent perform_create/update/
+    destroy hooks on the plan-structure viewsets (nutrition/workouts apps),
+    not by this app directly. See connection/services.py::log_plan_change."""
+
+    class PlanType(models.TextChoices):
+        DIET = "diet", "Diet"
+        WORKOUT = "workout", "Workout"
+
+    trainee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        limit_choices_to={"role": "trainee"},
+        related_name="plan_change_logs",
+    )
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="+",
+    )
+    plan_type = models.CharField(max_length=10, choices=PlanType.choices)
+    summary = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.trainee} - {self.summary}"

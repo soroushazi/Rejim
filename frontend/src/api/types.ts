@@ -549,6 +549,9 @@ export type Goal = {
 }
 
 export type NewGoal = {
+  /** Only set (and only honored) when the requester is a trainer creating a
+   * goal for one of their trainees - server-forced for a trainee-requester. */
+  trainee?: number
   goal_type: GoalType
   target_weight?: string | null
   target_weight_unit?: WeightUnit | null
@@ -598,5 +601,49 @@ export type AppNotification = {
   goal: number | null
   is_read: boolean
   read_at: string | null
+  created_at: string
+}
+
+// --- Trainer Dashboard ---
+
+export type WeightTrend = 'losing' | 'gaining' | 'maintaining'
+
+export type TraineeListRow = {
+  id: number
+  username: string
+  first_name: string
+  last_name: string
+  weight_trend: WeightTrend | null
+  consistency_pct: number
+  last_active: string | null
+}
+
+export type TraineeListFilters = {
+  search?: string
+  trend?: WeightTrend
+  lowConsistency?: boolean
+  inactiveDays?: number
+}
+
+export type TrainerPrivateNote = {
+  id: number
+  trainee: number
+  trainee_username: string
+  content: string
+  created_at: string
+}
+
+export type NewTrainerPrivateNote = {
+  trainee: number
+  content: string
+}
+
+export type PlanChangeLogEntry = {
+  id: number
+  trainee: number
+  changed_by: number | null
+  changed_by_username: string | null
+  plan_type: 'diet' | 'workout'
+  summary: string
   created_at: string
 }

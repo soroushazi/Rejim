@@ -35,6 +35,7 @@ urlpatterns = [
     path("api/progress/", include("progress.urls")),
     path("api/", include("usersettings.urls")),
     path("api/export/", include("dataexport.urls")),
+    path("api/trainer/", include("trainerdashboard.urls")),
 ]
 
 if settings.DEBUG:

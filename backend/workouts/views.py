@@ -2,6 +2,7 @@ from rest_framework import viewsets
 
 from accounts.mixins import TraineeScopedQuerysetMixin
 from accounts.permissions import IsTraineeWriteTrainerReadOnly, IsTrainerWriteTraineeReadOnly
+from connection.mixins import PlanChangeLoggingMixin
 
 from .models import (
     Exercise,
@@ -38,11 +39,12 @@ class ExerciseViewSet(viewsets.ModelViewSet):
     permission_classes = [IsTrainerWriteTraineeReadOnly]
 
 
-class WorkoutPlanViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
+class WorkoutPlanViewSet(PlanChangeLoggingMixin, TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = WorkoutPlan.objects.all()
     serializer_class = WorkoutPlanSerializer
     permission_classes = [IsTrainerWriteTraineeReadOnly]
     trainee_path = "trainee"
+    plan_type = "workout"
 
     def get_serializer_class(self):
         if self.action == "retrieve":
@@ -53,21 +55,35 @@ class WorkoutPlanViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
         queryset = super().get_queryset()
         if self.action == "retrieve":
             queryset = queryset.prefetch_related("sessions__exercises__exercise")
+        trainee_id = self.request.query_params.get("trainee_id")
+        if trainee_id:
+            queryset = queryset.filter(trainee_id=trainee_id)
         return queryset
 
+    def _change_log_context(self, instance):
+        return instance.trainee, f"workout plan '{instance.name}'"
 
-class PlanSessionViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
+
+class PlanSessionViewSet(PlanChangeLoggingMixin, TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = PlanSession.objects.all()
     serializer_class = PlanSessionSerializer
     permission_classes = [IsTrainerWriteTraineeReadOnly]
     trainee_path = "plan__trainee"
+    plan_type = "workout"
+
+    def _change_log_context(self, instance):
+        return instance.plan.trainee, f"session '{instance.label}'"
 
 
-class PlanExerciseViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
+class PlanExerciseViewSet(PlanChangeLoggingMixin, TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = PlanExercise.objects.all()
     serializer_class = PlanExerciseSerializer
     permission_classes = [IsTrainerWriteTraineeReadOnly]
     trainee_path = "session__plan__trainee"
+    plan_type = "workout"
+
+    def _change_log_context(self, instance):
+        return instance.session.plan.trainee, f"{instance.exercise.name} in {instance.session.label}"
 
 
 class WorkoutSessionViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
