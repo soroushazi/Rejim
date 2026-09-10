@@ -281,6 +281,63 @@ export type NewWorkoutSessionLog = {
   logged_exercises: NewLoggedExercise[]
 }
 
+export type DailyMetric = {
+  id: number
+  trainee: number
+  date: string
+  weight: string | null
+  weight_unit: WeightUnit
+  steps: number | null
+  sleep_hours: string | null
+  sleep_quality: number | null
+  readiness: number | null
+  water_intake_ml: number | null
+  notes: string
+}
+
+export type NewDailyMetric = {
+  date: string
+  weight: string | null
+  weight_unit: WeightUnit
+  steps: number | null
+  sleep_hours: string | null
+  sleep_quality: number | null
+  readiness: number | null
+  water_intake_ml: number | null
+  notes: string
+}
+
+export type ActivityLogEntry = {
+  id: number
+  trainee: number
+  date: string
+  activity_type: string
+  duration_minutes: number
+  calories_burned: number | null
+  notes: string
+}
+
+export type NewActivityLogEntry = {
+  date: string
+  activity_type: string
+  duration_minutes: number
+  calories_burned: number | null
+  notes: string
+}
+
+/** Read-side rollup from GET /tracker/daily-summary/?date= - calories/macros
+ * consumed (Diet logs), calories burned (ActivityLog only - WorkoutSession
+ * carries no calorie field in Stage 1), net balance, and the diet plan's
+ * target for a planned-vs-actual comparison (null if no plan exists yet). */
+export type DailySummary = {
+  date: string
+  trainee: number
+  consumed: Nutrients
+  planned: Nutrients | null
+  calories_burned: number
+  net_calories: number
+}
+
 /** Flat shape returned by GET /workouts/logged-sets/?exercise=<id> - one row per
  * set across every past session for that exercise, used for the history list
  * and chart (and, client-side, weight suggestions + PR detection). */
