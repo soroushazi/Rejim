@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -28,7 +29,9 @@ class TraineeListView(APIView):
 
         search = request.query_params.get("search")
         if search:
-            trainees = trainees.filter(username__icontains=search)
+            trainees = trainees.filter(
+                Q(username__icontains=search) | Q(first_name__icontains=search) | Q(last_name__icontains=search)
+            )
 
         trend_filter = request.query_params.get("trend")
         low_consistency = request.query_params.get("low_consistency") == "true"
