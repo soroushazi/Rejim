@@ -29,6 +29,7 @@ urlpatterns = [
     path("api/nutrition/", include("nutrition.urls")),
     path("api/connection/", include("connection.urls")),
     path("api/tracker/", include("tracker.urls")),
+    path("api/progress/", include("progress.urls")),
 ]
 
 if settings.DEBUG:

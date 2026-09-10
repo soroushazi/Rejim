@@ -403,3 +403,89 @@ export type ExerciseHistorySet = {
   session_date: string
   exercise: number
 }
+
+// --- Progress tab (read-only aggregation over the resources above) ---
+
+export type ProgressOverviewDay = {
+  date: string
+  weight_kg: number | null
+  steps: number | null
+  sleep_hours: number | null
+  water_intake_ml: number | null
+  calories_consumed: number | null
+  calories_burned: number | null
+  net_calories: number | null
+}
+
+export type ProgressOverviewResponse = {
+  trainee: number
+  start: string
+  end: string
+  days: ProgressOverviewDay[]
+}
+
+export type ProgressLoggedExerciseOption = {
+  exercise_id: number
+  exercise_name: string
+  set_count: number
+}
+
+export type ProgressTrainingResponse = {
+  trainee: number
+  start: string
+  end: string
+  exercise_id: number | null
+  exercise_name: string | null
+  logged_exercises: ProgressLoggedExerciseOption[]
+}
+
+export type ProgressTrainingVolumeWeek = {
+  week_start: string
+  total_volume_kg: number
+  session_count: number
+}
+
+export type ProgressTrainingVolumeResponse = {
+  trainee: number
+  start: string
+  end: string
+  weeks: ProgressTrainingVolumeWeek[]
+}
+
+export type ProgressNutritionDay = {
+  date: string
+  consumed: Nutrients
+}
+
+export type ProgressNutritionResponse = {
+  trainee: number
+  start: string
+  end: string
+  target: Nutrients | null
+  days: ProgressNutritionDay[]
+  adherence_pct: number
+}
+
+export type ProgressRecoveryDay = {
+  date: string
+  sleep_quality: number | null
+  readiness: number | null
+}
+
+export type ProgressRecoveryResponse = {
+  trainee: number
+  start: string
+  end: string
+  days: ProgressRecoveryDay[]
+}
+
+export type ProgressConsistencyResponse = {
+  trainee: number
+  start: string
+  end: string
+  days_in_range: number
+  daily_metric_pct: number
+  workout_session_pct: number
+  diet_log_pct: number
+  current_streak_days: number
+}

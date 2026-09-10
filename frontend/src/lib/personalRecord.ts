@@ -26,3 +26,30 @@ export function checkPersonalRecord(
 
   return null
 }
+
+export type PrEvent = { date: string; kind: 'weight' | 'reps'; weight: number; reps: number }
+
+/** Reconstructs the PR timeline for the Progress tab's Training dashboard by
+ * replaying checkPersonalRecord chronologically: at each (non-warmup) set,
+ * check it against everything strictly before it. Same PR rules as the
+ * Log-time check, just run as a scan over history instead of one new set -
+ * no new comparison logic. `history` should be the exercise's full, unbounded
+ * history so earlier PRs aren't missed and later sets aren't misflagged. */
+export function computePrTimeline(history: ExerciseHistorySet[]): PrEvent[] {
+  const working = history
+    .filter((s) => !s.is_warmup)
+    .slice()
+    .sort((a, b) => a.session_date.localeCompare(b.session_date) || a.set_number - b.set_number)
+
+  const events: PrEvent[] = []
+  const seenSoFar: ExerciseHistorySet[] = []
+  for (const set of working) {
+    const weight = Number(set.weight)
+    const kind = checkPersonalRecord(seenSoFar, weight, set.reps_done, false)
+    if (kind) {
+      events.push({ date: set.session_date, kind, weight, reps: set.reps_done })
+    }
+    seenSoFar.push(set)
+  }
+  return events
+}

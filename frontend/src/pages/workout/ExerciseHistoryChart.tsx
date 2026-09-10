@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ExerciseHistorySet } from '@/api/types'
+import type { PrEvent } from '@/lib/personalRecord'
 import { cn } from '@/lib/utils'
 
 type DayPoint = { date: string; maxWeight: number; avgReps: number; weightUnit: string }
@@ -37,7 +38,16 @@ function formatDateShort(date: string) {
  * avoided a dual axis by indexing to % of target) there's no common base to
  * index to here. Mitigated with axis-color-coding (each axis/line tinted to
  * match) and direct end labels, same mark conventions as ProgressTrendChart. */
-export default function ExerciseHistoryChart({ history }: { history: ExerciseHistorySet[] }) {
+export default function ExerciseHistoryChart({
+  history,
+  prEvents,
+}: {
+  history: ExerciseHistorySet[]
+  /** Optional PR markers drawn on the weight line - used by the Progress tab's
+   * Training dashboard (see lib/personalRecord.ts::computePrTimeline). Absent
+   * for every other caller (Log-time popup, Workout Progress's history card). */
+  prEvents?: PrEvent[]
+}) {
   const [visible, setVisible] = useState({ weight: true, reps: true })
 
   const working = history.filter((s) => !s.is_warmup)
@@ -141,6 +151,36 @@ export default function ExerciseHistoryChart({ history }: { history: ExerciseHis
             </text>
           </g>
         )}
+        {visible.weight &&
+          prEvents &&
+          // One marker per day (not per event) - the marker sits on that day's
+          // single weight-line point, so two same-day PRs (e.g. new-max-reps at
+          // two different weights) would otherwise draw two identical, fully
+          // overlapping markers.
+          [...new Map(prEvents.map((ev) => [ev.date, ev])).values()].map((ev) => {
+            const dayIndex = days.findIndex((d) => d.date === ev.date)
+            if (dayIndex === -1) return null
+            const cx = x(dayIndex, n)
+            const cy = y(days[dayIndex].maxWeight, weightAxis.niceMax)
+            const dayEvents = prEvents.filter((e) => e.date === ev.date)
+            return (
+              <rect
+                key={ev.date}
+                x={cx - 4}
+                y={cy - 4}
+                width={8}
+                height={8}
+                transform={`rotate(45 ${cx} ${cy})`}
+                fill="var(--status-good)"
+                stroke="var(--card)"
+                strokeWidth={1.5}
+              >
+                <title>
+                  {dayEvents.map((e) => (e.kind === 'weight' ? 'New max weight' : 'New max reps')).join(', ')} - {formatDateShort(ev.date)}
+                </title>
+              </rect>
+            )
+          })}
       </svg>
     </div>
   )

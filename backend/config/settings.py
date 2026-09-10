@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     "nutrition",
     "connection",
     "tracker",
+    "progress",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
