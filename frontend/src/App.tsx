@@ -4,7 +4,9 @@ import AppLayout from './layout/AppLayout'
 import LoginPage from './pages/LoginPage'
 import ProgressPage from './pages/ProgressPage'
 import TrackerPage from './pages/TrackerPage'
-import TrainerPage from './pages/TrainerPage'
+import TrainerLayout from './pages/trainer/TrainerLayout'
+import NotesPage from './pages/trainer/NotesPage'
+import QAPage from './pages/trainer/QAPage'
 import DietLayout from './pages/diet/DietLayout'
 import LogPage from './pages/diet/LogPage'
 import DietProgressPage from './pages/diet/DietProgressPage'
@@ -44,7 +46,11 @@ export default function App() {
         </Route>
         <Route path="/progress" element={<ProgressPage />} />
         <Route path="/tracker" element={<TrackerPage />} />
-        <Route path="/trainer" element={<TrainerPage />} />
+        <Route path="/trainer" element={<TrainerLayout />}>
+          <Route index element={<Navigate to="/trainer/notes" replace />} />
+          <Route path="notes" element={<NotesPage />} />
+          <Route path="qa" element={<QAPage />} />
+        </Route>
       </Route>
     </Routes>
   )

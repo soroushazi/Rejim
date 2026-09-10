@@ -338,6 +338,55 @@ export type DailySummary = {
   net_calories: number
 }
 
+export type QAThreadStatus = 'open' | 'answered' | 'archived'
+
+export type QAThread = {
+  id: number
+  trainee: number
+  trainee_username: string
+  subject: string
+  status: QAThreadStatus
+  created_at: string
+  updated_at: string
+}
+
+/** trainee is omitted when a trainee opens a thread (server-set to themselves);
+ * required when a trainer opens one, naming which of their trainees it's about. */
+export type NewQAThread = {
+  subject: string
+  trainee?: number
+}
+
+export type QAMessage = {
+  id: number
+  thread: number
+  sender: number
+  sender_username: string
+  sender_role: Role
+  body: string
+  created_at: string
+}
+
+export type NewQAMessage = {
+  thread: number
+  body: string
+}
+
+export type TrainerNote = {
+  id: number
+  trainee: number
+  trainee_username: string
+  body: string
+  created_at: string
+  read: boolean
+  read_at: string | null
+}
+
+export type NewTrainerNote = {
+  trainee: number
+  body: string
+}
+
 /** Flat shape returned by GET /workouts/logged-sets/?exercise=<id> - one row per
  * set across every past session for that exercise, used for the history list
  * and chart (and, client-side, weight suggestions + PR detection). */

@@ -19,9 +19,14 @@ class QAThreadViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
     trainee_path = "trainee"
 
     def perform_create(self, serializer):
-        if self.request.user.role != self.request.user.Role.TRAINEE:
-            raise PermissionDenied("Only a trainee can open a new Q&A thread.")
-        serializer.save(trainee=self.request.user)
+        user = self.request.user
+        if user.role == user.Role.TRAINEE:
+            # A trainee's thread is always about themselves - server-set.
+            serializer.save(trainee=user)
+        else:
+            # A trainer must name one of their own trainees (validated_data
+            # already restricted to that queryset by the serializer).
+            serializer.save()
 
 
 class QAMessageViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
