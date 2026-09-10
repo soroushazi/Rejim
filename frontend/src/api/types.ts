@@ -1,11 +1,48 @@
 export type Role = 'trainer' | 'trainee'
 
+export type GymLocation = 'home' | 'commercial' | 'outdoor' | 'none'
+export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced'
+
 export type User = {
   id: number
   username: string
   email: string
+  first_name: string
+  last_name: string
   role: Role
   trainer: number | null
+  height_cm: string | null
+  age: number | null
+  starting_weight: string | null
+  starting_weight_unit: WeightUnit
+  meal_preferences: number[]
+  meal_preferences_notes: string
+  workout_days_per_week: number | null
+  workout_session_minutes: number | null
+  gym_location: GymLocation | null
+  experience_level: ExperienceLevel | null
+  injury_notes: string
+  onboarding_completed: boolean
+  bmi: number | null
+  bmi_category: 'underweight' | 'normal' | 'overweight' | 'obese' | null
+}
+
+export type TrainerConnectionOption = 'no_preference' | 'specific_trainer' | 'train_myself'
+export type TrainerConnectionStatus = 'pending_manual_assignment' | 'active' | 'not_applicable'
+
+export type TrainerConnection = {
+  id: number
+  option_selected: TrainerConnectionOption
+  requested_trainer_name: string
+  status: TrainerConnectionStatus
+  assigned_trainer: number | null
+  assigned_trainer_username: string | null
+  created_at: string
+}
+
+export type NewTrainerConnection = {
+  option_selected: TrainerConnectionOption
+  requested_trainer_name?: string
 }
 
 export type FoodItemKind = 'single' | 'composite'
@@ -488,4 +525,78 @@ export type ProgressConsistencyResponse = {
   workout_session_pct: number
   diet_log_pct: number
   current_streak_days: number
+}
+
+// --- Hamburger menu: Goals, Preferences, Reminders, Notifications ---
+
+export type GoalType = 'weight' | 'strength'
+export type GoalDirection = 'lose' | 'gain' | 'maintain'
+
+export type Goal = {
+  id: number
+  trainee: number
+  goal_type: GoalType
+  target_weight: string | null
+  target_weight_unit: WeightUnit | null
+  direction: GoalDirection | null
+  exercise: number | null
+  target_value: string | null
+  target_value_unit: WeightUnit | null
+  target_date: string | null
+  is_active: boolean
+  created_at: string
+  current_weight_kg: number | null
+}
+
+export type NewGoal = {
+  goal_type: GoalType
+  target_weight?: string | null
+  target_weight_unit?: WeightUnit | null
+  direction?: GoalDirection | null
+  exercise?: number | null
+  target_value?: string | null
+  target_value_unit?: WeightUnit | null
+  target_date?: string | null
+  is_active?: boolean
+}
+
+export type UserPreference = {
+  default_weight_unit: WeightUnit
+}
+
+export type ReminderType = 'weight' | 'sleep' | 'diet_log' | 'workout_log'
+
+export type ReminderSetting = {
+  id: number
+  reminder_type: ReminderType
+  is_enabled: boolean
+  time_of_day: string
+  channel_in_app: boolean
+  channel_push: boolean
+  channel_banner: boolean
+  channel_email: boolean
+}
+
+export type NewReminderSetting = {
+  reminder_type: ReminderType
+  is_enabled: boolean
+  time_of_day: string
+  channel_in_app: boolean
+  channel_push: boolean
+  channel_banner: boolean
+  channel_email: boolean
+}
+
+export type NotificationKind = 'reminder' | 'goal_completion'
+
+export type AppNotification = {
+  id: number
+  kind: NotificationKind
+  title: string
+  body: string
+  reminder: number | null
+  goal: number | null
+  is_read: boolean
+  read_at: string | null
+  created_at: string
 }

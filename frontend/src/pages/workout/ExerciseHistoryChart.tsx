@@ -41,12 +41,17 @@ function formatDateShort(date: string) {
 export default function ExerciseHistoryChart({
   history,
   prEvents,
+  goalWeight,
 }: {
   history: ExerciseHistorySet[]
   /** Optional PR markers drawn on the weight line - used by the Progress tab's
    * Training dashboard (see lib/personalRecord.ts::computePrTimeline). Absent
    * for every other caller (Log-time popup, Workout Progress's history card). */
   prEvents?: PrEvent[]
+  /** Optional strength-goal target weight, already converted to this chart's
+   * own display unit (the most recent session's weight_unit) - draws a dashed
+   * reference line, same idiom as OverviewChart's weight-goal line. */
+  goalWeight?: number
 }) {
   const [visible, setVisible] = useState({ weight: true, reps: true })
 
@@ -71,7 +76,7 @@ export default function ExerciseHistoryChart({
     return <p className="py-6 text-center text-sm text-muted-foreground">No working sets logged yet.</p>
   }
 
-  const weightAxis = computeAxis(Math.max(...days.map((d) => d.maxWeight)))
+  const weightAxis = computeAxis(Math.max(...days.map((d) => d.maxWeight), goalWeight ?? 0))
   const repsAxis = computeAxis(Math.max(...days.map((d) => d.avgReps)))
 
   const labelStep = Math.max(1, Math.ceil(n / 5))
@@ -140,6 +145,22 @@ export default function ExerciseHistoryChart({
             <path d={weightPath()} fill="none" stroke="var(--chart-1)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
             <text x={x(n - 1, n) + 6} y={y(last.maxWeight, weightAxis.niceMax)} dominantBaseline="middle" fontSize={9} fontWeight={600} fill="var(--chart-1)">
               {last.maxWeight}
+            </text>
+          </g>
+        )}
+        {visible.weight && goalWeight !== undefined && (
+          <g>
+            <line
+              x1={PAD.left}
+              x2={W - PAD.right}
+              y1={y(goalWeight, weightAxis.niceMax)}
+              y2={y(goalWeight, weightAxis.niceMax)}
+              stroke="var(--status-good)"
+              strokeWidth={1}
+              strokeDasharray="4 3"
+            />
+            <text x={PAD.left + 4} y={y(goalWeight, weightAxis.niceMax) - 4} textAnchor="start" fontSize={8} fill="var(--status-good)">
+              Goal
             </text>
           </g>
         )}

@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -8,8 +9,18 @@ type NavDrawerProps = {
   onOpenChange: (open: boolean) => void
 }
 
+const MENU_ITEMS = [
+  { to: '/profile', label: 'Profile' },
+  { to: '/goals', label: 'Goals' },
+  { to: '/plan-management', label: 'Plan Management' },
+  { to: '/preferences', label: 'Units & Preferences' },
+  { to: '/reminders', label: 'Reminders' },
+  { to: '/export', label: 'Data Export' },
+]
+
 export default function NavDrawer({ open, onOpenChange }: NavDrawerProps) {
   const { user, logout } = useAuth()
+  const navigate = useNavigate()
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -26,12 +37,19 @@ export default function NavDrawer({ open, onOpenChange }: NavDrawerProps) {
         </SheetHeader>
         <Separator />
         <div className="flex flex-col px-4">
-          <Button variant="ghost" className="justify-start px-2" disabled>
-            Profile
-          </Button>
-          <Button variant="ghost" className="justify-start px-2" disabled>
-            Settings
-          </Button>
+          {MENU_ITEMS.map((item) => (
+            <Button
+              key={item.to}
+              variant="ghost"
+              className="justify-start px-2"
+              onClick={() => {
+                onOpenChange(false)
+                navigate(item.to)
+              }}
+            >
+              {item.label}
+            </Button>
+          ))}
           <Separator className="my-1" />
           <Button variant="ghost" className="justify-start px-2 text-destructive" onClick={logout}>
             Log out

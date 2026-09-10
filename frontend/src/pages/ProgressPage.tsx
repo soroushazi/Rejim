@@ -1,14 +1,14 @@
 import { Camera, Dumbbell, Flame, Moon, Utensils } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { listTrainees } from '@/api/accounts'
+import { listGoals } from '@/api/goals'
 import { getProgressOverview } from '@/api/progress'
-import type { ProgressOverviewDay, User } from '@/api/types'
-import { useAuth } from '@/auth/AuthContext'
+import type { ProgressOverviewDay } from '@/api/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import { toDateKey } from '@/lib/date'
+import { useTraineeId } from '@/lib/useTraineeId'
+import { toKg } from '@/lib/weightUnits'
 import ConsistencyDashboard from './progress/ConsistencyDashboard'
 import DateRangeControl, { resolvePreset, type RangePreset } from './progress/DateRangeControl'
 import NutritionDashboard from './progress/NutritionDashboard'
@@ -16,56 +16,6 @@ import OverviewChart from './progress/OverviewChart'
 import PhotosPlaceholder from './progress/PhotosPlaceholder'
 import RecoveryDashboard from './progress/RecoveryDashboard'
 import TrainingDashboard from './progress/TrainingDashboard'
-
-/** A trainer picks which of their trainees to view (same pattern as the
- * Trainer tab's per-page trainee Select - there's no shared "which trainee am
- * I viewing" concept elsewhere in the app yet, see CLAUDE.md's Daily tab
- * note). Returns `undefined` while a trainee is viewing their own progress,
- * since every /api/progress/* endpoint treats a missing trainee_id as "self"
- * for a trainee caller. */
-function useTraineeId(): { traineeId: number | undefined; picker: React.ReactNode; ready: boolean } {
-  const { user } = useAuth()
-  const [trainees, setTrainees] = useState<User[] | null>(null)
-  const [selected, setSelected] = useState<number | undefined>(undefined)
-
-  useEffect(() => {
-    if (user?.role !== 'trainer') return
-    listTrainees()
-      .then((data) => {
-        setTrainees(data)
-        setSelected((prev) => prev ?? data[0]?.id)
-      })
-      .catch(() => setTrainees([]))
-  }, [user?.role])
-
-  if (user?.role !== 'trainer') {
-    return { traineeId: undefined, picker: null, ready: true }
-  }
-  if (trainees === null) {
-    return { traineeId: undefined, picker: null, ready: false }
-  }
-  if (trainees.length === 0) {
-    return { traineeId: undefined, picker: <p className="text-sm text-muted-foreground">You have no trainees yet.</p>, ready: false }
-  }
-
-  const picker =
-    trainees.length > 1 ? (
-      <Select value={String(selected)} onValueChange={(v) => setSelected(Number(v))}>
-        <SelectTrigger className="w-full">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {trainees.map((t) => (
-            <SelectItem key={t.id} value={String(t.id)}>
-              {t.username}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    ) : null
-
-  return { traineeId: selected, picker, ready: selected !== undefined }
-}
 
 const SECTIONS = [
   { value: 'training', label: 'Training', Icon: Dumbbell },
@@ -82,6 +32,7 @@ export default function ProgressPage() {
   const [customEnd, setCustomEnd] = useState(() => toDateKey(new Date()))
   const [overviewDays, setOverviewDays] = useState<ProgressOverviewDay[]>([])
   const [overviewLoading, setOverviewLoading] = useState(true)
+  const [weightGoalKg, setWeightGoalKg] = useState<number | undefined>(undefined)
 
   const range = resolvePreset(preset, customStart, customEnd)
   const rangeInvalid = preset === 'custom' && customStart > customEnd
@@ -105,6 +56,23 @@ export default function ProgressPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, traineeId, range.start, range.end, rangeInvalid])
+
+  useEffect(() => {
+    if (!ready) return
+    let cancelled = false
+    listGoals(traineeId)
+      .then((goals) => {
+        if (cancelled) return
+        const active = goals.find((g) => g.goal_type === 'weight' && g.is_active && g.target_weight)
+        setWeightGoalKg(active ? toKg(Number(active.target_weight), active.target_weight_unit!) : undefined)
+      })
+      .catch(() => {
+        if (!cancelled) setWeightGoalKg(undefined)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [ready, traineeId])
 
   if (!ready) {
     return picker ?? <p className="mt-6 text-center text-sm text-muted-foreground">Loading…</p>
@@ -130,7 +98,11 @@ export default function ProgressPage() {
           <CardTitle>Overview</CardTitle>
         </CardHeader>
         <CardContent>
-          {overviewLoading ? <p className="text-sm text-muted-foreground">Loading…</p> : <OverviewChart days={overviewDays} />}
+          {overviewLoading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : (
+            <OverviewChart days={overviewDays} weightGoalKg={weightGoalKg} />
+          )}
         </CardContent>
       </Card>
 

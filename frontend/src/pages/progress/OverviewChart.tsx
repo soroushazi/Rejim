@@ -62,7 +62,7 @@ function movingAverage(values: (number | null)[], windowSize: number): (number |
   })
 }
 
-export default function OverviewChart({ days }: { days: ProgressOverviewDay[] }) {
+export default function OverviewChart({ days, weightGoalKg }: { days: ProgressOverviewDay[]; weightGoalKg?: number }) {
   const [visible, setVisible] = useState<Record<SeriesKey, boolean>>({
     weight: true,
     netCalories: true,
@@ -98,7 +98,11 @@ export default function OverviewChart({ days }: { days: ProgressOverviewDay[] })
 
   const axes = (Object.keys(SERIES) as SeriesKey[]).reduce(
     (acc, key) => {
-      acc[key] = computeAxis(rawValues[key].filter((v): v is number => v !== null))
+      const values = rawValues[key].filter((v): v is number => v !== null)
+      // Fold the weight goal into the axis's own input so the dashed target
+      // line never clips off-chart, same idiom as the strength chart's goal line.
+      if (key === 'weight' && weightGoalKg !== undefined) values.push(weightGoalKg)
+      acc[key] = computeAxis(values)
       return acc
     },
     {} as Record<SeriesKey, ReturnType<typeof computeAxis>>,
@@ -186,6 +190,22 @@ export default function OverviewChart({ days }: { days: ProgressOverviewDay[] })
           <g>
             <path d={pathFor('weight', rawValues.weight)} fill="none" stroke="var(--chart-1)" strokeWidth={1} strokeLinecap="round" strokeLinejoin="round" opacity={0.35} />
             <path d={pathFor('weight', weightMA)} fill="none" stroke="var(--chart-1)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+          </g>
+        )}
+        {visible.weight && weightGoalKg !== undefined && (
+          <g>
+            <line
+              x1={padLeft}
+              x2={W - padRight}
+              y1={y('weight', weightGoalKg)}
+              y2={y('weight', weightGoalKg)}
+              stroke="var(--status-good)"
+              strokeWidth={1}
+              strokeDasharray="4 3"
+            />
+            <text x={W - padRight - 4} y={y('weight', weightGoalKg) - 4} textAnchor="end" fontSize={8} fill="var(--status-good)">
+              Goal
+            </text>
           </g>
         )}
         {(['netCalories', 'sleepHours', 'steps', 'water'] as SeriesKey[]).map(

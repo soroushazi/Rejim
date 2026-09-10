@@ -1,7 +1,7 @@
 from django.db.models import Q
 from rest_framework import serializers
 
-from .models import QAMessage, QAThread, TrainerNote
+from .models import QAMessage, QAThread, TrainerConnection, TrainerNote
 
 
 class QAThreadSerializer(serializers.ModelSerializer):
@@ -58,3 +58,35 @@ class TrainerNoteSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         if request is not None:
             self.fields["trainee"].queryset = request.user.trainees.all()
+
+
+class TrainerConnectionSerializer(serializers.ModelSerializer):
+    assigned_trainer_username = serializers.CharField(source="assigned_trainer.username", read_only=True, default=None)
+
+    class Meta:
+        model = TrainerConnection
+        fields = [
+            "id",
+            "option_selected",
+            "requested_trainer_name",
+            "status",
+            "assigned_trainer",
+            "assigned_trainer_username",
+            "created_at",
+        ]
+        read_only_fields = ["status", "assigned_trainer", "created_at"]
+
+    def validate(self, attrs):
+        option = attrs.get("option_selected", getattr(self.instance, "option_selected", None))
+        if option == TrainerConnection.Option.SPECIFIC_TRAINER:
+            name = attrs.get("requested_trainer_name", getattr(self.instance, "requested_trainer_name", ""))
+            if not name:
+                raise serializers.ValidationError(
+                    {"requested_trainer_name": "Required when requesting a specific trainer."}
+                )
+        else:
+            attrs["requested_trainer_name"] = ""
+        if option == TrainerConnection.Option.TRAIN_MYSELF:
+            # Not built yet - the UI disables this option, this is belt-and-suspenders.
+            raise serializers.ValidationError({"option_selected": "Train myself isn't available yet."})
+        return attrs

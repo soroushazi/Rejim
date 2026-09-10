@@ -1,9 +1,17 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import RequireAuth from './auth/RequireAuth'
+import { useAuth } from './auth/AuthContext'
 import AppLayout from './layout/AppLayout'
 import LoginPage from './pages/LoginPage'
 import ProgressPage from './pages/ProgressPage'
 import TrackerPage from './pages/TrackerPage'
+import ProfilePage from './pages/ProfilePage'
+import GoalsPage from './pages/GoalsPage'
+import PlanManagementPage from './pages/PlanManagementPage'
+import PreferencesPage from './pages/PreferencesPage'
+import RemindersPage from './pages/RemindersPage'
+import ExportPage from './pages/ExportPage'
+import OnboardingWizard from './pages/onboarding/OnboardingWizard'
 import TrainerLayout from './pages/trainer/TrainerLayout'
 import NotesPage from './pages/trainer/NotesPage'
 import QAPage from './pages/trainer/QAPage'
@@ -18,6 +26,19 @@ import WorkoutProgressPage from './pages/workout/WorkoutProgressPage'
 import WorkoutPlanPage from './pages/workout/WorkoutPlanPage'
 import ExerciseBankPage from './pages/workout/ExerciseBankPage'
 
+/** Sends a first-time trainee (onboarding_completed=false) into the
+ * /onboarding wizard instead of straight to /diet - the actual "right after
+ * signup/login" trigger, since this app has no self-service signup flow to
+ * hook into (see LOGIN_ONBOARDING_SPEC.md). Everyone else lands on /diet as
+ * before. */
+function IndexRedirect() {
+  const { user } = useAuth()
+  if (user?.role === 'trainee' && !user.onboarding_completed) {
+    return <Navigate to="/onboarding" replace />
+  }
+  return <Navigate to="/diet" replace />
+}
+
 export default function App() {
   return (
     <Routes>
@@ -29,7 +50,8 @@ export default function App() {
           </RequireAuth>
         }
       >
-        <Route index element={<Navigate to="/diet" replace />} />
+        <Route index element={<IndexRedirect />} />
+        <Route path="/onboarding" element={<OnboardingWizard />} />
         <Route path="/diet" element={<DietLayout />}>
           <Route index element={<Navigate to="/diet/log" replace />} />
           <Route path="log" element={<LogPage />} />
@@ -46,6 +68,12 @@ export default function App() {
         </Route>
         <Route path="/progress" element={<ProgressPage />} />
         <Route path="/tracker" element={<TrackerPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/goals" element={<GoalsPage />} />
+        <Route path="/plan-management" element={<PlanManagementPage />} />
+        <Route path="/preferences" element={<PreferencesPage />} />
+        <Route path="/reminders" element={<RemindersPage />} />
+        <Route path="/export" element={<ExportPage />} />
         <Route path="/trainer" element={<TrainerLayout />}>
           <Route index element={<Navigate to="/trainer/notes" replace />} />
           <Route path="notes" element={<NotesPage />} />

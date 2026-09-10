@@ -1,12 +1,14 @@
 import { ChevronDown, Search } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { listGoals } from '@/api/goals'
 import { listExerciseHistory } from '@/api/loggedSets'
 import { getProgressTraining } from '@/api/progress'
-import type { ProgressLoggedExerciseOption } from '@/api/types'
+import type { Goal, ProgressLoggedExerciseOption } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { computePrTimeline, type PrEvent } from '@/lib/personalRecord'
+import { toKg } from '@/lib/weightUnits'
 import ExerciseHistoryContent from '@/pages/workout/ExerciseHistoryContent'
 
 type Props = {
@@ -21,6 +23,13 @@ export default function TrainingStrengthPanel({ range, traineeId }: Props) {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [prEvents, setPrEvents] = useState<PrEvent[]>([])
+  const [strengthGoals, setStrengthGoals] = useState<Goal[]>([])
+
+  useEffect(() => {
+    listGoals(traineeId)
+      .then((goals) => setStrengthGoals(goals.filter((g) => g.goal_type === 'strength' && g.is_active)))
+      .catch(() => setStrengthGoals([]))
+  }, [traineeId])
 
   useEffect(() => {
     let cancelled = false
@@ -125,7 +134,17 @@ export default function TrainingStrengthPanel({ range, traineeId }: Props) {
 
       {selectedId !== null && (
         <>
-          <ExerciseHistoryContent exerciseId={selectedId} range={range} prEvents={prEvents} />
+          <ExerciseHistoryContent
+            exerciseId={selectedId}
+            range={range}
+            prEvents={prEvents}
+            goalWeightKg={(() => {
+              const goal = strengthGoals.find((g) => g.exercise === selectedId)
+              return goal && goal.target_value && goal.target_value_unit
+                ? toKg(Number(goal.target_value), goal.target_value_unit)
+                : undefined
+            })()}
+          />
 
           <div className="flex flex-col gap-1.5">
             <p className="text-sm font-semibold">PRs in this range</p>

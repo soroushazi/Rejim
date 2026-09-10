@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { listExerciseHistory } from '@/api/loggedSets'
 import type { ExerciseHistorySet } from '@/api/types'
 import type { PrEvent } from '@/lib/personalRecord'
+import { fromKg } from '@/lib/weightUnits'
 import ExerciseHistoryChart from './ExerciseHistoryChart'
 
 type Props = {
@@ -15,12 +16,16 @@ type Props = {
    * computed by the caller from the exercise's *unbounded* history, since a PR
    * check needs everything before it, not just what's in `range`. */
   prEvents?: PrEvent[]
+  /** Optional strength-goal target for this exercise, in kg - converted to
+   * whatever unit the most recent session actually used before being passed
+   * to the chart (see ExerciseHistoryChart's goalWeight prop). */
+  goalWeightKg?: number
 }
 
 /** Fetches and renders one exercise's history (chart + date-grouped set list) -
  * shared between the Log-time popup (ExerciseHistoryDialog) and the Progress
  * page's inline exercise-history card, so both stay in sync automatically. */
-export default function ExerciseHistoryContent({ exerciseId, range, prEvents }: Props) {
+export default function ExerciseHistoryContent({ exerciseId, range, prEvents, goalWeightKg }: Props) {
   const [history, setHistory] = useState<ExerciseHistorySet[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -61,10 +66,12 @@ export default function ExerciseHistoryContent({ exerciseId, range, prEvents }: 
     byDate.set(s.session_date, arr)
   }
   const days = [...byDate.entries()].sort((a, b) => b[0].localeCompare(a[0]))
+  const displayUnit = days[0][1][0].weight_unit
+  const goalWeight = goalWeightKg !== undefined ? fromKg(goalWeightKg, displayUnit) : undefined
 
   return (
     <div className="flex flex-col gap-4">
-      <ExerciseHistoryChart history={history} prEvents={prEvents} />
+      <ExerciseHistoryChart history={history} prEvents={prEvents} goalWeight={goalWeight} />
       <div className="flex flex-col gap-2 border-t border-border pt-3">
         {days.map(([date, sets]) => (
           <div key={date} className="rounded-lg border border-border p-2.5">

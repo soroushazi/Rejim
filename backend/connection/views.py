@@ -4,12 +4,13 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from accounts.mixins import TraineeScopedQuerysetMixin
 from accounts.permissions import IsTrainerWriteTraineeReadOnly
 
-from .models import QAMessage, QAThread, TrainerNote
-from .serializers import QAMessageSerializer, QAThreadSerializer, TrainerNoteSerializer
+from .models import QAMessage, QAThread, TrainerConnection, TrainerNote
+from .serializers import QAMessageSerializer, QAThreadSerializer, TrainerConnectionSerializer, TrainerNoteSerializer
 
 
 class QAThreadViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
@@ -69,3 +70,28 @@ class TrainerNoteViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
         note.read_at = timezone.now()
         note.save(update_fields=["read", "read_at"])
         return Response(self.get_serializer(note).data)
+
+
+class TrainerConnectionView(APIView):
+    """Trainee-only, own row - a first-time trainer-assignment request
+    submitted from the onboarding wizard. GET returns 204 (no body) if none
+    exists yet - Response(None) with a 200 renders with no body/content-type
+    at all, which the frontend's JSON-parsing apiFetch() can't distinguish
+    from an error, whereas 204 is already special-cased there. POST upserts
+    (a trainee resubmitting before being assigned just replaces their prior
+    request)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        connection = TrainerConnection.objects.filter(trainee=request.user).first()
+        if connection is None:
+            return Response(status=204)
+        return Response(TrainerConnectionSerializer(connection).data)
+
+    def post(self, request):
+        connection = TrainerConnection.objects.filter(trainee=request.user).first()
+        serializer = TrainerConnectionSerializer(connection, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(trainee=request.user)
+        return Response(serializer.data, status=201)

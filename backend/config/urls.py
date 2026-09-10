@@ -21,15 +21,20 @@ from django.contrib import admin
 from django.urls import include, path
 from rest_framework.authtoken.views import obtain_auth_token
 
+from accounts.views import SignupView
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/auth/token/", obtain_auth_token),
+    path("api/auth/signup/", SignupView.as_view()),
     path("api/accounts/", include("accounts.urls")),
     path("api/workouts/", include("workouts.urls")),
     path("api/nutrition/", include("nutrition.urls")),
     path("api/connection/", include("connection.urls")),
     path("api/tracker/", include("tracker.urls")),
     path("api/progress/", include("progress.urls")),
+    path("api/", include("usersettings.urls")),
+    path("api/export/", include("dataexport.urls")),
 ]
 
 if settings.DEBUG:

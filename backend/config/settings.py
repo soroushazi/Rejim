@@ -45,6 +45,8 @@ INSTALLED_APPS = [
     "connection",
     "tracker",
     "progress",
+    "usersettings",
+    "dataexport",
 ]
 
 AUTH_USER_MODEL = "accounts.User"
@@ -148,3 +150,18 @@ MAILERS = {
         "BACKEND": "django.core.mail.backends.console.EmailBackend",
     },
 }
+
+
+# Web Push (Reminders/Goals notifications, Stage 1)
+# SECURITY WARNING: dev-only keys, same posture as the SECRET_KEY above - not
+# suitable for production. Regenerate via `py_vapid` for a real deployment.
+VAPID_PUBLIC_KEY = "BOYGNGSDkM5vbFTAjOXH8BXVOMbMpo4GS8iJwSdnn4tItYRg-hxgZpNLzfU6HhSBFIOGi1qGz0rQXt3qIz7YbhI"
+# py_vapid's Vapid.from_string() expects base64(DER) with no PEM header/footer
+# (it strips newlines then b64-decodes directly) - this is that same keypair's
+# private half, re-encoded in the form pywebpush actually accepts.
+VAPID_PRIVATE_KEY = (
+    "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgey8I5uu/g+8OGU2w"
+    "vo5oY+LCIw5+8ujTVpDPDTXHusqhRANCAATmBjRkg5DOb2xUwIzlx/AV1TjGzKaO"
+    "BkvIicEnZ5+LSLWEYPocYGaTS831Oh4UgRSDhotahs9K0F7d6iM+2G4S"
+)
+VAPID_SUBJECT = "mailto:admin@example.com"
