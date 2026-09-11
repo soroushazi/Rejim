@@ -38,5 +38,10 @@ urlpatterns = [
     path("api/trainer/", include("trainerdashboard.urls")),
 ]
 
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# Always on, not just DEBUG - Caddy proxies /media/* straight to gunicorn
+# (same pattern as /static/*, no shared volume), so this needs to work in
+# production too. Django's docs caution against serving media this way at
+# high traffic, but at this app's ~10-user Stage 1 scale (occasional
+# exercise images) it's the simplest thing that works - matches the
+# project's "don't over-engineer" convention.
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

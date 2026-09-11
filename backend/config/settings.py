@@ -10,22 +10,34 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def _split_env_list(name):
+    value = os.environ.get(name, "")
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
+# Every setting below falls back to its original dev-only value when the
+# matching environment variable isn't set, so local `manage.py runserver`
+# usage is completely unaffected - only docker-compose.prod.yml's env_file
+# (backed by .env.prod) actually overrides these.
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-+e(!h)8l5tmghzr+1=h+cwmb7yblug5en!-r^+yu7@#0=8*n*6"
+SECRET_KEY = os.environ.get(
+    "DJANGO_SECRET_KEY", "django-insecure-+e(!h)8l5tmghzr+1=h+cwmb7yblug5en!-r^+yu7@#0=8*n*6"
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get("DEBUG", "True") == "True"
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = _split_env_list("DJANGO_ALLOWED_HOSTS")
 
 
 # Application definition
@@ -39,6 +51,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "rest_framework.authtoken",
+    "corsheaders",
     "accounts",
     "workouts",
     "nutrition",
@@ -64,6 +77,8 @@ REST_FRAMEWORK = {
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -94,13 +109,27 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
+# Postgres in production (POSTGRES_DB set via .env.prod / docker-compose),
+# SQLite otherwise - dev is untouched since that env var is never set locally.
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+if os.environ.get("POSTGRES_DB"):
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.environ["POSTGRES_DB"],
+            "USER": os.environ.get("POSTGRES_USER", "postgres"),
+            "PASSWORD": os.environ.get("POSTGRES_PASSWORD", ""),
+            "HOST": os.environ.get("POSTGRES_HOST", "db"),
+            "PORT": os.environ.get("POSTGRES_PORT", "5432"),
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
 
 # Password validation
@@ -138,9 +167,39 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+# Caddy reverse-proxies /static/* straight to gunicorn (no shared volume, no
+# nginx) - whitenoise is what lets Django serve its own static files
+# efficiently (compressed + far-future cache headers) without either.
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+}
+
+
+# CORS / CSRF
+# Same domain serves the SPA and /api/ in production (nginx proxies both), so
+# these are mostly a defensive no-op there - but CSRF_TRUSTED_ORIGINS is what
+# actually matters once DEBUG=False, since Django checks the request's Origin
+# header against it regardless of CORS.
+
+CORS_ALLOWED_ORIGINS = _split_env_list("CORS_ALLOWED_ORIGINS")
+CSRF_TRUSTED_ORIGINS = _split_env_list("CSRF_TRUSTED_ORIGINS")
+
+# Caddy terminates TLS and proxies to gunicorn over plain HTTP internally -
+# without this, Django can't tell the original request was HTTPS, which
+# breaks secure-cookie and CSRF checks below once DEBUG=False. Caddy sets
+# X-Forwarded-Proto correctly on its own by default.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_SSL_REDIRECT = True
 
 
 # Email
@@ -155,14 +214,18 @@ MAILERS = {
 
 # Web Push (Reminders/Goals notifications, Stage 1)
 # SECURITY WARNING: dev-only keys, same posture as the SECRET_KEY above - not
-# suitable for production. Regenerate via `py_vapid` for a real deployment.
-VAPID_PUBLIC_KEY = "BOYGNGSDkM5vbFTAjOXH8BXVOMbMpo4GS8iJwSdnn4tItYRg-hxgZpNLzfU6HhSBFIOGi1qGz0rQXt3qIz7YbhI"
+# suitable for production. Regenerate via `py_vapid` and set VAPID_* env vars
+# for a real deployment; these are just dev-safe fallbacks.
+VAPID_PUBLIC_KEY = os.environ.get(
+    "VAPID_PUBLIC_KEY", "BOYGNGSDkM5vbFTAjOXH8BXVOMbMpo4GS8iJwSdnn4tItYRg-hxgZpNLzfU6HhSBFIOGi1qGz0rQXt3qIz7YbhI"
+)
 # py_vapid's Vapid.from_string() expects base64(DER) with no PEM header/footer
 # (it strips newlines then b64-decodes directly) - this is that same keypair's
 # private half, re-encoded in the form pywebpush actually accepts.
-VAPID_PRIVATE_KEY = (
+VAPID_PRIVATE_KEY = os.environ.get(
+    "VAPID_PRIVATE_KEY",
     "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgey8I5uu/g+8OGU2w"
     "vo5oY+LCIw5+8ujTVpDPDTXHusqhRANCAATmBjRkg5DOb2xUwIzlx/AV1TjGzKaO"
-    "BkvIicEnZ5+LSLWEYPocYGaTS831Oh4UgRSDhotahs9K0F7d6iM+2G4S"
+    "BkvIicEnZ5+LSLWEYPocYGaTS831Oh4UgRSDhotahs9K0F7d6iM+2G4S",
 )
-VAPID_SUBJECT = "mailto:admin@example.com"
+VAPID_SUBJECT = os.environ.get("VAPID_SUBJECT", "mailto:admin@example.com")

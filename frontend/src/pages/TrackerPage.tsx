@@ -9,7 +9,7 @@ import DailySummaryCard from './daily/DailySummaryCard'
 
 export default function TrackerPage() {
   const { user } = useAuth()
-  const canLog = user?.is_trainee
+  const canLog = !!user?.is_trainee
   const [date, setDate] = useState(() => toDateKey(new Date()))
   const [summaryRefreshKey, setSummaryRefreshKey] = useState(0)
 

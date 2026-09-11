@@ -1,0 +1,76 @@
+# Production deploy, mirroring AllIn's own docker-compose.prod.yml structure
+# on the same host: db + backend here, no local Caddy/frontend-serving of our
+# own - AllIn's existing Caddy container gets a second site block (for
+# rejim.soroushazizzadeh.com) added to its Caddyfile, reaching this project's
+# `backend` over a shared external Docker network, and serving the SPA built
+# by `frontend-build` from a shared external volume. See the deploy notes for
+# the exact snippets to add on AllIn's side.
+#
+# Run with:
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build backend db
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod run --rm frontend-build
+# (re-run frontend-build whenever frontend code changes, to refresh the
+# shared volume Caddy serves from - it's a one-shot task, not a long-running
+# service.)
+
+name: rejim
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: .env.prod
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Never joins the shared Caddy network - not reachable from anything
+    # outside this project.
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env.prod
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - static_files:/app/staticfiles
+      - media_files:/app/media
+    networks:
+      default: {}
+      caddy:
+        # Explicit alias (not the bare service name "backend") so this can't
+        # collide with AllIn's own "backend" service on the shared network.
+        aliases:
+          - rejim-backend
+
+  frontend-build:
+    build: ./frontend
+    volumes:
+      - frontend_dist:/output
+    # No restart policy, no networks - a one-shot task that populates the
+    # shared volume and exits (AllIn's own frontend-build works the same
+    # way). Re-run manually after every frontend change.
+
+networks:
+  caddy:
+    # Must already exist, with AllIn's Caddy container attached to it -
+    # create once with `docker network create caddy` (adjust CADDY_NETWORK
+    # in .env.prod if the shared network is named differently).
+    external: true
+    name: ${CADDY_NETWORK:-caddy}
+
+volumes:
+  postgres_data:
+  static_files:
+  media_files:
+  frontend_dist:
+    # External so AllIn's Caddy container can mount the exact same volume
+    # read-only at its own /srv-rejim path - create once with
+    # `docker volume create rejim_frontend_dist`.
+    external: true
+    name: rejim_frontend_dist

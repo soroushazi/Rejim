@@ -154,7 +154,7 @@ function PlanSessionCard({
 
 export default function WorkoutPlanPage() {
   const { user } = useAuth()
-  const isTrainer = user?.is_trainer
+  const isTrainer = !!user?.is_trainer
   const [plan, setPlan] = useState<WorkoutPlanDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
