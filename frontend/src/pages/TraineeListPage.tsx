@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { listTraineeRoster } from '@/api/trainerDashboard'
 import type { TraineeListRow, WeightTrend } from '@/api/types'
+import { useAuth } from '@/auth/AuthContext'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -19,6 +21,7 @@ function formatLastActive(value: string | null) {
  * assigned trainees (see TRAINER_DASHBOARD_SPEC.md). */
 export default function TraineeListPage() {
   const navigate = useNavigate()
+  const { user, setViewMode } = useAuth()
   const [rows, setRows] = useState<TraineeListRow[] | null>(null)
   const [search, setSearch] = useState('')
   const [trend, setTrend] = useState<WeightTrend | 'any'>('any')
@@ -49,7 +52,23 @@ export default function TraineeListPage() {
 
   return (
     <div className="flex flex-col gap-3">
-      <h1 className="text-lg font-semibold">My Trainees</h1>
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="text-lg font-semibold">My Trainees</h1>
+        {user?.is_trainer && user?.is_trainee && (
+          <Button
+            type="button"
+            variant="link"
+            size="sm"
+            className="h-auto p-0 text-xs text-muted-foreground"
+            onClick={() => {
+              setViewMode('trainee')
+              navigate('/diet')
+            }}
+          >
+            Log my own training
+          </Button>
+        )}
+      </div>
 
       <Input placeholder="Search by name…" value={search} onChange={(e) => setSearch(e.target.value)} />
 

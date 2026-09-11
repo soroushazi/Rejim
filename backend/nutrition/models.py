@@ -6,7 +6,6 @@ from django.db import models
 from django.db.models import Q
 from django.utils import timezone
 
-from accounts.models import User
 from workouts.models import DayOfWeek
 
 from .services import NUTRIENT_FIELDS, average_nutrients, scale_nutrients, sum_nutrients
@@ -132,7 +131,7 @@ class FoodItem(models.Model):
         items). Trainers additionally see every public item regardless of approval
         status, so they can find and review pending submissions."""
         qs = cls.objects.all()
-        if user.role == User.Role.TRAINER:
+        if user.is_trainer:
             return qs.filter(Q(visibility=cls.Visibility.PUBLIC) | Q(created_by=user)).distinct()
         return qs.filter(
             Q(visibility=cls.Visibility.PUBLIC, approval_status=cls.ApprovalStatus.APPROVED)
@@ -179,7 +178,7 @@ class QuickLogItem(models.Model):
     trainee = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        limit_choices_to={"role": "trainee"},
+        limit_choices_to={"is_trainee": True},
         related_name="quick_log_items",
     )
     name = models.CharField(max_length=255)
@@ -203,7 +202,7 @@ class DietPlan(models.Model):
     trainee = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        limit_choices_to={"role": "trainee"},
+        limit_choices_to={"is_trainee": True},
         related_name="diet_plans",
     )
     name = models.CharField(max_length=255)
@@ -279,7 +278,7 @@ class LoggedMeal(models.Model):
     trainee = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        limit_choices_to={"role": "trainee"},
+        limit_choices_to={"is_trainee": True},
         related_name="logged_meals",
     )
     reference_meal = models.ForeignKey(ReferenceMeal, on_delete=models.PROTECT, related_name="logged_meals")
@@ -306,7 +305,7 @@ class FoodLog(models.Model):
     trainee = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        limit_choices_to={"role": "trainee"},
+        limit_choices_to={"is_trainee": True},
         related_name="food_logs",
     )
     # A model-level default is set only so the migration doesn't need a one-off

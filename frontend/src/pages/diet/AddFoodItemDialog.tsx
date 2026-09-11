@@ -224,7 +224,7 @@ export default function AddFoodItemDialog({ open, onOpenChange, onCreated }: Add
             )}
           </div>
 
-          {user?.role === 'trainee' && (
+          {user?.is_trainee && (
             <div className="flex flex-col gap-1.5">
               <Label>Visibility</Label>
               <ToggleGroup

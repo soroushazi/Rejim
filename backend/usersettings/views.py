@@ -2,6 +2,7 @@ from django.conf import settings
 from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -19,20 +20,16 @@ class GoalViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
     permission_classes = [GoalWritePermission]
     trainee_path = "trainee"
 
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        trainee_id = self.request.query_params.get("trainee_id")
-        if trainee_id:
-            queryset = queryset.filter(trainee_id=trainee_id)
-        return queryset
-
     def perform_create(self, serializer):
         user = self.request.user
-        if user.role == user.Role.TRAINEE:
-            # A trainee's goal is always about themselves - server-set.
+        trainee = serializer.validated_data.get("trainee")
+        if trainee is None:
+            # No trainee named - about themselves, server-set.
+            if not user.is_trainee:
+                raise PermissionDenied("trainee is required.")
             serializer.save(trainee=user)
         else:
-            # A trainer must name one of their own trainees (validated_data
+            # A trainer named one of their own trainees (validated_data
             # already restricted to that queryset by the serializer).
             serializer.save()
 

@@ -39,7 +39,7 @@ function weightsForOption(option: MealOptionDetail, loggedMeal: LoggedMeal | nul
 
 export default function LogMealSlot({ meal, date, loggedMeal, onSaved, onCleared }: Props) {
   const { user } = useAuth()
-  const canLog = user?.role === 'trainee'
+  const canLog = user?.is_trainee
   const [editing, setEditing] = useState(false)
   const options = useMemo(() => [...meal.options].sort((a, b) => a.order - b.order), [meal.options])
 

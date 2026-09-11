@@ -25,7 +25,7 @@ export default function FoodItemCard({
   const [reviewing, setReviewing] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
   const isOwner = user?.id === item.created_by
-  const isTrainer = user?.role === 'trainer'
+  const isTrainer = user?.is_trainer
 
   const servingGrams = item.serving_size_grams ? Number(item.serving_size_grams) : null
   const factor = servingGrams ? servingGrams / 100 : 1

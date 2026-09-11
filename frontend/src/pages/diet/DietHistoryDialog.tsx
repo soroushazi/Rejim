@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
-import type { WorkoutSessionLog } from '@/api/types'
+import type { LoggedMeal, Nutrients } from '@/api/types'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { addDays, startOfMonth, startOfWeek, toDateKey } from '@/lib/date'
 import { cn } from '@/lib/utils'
-import SessionHistoryRow from './SessionHistoryRow'
+import ProgressDayCard from './ProgressDayCard'
 
 type Period = 'today' | 'yesterday' | 'week' | 'month' | 'all' | 'custom'
 
@@ -22,13 +22,16 @@ const PERIOD_GRID: Period[] = ['today', 'yesterday', 'week', 'month', 'all', 'cu
 type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  sessions: WorkoutSessionLog[]
+  loggedMeals: LoggedMeal[]
+  target: Nutrients
 }
 
-/** Independent of the Progress page's own period selector (which scopes the
- * frequency stat) - filtering session history shouldn't also change the
- * numbers in the cards above. */
-export default function SessionHistoryDialog({ open, onOpenChange, sessions }: Props) {
+/** Independent of the Nutrition dashboard's own date-range control - filtering
+ * diet history shouldn't also change the numbers in the cards above. Mirrors
+ * SessionHistoryDialog's exact period selector; days are rendered with
+ * ProgressDayCard, the same day-by-day renderer the trainee's own Diet →
+ * Progress page already uses. */
+export default function DietHistoryDialog({ open, onOpenChange, loggedMeals, target }: Props) {
   const [period, setPeriod] = useState<Period>('week')
   const [customStart, setCustomStart] = useState(() => addDays(toDateKey(new Date()), -6))
   const [customEnd, setCustomEnd] = useState(() => toDateKey(new Date()))
@@ -36,7 +39,7 @@ export default function SessionHistoryDialog({ open, onOpenChange, sessions }: P
   const customRangeInvalid = period === 'custom' && customStart > customEnd
 
   const filtered = useMemo(() => {
-    if (period === 'all') return sessions
+    if (period === 'all') return loggedMeals
     if (customRangeInvalid) return []
     const today = toDateKey(new Date())
     let start: string
@@ -57,19 +60,29 @@ export default function SessionHistoryDialog({ open, onOpenChange, sessions }: P
       start = customStart
       end = customEnd
     }
-    return sessions.filter((s) => s.date >= start && s.date <= end)
-  }, [sessions, period, customStart, customEnd, customRangeInvalid])
+    return loggedMeals.filter((m) => m.date >= start && m.date <= end)
+  }, [loggedMeals, period, customStart, customEnd, customRangeInvalid])
 
-  const sorted = [...filtered].sort((a, b) => b.date.localeCompare(a.date))
+  const dayEntries = useMemo(() => {
+    const grouped = new Map<string, LoggedMeal[]>()
+    for (const meal of filtered) {
+      const arr = grouped.get(meal.date) ?? []
+      arr.push(meal)
+      grouped.set(meal.date, arr)
+    }
+    return [...grouped.entries()].sort((a, b) => b[0].localeCompare(a[0]))
+  }, [filtered])
+
+  const today = toDateKey(new Date())
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85svh] min-w-0 overflow-x-hidden overflow-y-auto sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Session history</DialogTitle>
+          <DialogTitle>Diet history</DialogTitle>
         </DialogHeader>
 
-        <div className="flex flex-col gap-3">
+        <div className="flex min-w-0 flex-col gap-3">
           <div className="grid grid-cols-2 gap-2">
             {PERIOD_GRID.map((p) => (
               <button
@@ -91,9 +104,9 @@ export default function SessionHistoryDialog({ open, onOpenChange, sessions }: P
           {period === 'custom' && (
             <div className="flex items-end gap-3">
               <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                <Label htmlFor="sh-custom-start">From</Label>
+                <Label htmlFor="dh-custom-start">From</Label>
                 <Input
-                  id="sh-custom-start"
+                  id="dh-custom-start"
                   type="date"
                   value={customStart}
                   max={customEnd}
@@ -101,9 +114,9 @@ export default function SessionHistoryDialog({ open, onOpenChange, sessions }: P
                 />
               </div>
               <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                <Label htmlFor="sh-custom-end">To</Label>
+                <Label htmlFor="dh-custom-end">To</Label>
                 <Input
-                  id="sh-custom-end"
+                  id="dh-custom-end"
                   type="date"
                   value={customEnd}
                   min={customStart}
@@ -117,12 +130,12 @@ export default function SessionHistoryDialog({ open, onOpenChange, sessions }: P
             <p className="text-sm text-destructive">The start date must be before the end date.</p>
           )}
 
-          {sorted.length === 0 ? (
-            <p className="py-4 text-center text-sm text-muted-foreground">No sessions logged in this period.</p>
+          {dayEntries.length === 0 ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">No meals logged in this period.</p>
           ) : (
-            <ul className="flex flex-col gap-2">
-              {sorted.map((s) => (
-                <SessionHistoryRow key={s.id} session={s} />
+            <ul className="flex min-w-0 flex-col gap-2">
+              {dayEntries.map(([date, meals]) => (
+                <ProgressDayCard key={date} date={date} isToday={date === today} loggedMeals={meals} target={target} />
               ))}
             </ul>
           )}

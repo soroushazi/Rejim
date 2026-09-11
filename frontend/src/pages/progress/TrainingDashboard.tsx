@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { getProgressTrainingVolume } from '@/api/progress'
-import type { ProgressTrainingVolumeWeek } from '@/api/types'
+import type { ProgressTrainingVolumeWeek, WorkoutSessionLog } from '@/api/types'
+import { listWorkoutSessions } from '@/api/workoutSessions'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import SessionHistoryCard from '../workout/SessionHistoryCard'
 import TrainingStrengthPanel from './TrainingStrengthPanel'
 import TrainingVolumeChart from './TrainingVolumeChart'
 
@@ -13,6 +15,16 @@ type Props = {
 export default function TrainingDashboard({ range, traineeId }: Props) {
   const [weeks, setWeeks] = useState<ProgressTrainingVolumeWeek[]>([])
   const [loading, setLoading] = useState(true)
+  const [sessions, setSessions] = useState<WorkoutSessionLog[]>([])
+
+  // Unbounded, not tied to `range` - same independence SessionHistoryDialog
+  // already documents for itself: browsing history shouldn't move the
+  // numbers in the cards below, and vice versa.
+  useEffect(() => {
+    listWorkoutSessions(traineeId)
+      .then(setSessions)
+      .catch(() => setSessions([]))
+  }, [traineeId])
 
   useEffect(() => {
     let cancelled = false
@@ -35,6 +47,8 @@ export default function TrainingDashboard({ range, traineeId }: Props) {
 
   return (
     <div className="flex flex-col gap-3">
+      <SessionHistoryCard sessions={sessions} />
+
       <Card>
         <CardHeader>
           <CardTitle>Strength</CardTitle>

@@ -1,11 +1,9 @@
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 
-from .models import User
-
 
 class IsTrainer(BasePermission):
     def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated and request.user.role == User.Role.TRAINER)
+        return bool(request.user and request.user.is_authenticated and request.user.is_trainer)
 
 
 class IsTrainerWriteTraineeReadOnly(BasePermission):
@@ -16,7 +14,7 @@ class IsTrainerWriteTraineeReadOnly(BasePermission):
             return False
         if request.method in SAFE_METHODS:
             return True
-        return request.user.role == User.Role.TRAINER
+        return request.user.is_trainer
 
 
 class IsTraineeWriteTrainerReadOnly(BasePermission):
@@ -27,7 +25,7 @@ class IsTraineeWriteTrainerReadOnly(BasePermission):
             return False
         if request.method in SAFE_METHODS:
             return True
-        return request.user.role == User.Role.TRAINEE
+        return request.user.is_trainee
 
 
 class GoalWritePermission(BasePermission):
@@ -36,20 +34,25 @@ class GoalWritePermission(BasePermission):
     covers the onboarding wizard, used before any TrainerConnection resolves);
     once a trainer is assigned, only that trainer may write, and the trainee's
     own view goes read-only. State-based, not "goals created after assignment" -
-    applies retroactively to goals a trainee made before being assigned too."""
+    applies retroactively to goals a trainee made before being assigned too.
+
+    Object-level access is decided by whose trainee the goal actually belongs
+    to (obj.trainee_id), not by the requester's own capability flags - this is
+    what lets a dual-role account (both is_trainer and is_trainee) manage a
+    trainee's goal AND their own goal through the same endpoint without one
+    capability shadowing the other."""
 
     def has_permission(self, request, view):
         if not (request.user and request.user.is_authenticated):
             return False
         if request.method in SAFE_METHODS:
             return True
-        if request.user.role == User.Role.TRAINER:
-            return True  # narrowed to their own trainees at the object level
-        return request.user.trainer_id is None
+        return bool(request.user.is_trainer or request.user.is_trainee)
 
     def has_object_permission(self, request, view, obj):
         if request.method in SAFE_METHODS:
             return True
-        if request.user.role == User.Role.TRAINER:
-            return obj.trainee.trainer_id == request.user.id
-        return obj.trainee_id == request.user.id and request.user.trainer_id is None
+        user = request.user
+        if obj.trainee_id == user.id:
+            return user.is_trainee and user.trainer_id is None
+        return user.is_trainer and obj.trainee.trainer_id == user.id

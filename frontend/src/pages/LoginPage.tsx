@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Link, Navigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { ApiError } from '@/api/client'
 import { Button } from '@/components/ui/button'
@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
-function LoginForm() {
+function LoginForm({ asTrainer }: { asTrainer?: boolean }) {
   const { login } = useAuth()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -20,7 +20,7 @@ function LoginForm() {
     setError(null)
     setSubmitting(true)
     try {
-      await login(username, password)
+      await login(username, password, asTrainer ? { as: 'trainer' } : undefined)
     } catch {
       setError('Incorrect username or password.')
     } finally {
@@ -133,10 +133,12 @@ function SignupForm() {
 
 export default function LoginPage() {
   const { user } = useAuth()
+  const [params] = useSearchParams()
+  const isTrainerEntry = params.get('as') === 'trainer'
 
   if (user) {
     // Delegates to the same index-route logic that sends a first-time
-    // trainee to /onboarding instead of /diet.
+    // trainee to /onboarding instead of /diet, or a trainer to /trainees.
     return <Navigate to="/" replace />
   }
 
@@ -145,25 +147,44 @@ export default function LoginPage() {
       <h1 className="text-3xl font-bold text-primary">Rejim</h1>
       <Card className="w-full max-w-xs">
         <CardHeader>
-          <CardTitle className="text-lg">Welcome</CardTitle>
+          <CardTitle className="text-lg">{isTrainerEntry ? 'Trainer login' : 'Welcome'}</CardTitle>
+          {isTrainerEntry && (
+            <Link to="/login" className="text-xs text-muted-foreground underline underline-offset-2">
+              ← Not a trainer? Log in as a trainee
+            </Link>
+          )}
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="login">
-            <TabsList className="mb-4 w-full">
-              <TabsTrigger value="login" className="flex-1">
-                Log in
-              </TabsTrigger>
-              <TabsTrigger value="signup" className="flex-1">
-                Sign up
-              </TabsTrigger>
-            </TabsList>
-            <TabsContent value="login">
-              <LoginForm />
-            </TabsContent>
-            <TabsContent value="signup">
-              <SignupForm />
-            </TabsContent>
-          </Tabs>
+          {isTrainerEntry ? (
+            // Trainer entry is login-only - trainers are still admin-provisioned,
+            // no self-serve signup path here (see CLAUDE.md).
+            <LoginForm asTrainer />
+          ) : (
+            <>
+              <Tabs defaultValue="login">
+                <TabsList className="mb-4 w-full">
+                  <TabsTrigger value="login" className="flex-1">
+                    Log in
+                  </TabsTrigger>
+                  <TabsTrigger value="signup" className="flex-1">
+                    Sign up
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="login">
+                  <LoginForm />
+                </TabsContent>
+                <TabsContent value="signup">
+                  <SignupForm />
+                </TabsContent>
+              </Tabs>
+              <Link
+                to="/login?as=trainer"
+                className="mt-4 block text-center text-xs text-muted-foreground underline underline-offset-2"
+              >
+                Are you a trainer? Log in here
+              </Link>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>

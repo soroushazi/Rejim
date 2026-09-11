@@ -1,7 +1,5 @@
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 
-from accounts.models import User
-
 
 class FoodItemWritePermission(BasePermission):
     """Any authenticated user can browse (queryset scoping handles what they see) and
@@ -14,4 +12,4 @@ class FoodItemWritePermission(BasePermission):
         if request.method in SAFE_METHODS:
             return True
         user = request.user
-        return user.role == User.Role.TRAINER or obj.created_by_id == user.id
+        return user.is_trainer or obj.created_by_id == user.id

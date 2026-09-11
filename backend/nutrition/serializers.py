@@ -1,7 +1,5 @@
 from rest_framework import serializers
 
-from accounts.models import User
-
 from .models import (
     DietaryTag,
     DietPlan,
@@ -101,7 +99,7 @@ class FoodItemSerializer(serializers.ModelSerializer):
         return attrs
 
     def _visibility_and_approval(self, user, visibility):
-        if user.role == User.Role.TRAINER:
+        if user.is_trainer:
             return FoodItem.Visibility.PUBLIC, FoodItem.ApprovalStatus.APPROVED
         visibility = visibility or FoodItem.Visibility.PRIVATE
         approval = (

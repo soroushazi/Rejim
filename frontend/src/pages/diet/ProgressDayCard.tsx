@@ -31,21 +31,21 @@ export default function ProgressDayCard({ date, isToday, loggedMeals, target }: 
   const calPct = actualCalories !== null && target.calories ? Math.round((actualCalories / target.calories) * 100) : null
 
   return (
-    <li className="overflow-hidden rounded-xl border border-border bg-card">
+    <li className="min-w-0 overflow-hidden rounded-xl border border-border bg-card">
       <button
         type="button"
-        className="flex w-full flex-col gap-1.5 px-3.5 py-3 text-left"
+        className="flex w-full min-w-0 flex-col gap-1.5 px-3.5 py-3 text-left"
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
       >
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="font-semibold">{formatDateLabel(date, isToday)}</span>
-          <span className={cn('whitespace-nowrap text-sm font-medium', STATUS_TEXT_CLASS[calStatus])}>
+        <div className="flex min-w-0 items-baseline justify-between gap-2">
+          <span className="min-w-0 flex-1 truncate font-semibold">{formatDateLabel(date, isToday)}</span>
+          <span className={cn('shrink-0 whitespace-nowrap text-sm font-medium', STATUS_TEXT_CLASS[calStatus])}>
             {round(actualCalories ?? 0)} / {round(target.calories ?? 0)} kcal
             {calPct !== null ? ` · ${calPct}%` : ''}
           </span>
         </div>
-        <div className="flex gap-3 text-sm text-muted-foreground">
+        <div className="flex min-w-0 flex-wrap gap-3 text-sm text-muted-foreground">
           <span className={proteinStat === 'bad' ? STATUS_TEXT_CLASS.bad : undefined}>
             P {round(actualProtein ?? 0)}g
           </span>
@@ -55,7 +55,7 @@ export default function ProgressDayCard({ date, isToday, loggedMeals, target }: 
       </button>
 
       {expanded && (
-        <ul className="flex flex-col gap-2 border-t border-border px-3.5 py-3">
+        <ul className="flex min-w-0 flex-col gap-2 border-t border-border px-3.5 py-3">
           {loggedMeals.map((meal) => (
             <ProgressMealRow key={meal.id} meal={meal} />
           ))}

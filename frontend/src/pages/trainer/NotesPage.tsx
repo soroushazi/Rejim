@@ -171,6 +171,6 @@ function TrainerNotes() {
 }
 
 export default function NotesPage() {
-  const { user } = useAuth()
-  return user?.role === 'trainer' ? <TrainerNotes /> : <TraineeNotes />
+  const { viewMode } = useAuth()
+  return viewMode === 'trainer' ? <TrainerNotes /> : <TraineeNotes />
 }

@@ -16,7 +16,8 @@ class UserSerializer(serializers.ModelSerializer):
             "email",
             "first_name",
             "last_name",
-            "role",
+            "is_trainee",
+            "is_trainer",
             "trainer",
             "height_cm",
             "age",
@@ -33,7 +34,7 @@ class UserSerializer(serializers.ModelSerializer):
             "bmi",
             "bmi_category",
         ]
-        read_only_fields = ["role", "trainer"]
+        read_only_fields = ["is_trainee", "is_trainer", "trainer"]
 
     def get_bmi(self, obj):
         from .services import compute_bmi
@@ -71,7 +72,7 @@ class SignupSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         password = validated_data.pop("password")
-        user = User(role=User.Role.TRAINEE, **validated_data)
+        user = User(is_trainee=True, **validated_data)
         user.set_password(password)
         user.save()
         return user

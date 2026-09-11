@@ -19,7 +19,7 @@ class Goal(models.Model):
     trainee = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        limit_choices_to={"role": "trainee"},
+        limit_choices_to={"is_trainee": True},
         related_name="goals",
     )
     goal_type = models.CharField(max_length=10, choices=GoalType.choices)

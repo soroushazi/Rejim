@@ -2,10 +2,12 @@ import { apiFetch } from './client'
 import type { NewWorkoutSessionLog, WorkoutSessionLog } from './types'
 
 /** Fetches every logged session for the trainee (or, for a trainer, one of
- * their trainees) - small enough at Stage 1 scale to fetch in full and derive
- * "next session in rotation" / "already logged today" client-side. */
-export function listWorkoutSessions(): Promise<WorkoutSessionLog[]> {
-  return apiFetch<WorkoutSessionLog[]>('/workouts/sessions/')
+ * their trainees when traineeId is given) - small enough at Stage 1 scale to
+ * fetch in full and derive "next session in rotation" / "already logged
+ * today" / session history client-side. */
+export function listWorkoutSessions(traineeId?: number): Promise<WorkoutSessionLog[]> {
+  const query = traineeId ? `?trainee_id=${traineeId}` : ''
+  return apiFetch<WorkoutSessionLog[]>(`/workouts/sessions/${query}`)
 }
 
 /** Always posts the complete current state for a session log; the backend

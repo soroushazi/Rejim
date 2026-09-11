@@ -59,7 +59,7 @@ class WorkoutPlan(models.Model):
     trainee = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        limit_choices_to={"role": "trainee"},
+        limit_choices_to={"is_trainee": True},
         related_name="workout_plans",
     )
     name = models.CharField(max_length=255)
@@ -119,7 +119,7 @@ class WorkoutSession(models.Model):
     trainee = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        limit_choices_to={"role": "trainee"},
+        limit_choices_to={"is_trainee": True},
         related_name="workout_sessions",
     )
     plan_session = models.ForeignKey(PlanSession, on_delete=models.CASCADE, related_name="logged_sessions")

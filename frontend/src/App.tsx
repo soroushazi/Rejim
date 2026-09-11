@@ -35,14 +35,27 @@ import ExerciseBankPage from './pages/workout/ExerciseBankPage'
  * trainee roster (see TRAINER_DASHBOARD_SPEC.md); everyone else lands on
  * /diet as before. */
 function IndexRedirect() {
-  const { user } = useAuth()
-  if (user?.role === 'trainer') {
+  const { user, viewMode } = useAuth()
+  if (viewMode === 'trainer') {
     return <Navigate to="/trainees" replace />
   }
-  if (user?.role === 'trainee' && !user.onboarding_completed) {
+  if (!user?.onboarding_completed) {
     return <Navigate to="/onboarding" replace />
   }
   return <Navigate to="/diet" replace />
+}
+
+/** Guards the self-logging routes that trainer mode's nav no longer links to
+ * (Diet/Workout/Daily/Goals/Plan Management/Preferences/Reminders/Export/
+ * Trainer) - hiding the buttons doesn't stop direct URL navigation, and some
+ * of these show confusing, fabricated-looking UI for a trainer with nothing
+ * of their own logged. Redirects to the trainer's actual home instead. */
+function TraineeModeOnly({ children }: { children: React.ReactNode }) {
+  const { viewMode } = useAuth()
+  if (viewMode === 'trainer') {
+    return <Navigate to="/trainees" replace />
+  }
+  return <>{children}</>
 }
 
 export default function App() {
@@ -60,14 +73,28 @@ export default function App() {
         <Route path="/onboarding" element={<OnboardingWizard />} />
         <Route path="/trainees" element={<TraineeListPage />} />
         <Route path="/trainees/:id" element={<TraineeDetailPage />} />
-        <Route path="/diet" element={<DietLayout />}>
+        <Route
+          path="/diet"
+          element={
+            <TraineeModeOnly>
+              <DietLayout />
+            </TraineeModeOnly>
+          }
+        >
           <Route index element={<Navigate to="/diet/log" replace />} />
           <Route path="log" element={<LogPage />} />
           <Route path="progress" element={<DietProgressPage />} />
           <Route path="plan" element={<ReferencePlanPage />} />
           <Route path="food-bank" element={<FoodBankPage />} />
         </Route>
-        <Route path="/workout" element={<WorkoutLayout />}>
+        <Route
+          path="/workout"
+          element={
+            <TraineeModeOnly>
+              <WorkoutLayout />
+            </TraineeModeOnly>
+          }
+        >
           <Route index element={<Navigate to="/workout/log" replace />} />
           <Route path="log" element={<WorkoutLogPage />} />
           <Route path="progress" element={<WorkoutProgressPage />} />
@@ -75,14 +102,63 @@ export default function App() {
           <Route path="exercises" element={<ExerciseBankPage />} />
         </Route>
         <Route path="/progress" element={<ProgressPage />} />
-        <Route path="/tracker" element={<TrackerPage />} />
+        <Route
+          path="/tracker"
+          element={
+            <TraineeModeOnly>
+              <TrackerPage />
+            </TraineeModeOnly>
+          }
+        />
         <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/goals" element={<GoalsPage />} />
-        <Route path="/plan-management" element={<PlanManagementPage />} />
-        <Route path="/preferences" element={<PreferencesPage />} />
-        <Route path="/reminders" element={<RemindersPage />} />
-        <Route path="/export" element={<ExportPage />} />
-        <Route path="/trainer" element={<TrainerLayout />}>
+        <Route
+          path="/goals"
+          element={
+            <TraineeModeOnly>
+              <GoalsPage />
+            </TraineeModeOnly>
+          }
+        />
+        <Route
+          path="/plan-management"
+          element={
+            <TraineeModeOnly>
+              <PlanManagementPage />
+            </TraineeModeOnly>
+          }
+        />
+        <Route
+          path="/preferences"
+          element={
+            <TraineeModeOnly>
+              <PreferencesPage />
+            </TraineeModeOnly>
+          }
+        />
+        <Route
+          path="/reminders"
+          element={
+            <TraineeModeOnly>
+              <RemindersPage />
+            </TraineeModeOnly>
+          }
+        />
+        <Route
+          path="/export"
+          element={
+            <TraineeModeOnly>
+              <ExportPage />
+            </TraineeModeOnly>
+          }
+        />
+        <Route
+          path="/trainer"
+          element={
+            <TraineeModeOnly>
+              <TrainerLayout />
+            </TraineeModeOnly>
+          }
+        >
           <Route index element={<Navigate to="/trainer/notes" replace />} />
           <Route path="notes" element={<NotesPage />} />
           <Route path="qa" element={<QAPage />} />

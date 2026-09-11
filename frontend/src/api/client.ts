@@ -1,4 +1,5 @@
 const TOKEN_KEY = 'rejim_token'
+const VIEW_MODE_KEY = 'rejim_view_mode'
 
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY)
@@ -9,6 +10,19 @@ export function setToken(token: string | null) {
     localStorage.setItem(TOKEN_KEY, token)
   } else {
     localStorage.removeItem(TOKEN_KEY)
+  }
+}
+
+export function getStoredViewMode(): 'trainer' | 'trainee' | null {
+  const value = localStorage.getItem(VIEW_MODE_KEY)
+  return value === 'trainer' || value === 'trainee' ? value : null
+}
+
+export function setStoredViewMode(mode: 'trainer' | 'trainee' | null) {
+  if (mode) {
+    localStorage.setItem(VIEW_MODE_KEY, mode)
+  } else {
+    localStorage.removeItem(VIEW_MODE_KEY)
   }
 }
 

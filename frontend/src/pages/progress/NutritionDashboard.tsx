@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
+import { listLoggedMealsRange } from '@/api/loggedMeals'
 import { getProgressNutrition } from '@/api/progress'
-import type { ProgressNutritionResponse } from '@/api/types'
+import type { LoggedMeal, ProgressNutritionResponse } from '@/api/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import DietHistoryCard from '@/pages/diet/DietHistoryCard'
 import ProgressSummaryCard from '@/pages/diet/ProgressSummaryCard'
+import { toDateKey } from '@/lib/date'
 import { averageNutrients } from '@/lib/nutrients'
 import MacroTrendChart from './MacroTrendChart'
 
@@ -15,6 +18,16 @@ export default function NutritionDashboard({ range, traineeId }: Props) {
   const [data, setData] = useState<ProgressNutritionResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
+  const [loggedMeals, setLoggedMeals] = useState<LoggedMeal[]>([])
+
+  // Unbounded, not tied to `range` - same independence SessionHistoryDialog
+  // already documents for itself: browsing history shouldn't move the
+  // numbers in the cards below, and vice versa.
+  useEffect(() => {
+    listLoggedMealsRange(toDateKey(new Date()), undefined, traineeId)
+      .then(setLoggedMeals)
+      .catch(() => setLoggedMeals([]))
+  }, [traineeId])
 
   useEffect(() => {
     let cancelled = false
@@ -55,6 +68,8 @@ export default function NutritionDashboard({ range, traineeId }: Props) {
 
   return (
     <div className="flex flex-col gap-3">
+      <DietHistoryCard loggedMeals={loggedMeals} target={data.target} />
+
       <ProgressSummaryCard heading={heading} nutrients={hovered ? hovered.consumed : periodAverage} target={data.target} />
 
       <Card>

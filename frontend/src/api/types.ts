@@ -1,5 +1,3 @@
-export type Role = 'trainer' | 'trainee'
-
 export type GymLocation = 'home' | 'commercial' | 'outdoor' | 'none'
 export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced'
 
@@ -9,7 +7,8 @@ export type User = {
   email: string
   first_name: string
   last_name: string
-  role: Role
+  is_trainee: boolean
+  is_trainer: boolean
   trainer: number | null
   height_cm: string | null
   age: number | null
@@ -399,7 +398,7 @@ export type QAMessage = {
   thread: number
   sender: number
   sender_username: string
-  sender_role: Role
+  sender_role: 'trainer' | 'trainee'
   body: string
   created_at: string
 }

@@ -26,20 +26,16 @@ class QAThreadViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     trainee_path = "trainee"
 
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        trainee_id = self.request.query_params.get("trainee_id")
-        if trainee_id:
-            queryset = queryset.filter(trainee_id=trainee_id)
-        return queryset
-
     def perform_create(self, serializer):
         user = self.request.user
-        if user.role == user.Role.TRAINEE:
-            # A trainee's thread is always about themselves - server-set.
+        trainee = serializer.validated_data.get("trainee")
+        if trainee is None:
+            # No trainee named - about themselves, server-set.
+            if not user.is_trainee:
+                raise PermissionDenied("trainee is required.")
             serializer.save(trainee=user)
         else:
-            # A trainer must name one of their own trainees (validated_data
+            # A trainer named one of their own trainees (validated_data
             # already restricted to that queryset by the serializer).
             serializer.save()
 
@@ -138,9 +134,6 @@ class PlanChangeLogViewSet(TraineeScopedQuerysetMixin, viewsets.ReadOnlyModelVie
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        trainee_id = self.request.query_params.get("trainee_id")
-        if trainee_id:
-            queryset = queryset.filter(trainee_id=trainee_id)
         plan_type = self.request.query_params.get("plan_type")
         if plan_type:
             queryset = queryset.filter(plan_type=plan_type)

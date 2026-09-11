@@ -11,7 +11,7 @@ class DailyMetric(models.Model):
     trainee = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        limit_choices_to={"role": "trainee"},
+        limit_choices_to={"is_trainee": True},
         related_name="daily_metrics",
     )
     date = models.DateField()
@@ -42,7 +42,7 @@ class ActivityLog(models.Model):
     trainee = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        limit_choices_to={"role": "trainee"},
+        limit_choices_to={"is_trainee": True},
         related_name="activity_logs",
     )
     date = models.DateField()

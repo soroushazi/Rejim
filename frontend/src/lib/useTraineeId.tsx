@@ -11,21 +11,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
  * trainee-scoped endpoint treats a missing trainee id as "self" for a
  * trainee caller. */
 export function useTraineeId(): { traineeId: number | undefined; picker: React.ReactNode; ready: boolean } {
-  const { user } = useAuth()
+  const { viewMode } = useAuth()
   const [trainees, setTrainees] = useState<User[] | null>(null)
   const [selected, setSelected] = useState<number | undefined>(undefined)
 
   useEffect(() => {
-    if (user?.role !== 'trainer') return
+    if (viewMode !== 'trainer') return
     listTrainees()
       .then((data) => {
         setTrainees(data)
         setSelected((prev) => prev ?? data[0]?.id)
       })
       .catch(() => setTrainees([]))
-  }, [user?.role])
+  }, [viewMode])
 
-  if (user?.role !== 'trainer') {
+  if (viewMode !== 'trainer') {
     return { traineeId: undefined, picker: null, ready: true }
   }
   if (trainees === null) {

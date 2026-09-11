@@ -170,8 +170,12 @@ function PasswordForm() {
 }
 
 export default function ProfilePage() {
-  const { user } = useAuth()
-  const isTrainee = user?.role === 'trainee'
+  const { viewMode } = useAuth()
+  // Keyed off the current view mode, not the raw is_trainee flag - a
+  // dual-role account currently acting as trainer shouldn't see their own
+  // trainee onboarding sections here either (see NavDrawer.tsx/BottomNav.tsx
+  // for the same viewMode-driven trim).
+  const isTrainee = viewMode === 'trainee'
 
   return (
     <div className="flex flex-col gap-3">

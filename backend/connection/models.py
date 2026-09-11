@@ -11,7 +11,7 @@ class QAThread(models.Model):
     trainee = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        limit_choices_to={"role": "trainee"},
+        limit_choices_to={"is_trainee": True},
         related_name="qa_threads",
     )
     subject = models.CharField(max_length=255)
@@ -43,7 +43,7 @@ class TrainerNote(models.Model):
     trainee = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        limit_choices_to={"role": "trainee"},
+        limit_choices_to={"is_trainee": True},
         related_name="trainer_notes",
     )
     body = models.TextField()
@@ -79,7 +79,7 @@ class TrainerConnection(models.Model):
     trainee = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        limit_choices_to={"role": "trainee"},
+        limit_choices_to={"is_trainee": True},
         related_name="trainer_connection",
     )
     option_selected = models.CharField(max_length=20, choices=Option.choices)
@@ -90,7 +90,7 @@ class TrainerConnection(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        limit_choices_to={"role": "trainer"},
+        limit_choices_to={"is_trainer": True},
         related_name="pending_trainer_connections",
     )
     created_at = models.DateTimeField(auto_now_add=True)
@@ -121,13 +121,13 @@ class TrainerPrivateNote(models.Model):
     trainer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        limit_choices_to={"role": "trainer"},
+        limit_choices_to={"is_trainer": True},
         related_name="private_notes",
     )
     trainee = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        limit_choices_to={"role": "trainee"},
+        limit_choices_to={"is_trainee": True},
         related_name="+",
     )
     content = models.TextField()
@@ -153,7 +153,7 @@ class PlanChangeLog(models.Model):
     trainee = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        limit_choices_to={"role": "trainee"},
+        limit_choices_to={"is_trainee": True},
         related_name="plan_change_logs",
     )
     changed_by = models.ForeignKey(

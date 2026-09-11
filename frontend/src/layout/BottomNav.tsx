@@ -1,8 +1,9 @@
-import { CalendarCheck, Dumbbell, TrendingUp, User, Utensils } from 'lucide-react'
+import { CalendarCheck, Dumbbell, TrendingUp, User, Users, Utensils } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
+import { useAuth } from '@/auth/AuthContext'
 import { cn } from '@/lib/utils'
 
-const NAV_ITEMS = [
+const TRAINEE_NAV_ITEMS = [
   { to: '/diet', label: 'Diet', Icon: Utensils },
   { to: '/workout', label: 'Workout', Icon: Dumbbell },
   { to: '/progress', label: 'Progress', Icon: TrendingUp },
@@ -10,7 +11,15 @@ const NAV_ITEMS = [
   { to: '/trainer', label: 'Trainer', Icon: User },
 ]
 
+// A trainer's sole job here is managing trainees - no self-logging tabs to
+// show while in trainer view mode (see NavDrawer.tsx for the matching
+// hamburger-menu trim).
+const TRAINER_NAV_ITEMS = [{ to: '/trainees', label: 'Trainees', Icon: Users }]
+
 export default function BottomNav() {
+  const { viewMode } = useAuth()
+  const items = viewMode === 'trainer' ? TRAINER_NAV_ITEMS : TRAINEE_NAV_ITEMS
+
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-20 flex border-t border-border bg-card"
@@ -19,7 +28,7 @@ export default function BottomNav() {
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
-      {NAV_ITEMS.map(({ to, label, Icon }) => (
+      {items.map(({ to, label, Icon }) => (
         <NavLink
           key={to}
           to={to}

@@ -4,10 +4,6 @@ from django.db import models
 
 
 class User(AbstractUser):
-    class Role(models.TextChoices):
-        TRAINER = "trainer", "Trainer"
-        TRAINEE = "trainee", "Trainee"
-
     class WeightUnit(models.TextChoices):
         KG = "kg", "kg"
         LB = "lb", "lb"
@@ -23,13 +19,17 @@ class User(AbstractUser):
         INTERMEDIATE = "intermediate", "Intermediate"
         ADVANCED = "advanced", "Advanced"
 
-    role = models.CharField(max_length=10, choices=Role.choices)
+    # Independent capability flags - both can be true on the same account
+    # (a trainer who is also logging their own training). Replaces the old
+    # single `role` field, which could never represent that combination.
+    is_trainee = models.BooleanField(default=False)
+    is_trainer = models.BooleanField(default=False)
     trainer = models.ForeignKey(
         "self",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
-        limit_choices_to={"role": Role.TRAINER},
+        limit_choices_to={"is_trainer": True},
         related_name="trainees",
     )
 

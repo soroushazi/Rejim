@@ -3,9 +3,11 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { addDays, toDateKey } from '@/lib/date'
 
-export type RangePreset = '7d' | 'month' | '3mo' | 'all' | 'custom'
+export type RangePreset = 'today' | 'yesterday' | '7d' | 'month' | '3mo' | 'all' | 'custom'
 
 const PRESET_LABEL: Record<RangePreset, string> = {
+  today: 'Today',
+  yesterday: 'Yesterday',
   '7d': 'Last 7 days',
   month: 'Last month',
   '3mo': 'Last 3 months',
@@ -13,17 +15,22 @@ const PRESET_LABEL: Record<RangePreset, string> = {
   custom: 'Custom',
 }
 
-const PRESETS: RangePreset[] = ['7d', 'month', '3mo', 'all', 'custom']
+const PRESETS: RangePreset[] = ['today', 'yesterday', '7d', 'month', '3mo', 'all', 'custom']
 
 // "All time" has no real lower bound to query from without an extra fetch, and
-// the overview endpoint dense-fills every day in range - a 2-year lookback is
+// the overview endpoint dense-fills every day in range - a 10-year lookback is
 // a generous, practically-unbounded window at this app's ~10-user Stage 1
 // scale, without risking an enormous per-day array.
-const ALL_TIME_DAYS = 730
+const ALL_TIME_DAYS = 3650
 
 export function resolvePreset(preset: RangePreset, customStart: string, customEnd: string) {
   const today = toDateKey(new Date())
   if (preset === 'custom') return { start: customStart, end: customEnd }
+  if (preset === 'today') return { start: today, end: today }
+  if (preset === 'yesterday') {
+    const yesterday = addDays(today, -1)
+    return { start: yesterday, end: yesterday }
+  }
   if (preset === '7d') return { start: addDays(today, -6), end: today }
   if (preset === 'month') return { start: addDays(today, -29), end: today }
   if (preset === '3mo') return { start: addDays(today, -89), end: today }

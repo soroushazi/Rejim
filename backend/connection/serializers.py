@@ -18,22 +18,24 @@ class QAThreadSerializer(serializers.ModelSerializer):
         if request is None:
             return
         user = request.user
-        if user.role == user.Role.TRAINEE:
-            # A trainee can only ever open a thread about themselves - server-set.
-            self.fields["trainee"].read_only = True
-        else:
-            # A trainer must name one of their own trainees.
-            self.fields["trainee"].queryset = user.trainees.all()
+        # Optional and restricted to this requester's own trainees - naturally
+        # empty for a pure trainee, so DRF rejects any value they try to pass.
+        # Omitting it means "about themselves" (see QAThreadViewSet.perform_create).
+        self.fields["trainee"].required = False
+        self.fields["trainee"].queryset = user.trainees.all()
 
 
 class QAMessageSerializer(serializers.ModelSerializer):
     sender_username = serializers.CharField(source="sender.username", read_only=True)
-    sender_role = serializers.CharField(source="sender.role", read_only=True)
+    sender_role = serializers.SerializerMethodField()
 
     class Meta:
         model = QAMessage
         fields = ["id", "thread", "sender", "sender_username", "sender_role", "body", "created_at"]
         read_only_fields = ["sender", "created_at"]
+
+    def get_sender_role(self, obj):
+        return "trainer" if obj.sender.is_trainer else "trainee"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

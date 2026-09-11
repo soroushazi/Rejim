@@ -8,7 +8,6 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.mixins import TraineeScopedQuerysetMixin
-from accounts.models import User
 from accounts.permissions import IsTraineeWriteTrainerReadOnly
 from nutrition.models import FoodLog
 from nutrition.services import sum_nutrients
@@ -19,22 +18,25 @@ from .serializers import ActivityLogSerializer, DailyMetricSerializer
 
 
 def _resolve_trainee(request):
-    """Same rule used by every trainee-scoped aggregation endpoint: a trainee
-    can only ever ask about themselves, a trainer must name one of their own."""
+    """Same rule used by every trainee-scoped aggregation endpoint: an explicit
+    ?trainee_id= always means "one of my own trainees" (checked against the
+    real trainer FK, so this can't be used to read anyone else's data);
+    omitting it means "myself," which requires is_trainee. This presence-first
+    rule (rather than branching on the requester's own capability flags) is
+    what lets a dual-role account use the same endpoint both ways - see
+    accounts/mixins.py::TraineeScopedQuerysetMixin for the same pattern."""
     user = request.user
     trainee_id = request.query_params.get("trainee_id")
 
-    if user.role == User.Role.TRAINEE:
-        if trainee_id and str(user.pk) != str(trainee_id):
-            raise ValidationError("trainee_id must match your own account.")
-        return user
+    if trainee_id:
+        trainee = user.trainees.filter(pk=trainee_id).first()
+        if trainee is None:
+            raise ValidationError("trainee_id must be one of your own trainees.")
+        return trainee
 
-    if not trainee_id:
-        raise ValidationError("trainee_id is required for trainers.")
-    trainee = user.trainees.filter(pk=trainee_id).first()
-    if trainee is None:
-        raise ValidationError("trainee_id must be one of your own trainees.")
-    return trainee
+    if user.is_trainee:
+        return user
+    raise ValidationError("trainee_id is required for trainers.")
 
 
 def _parse_date(value, default):

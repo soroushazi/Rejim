@@ -33,8 +33,14 @@ type Props = {
 /** The thread list + compose + detail body shared by QAPage (the standalone
  * Trainer tab) and TraineeDetailPage's Notes & Q&A tab. */
 export default function QASection({ traineeId }: Props) {
-  const { user } = useAuth()
-  const isTrainer = user?.role === 'trainer'
+  const { viewMode } = useAuth()
+  // A known traineeId (passed in from TraineeDetailPage) always means we're
+  // acting on behalf of that trainee. With no traineeId, whether we're
+  // composing/labelling for a named trainee or for ourselves depends on the
+  // current view mode - this is what lets a dual-role account use this same
+  // standalone Q&A page (reached via the shared bottom-nav Trainer tab)
+  // both ways.
+  const actingForTrainee = traineeId !== undefined || viewMode === 'trainer'
   const [threads, setThreads] = useState<QAThread[] | null>(null)
   const [trainees, setTrainees] = useState<User[] | null>(null)
   const [showArchived, setShowArchived] = useState(false)
@@ -50,7 +56,7 @@ export default function QASection({ traineeId }: Props) {
     listQAThreads(traineeId)
       .then(setThreads)
       .catch(() => setThreads([]))
-    if (isTrainer && !traineeId) {
+    if (actingForTrainee && !traineeId) {
       listTrainees()
         .then((data) => {
           setTrainees(data)
@@ -59,7 +65,7 @@ export default function QASection({ traineeId }: Props) {
         .catch(() => setTrainees([]))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isTrainer, traineeId])
+  }, [actingForTrainee, traineeId])
 
   function handleThreadUpdated(updated: QAThread) {
     setThreads((prev) => (prev ?? []).map((t) => (t.id === updated.id ? updated : t)))
@@ -70,7 +76,7 @@ export default function QASection({ traineeId }: Props) {
       setError('Enter a subject and a message.')
       return
     }
-    if (isTrainer && !newThreadTraineeId) {
+    if (actingForTrainee && !newThreadTraineeId) {
       setError('Pick a trainee.')
       return
     }
@@ -79,7 +85,7 @@ export default function QASection({ traineeId }: Props) {
     try {
       const thread = await createQAThread({
         subject: subject.trim(),
-        ...(isTrainer ? { trainee: newThreadTraineeId } : {}),
+        ...(actingForTrainee ? { trainee: newThreadTraineeId } : {}),
       })
       await sendQAMessage({ thread: thread.id, body: firstMessage.trim() })
       setThreads((prev) => [thread, ...(prev ?? [])])
@@ -131,7 +137,7 @@ export default function QASection({ traineeId }: Props) {
 
       {creating && (
         <div className="flex flex-col gap-2 rounded-xl border border-border bg-card px-3.5 py-3">
-          {isTrainer && !traineeId && trainees && trainees.length > 1 && (
+          {actingForTrainee && !traineeId && trainees && trainees.length > 1 && (
             <Select value={String(newThreadTraineeId)} onValueChange={(v) => setNewThreadTraineeId(Number(v))}>
               <SelectTrigger className="w-full">
                 <SelectValue />
@@ -177,7 +183,7 @@ export default function QASection({ traineeId }: Props) {
                 <div className="flex flex-col gap-0.5">
                   <span className="font-medium">{thread.subject}</span>
                   <span className="text-xs text-muted-foreground">
-                    {isTrainer && !traineeId ? `${thread.trainee_username} · ` : ''}
+                    {actingForTrainee && !traineeId ? `${thread.trainee_username} · ` : ''}
                     {formatUpdated(thread.updated_at)}
                   </span>
                 </div>

@@ -36,15 +36,12 @@ class GoalSerializer(serializers.ModelSerializer):
         if request is None:
             return
         user = request.user
-        if user.role == user.Role.TRAINEE:
-            # A trainee's goal is always about themselves - server-set. (Whether
-            # they're allowed to write at all is GoalWritePermission's job, not
-            # this serializer's - see accounts/permissions.py.)
-            self.fields["trainee"].read_only = True
-        else:
-            # A trainer must name one of their own trainees, same pattern as
-            # QAThreadSerializer.
-            self.fields["trainee"].queryset = user.trainees.all()
+        # Optional and restricted to this requester's own trainees - naturally
+        # empty for a pure trainee, so DRF rejects any value they try to pass.
+        # Omitting it means "about themselves" (see GoalViewSet.perform_create;
+        # whether they're allowed to write at all is GoalWritePermission's job).
+        self.fields["trainee"].required = False
+        self.fields["trainee"].queryset = user.trainees.all()
 
     def get_current_weight_kg(self, obj):
         # "Progress measured against real data, not a duplicate field" - see
