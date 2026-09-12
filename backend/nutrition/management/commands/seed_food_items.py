@@ -23,7 +23,7 @@ CSV_FIELD_MAP = {
     "vitamin_a_mcg_per_100g": "vitamin_a_mcg_rae",
 }
 
-CSV_PATH = Path(settings.BASE_DIR).parent / "ingredient_nutrition_reference.csv"
+CSV_PATH = Path(settings.BASE_DIR) / "ingredient_nutrition_reference.csv"
 
 
 class Command(BaseCommand):

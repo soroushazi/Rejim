@@ -7,7 +7,7 @@ from openpyxl import load_workbook
 
 from workouts.models import Exercise, MuscleGroup
 
-XLSX_PATH = Path(settings.BASE_DIR).parent / "workout_sample.xlsx"
+XLSX_PATH = Path(settings.BASE_DIR) / "workout_sample.xlsx"
 
 # Plain-language cleanup for workout_sample.xlsx's Major/Minor Muscle Group
 # columns: strip clinical parentheticals ("Chest (Pectoralis Major)" ->
