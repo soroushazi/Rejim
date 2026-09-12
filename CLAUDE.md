@@ -87,6 +87,8 @@ The full Stage 1 feature set described above is built end-to-end (data model, DR
 
 **In progress:** production deployment — see "Deployment" below. Code is written and tested locally but the app is **not live yet**.
 
+**In progress:** DB backup/restore. `scripts/backup_db.sh` + `scripts/restore_db.sh` are written, committed, and pushed (2026-09-12) — daily local `pg_dump`, weekly `--upload` to a dedicated `rejim-db-backups` Object Storage bucket, 7-day local retention. The user has a full manual runbook (OCI bucket + PAR creation, `.env.prod` edit, manual test run, two `crontab` lines) but as of the last session hadn't confirmed running it yet — **don't assume the bucket/PAR exist or cron is wired up; ask before treating backups as live.** See Deployment steps 7–9 below for the exact runbook.
+
 Known gaps (unbuilt corners, not bugs):
 - No shared "which trainee am I viewing" concept — the Trainer tab, Progress, and Goals pages each have their own local trainee-picker.
 - No trainer-facing surface for `PlanChangeLog`, or for a trainee's `meal_preferences`/workout preferences/`injury_notes` captured during onboarding.
@@ -114,7 +116,7 @@ Production Docker infrastructure is written and tested locally, but **not yet li
 
 **Done (in this repo):** env-driven `backend/config/settings.py` (Postgres/SQLite switch, `SECRET_KEY`/`DEBUG`/`ALLOWED_HOSTS`, CORS/CSRF trusted origins, secure-cookie/proxy-SSL settings, `whitenoise` for `/static/`); `backend/Dockerfile` + `entrypoint.sh` (wait-for-Postgres → migrate → collectstatic → gunicorn on `:8001`); `frontend/Dockerfile` (one-shot build that copies `dist/` into a shared volume, no nginx container); `docker-compose.prod.yml` (`db` + `backend` + `frontend-build`, `backend` on an external `caddy` Docker network aliased `rejim-backend`); `.env.prod` at the repo root (gitignored, holds real secrets — must be copied to the server manually, never via `git pull`); `scripts/backup_db.sh` + `scripts/restore_db.sh`, ported from the AllIn app's own scripts of the same name (same Oracle instance) — daily `pg_dump --clean --if-exists` of the `db` service, gzipped to `~/rejim-backups/`, pruned past 7 days; `--upload` additionally PUTs the dump to a dedicated `rejim-db-backups` Object Storage bucket via a write-only pre-authenticated request URL (`BACKUP_PAR_URL` in `.env.prod`) — a separate bucket/PAR from AllIn's own, so a leaked one can't touch the other app's backups.
 
-**Left, all on the server or in AllIn's own repo — none of it in this repo:**
+**Left, all on the server or in AllIn's own repo — none of it in this repo (steps 7–9 are the backup runbook, status unconfirmed as of 2026-09-12 — see "Where things stand" above):**
 1. Copy `.env.prod` to the server (not via git).
 2. One-time: `docker network create caddy` + `docker volume create rejim_frontend_dist`.
 3. In AllIn's repo: add a Caddyfile site block for `rejim.soroushazizzadeh.com` (reverse-proxy `/api*`, `/admin*`, `/static/*`, `/media/*` to `rejim-backend:8001`; `file_server` everything else from a new `/srv-rejim` root), mount the shared volume/network onto AllIn's `caddy` service, then `docker compose up -d caddy`.
