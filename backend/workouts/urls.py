@@ -1,6 +1,7 @@
 from rest_framework.routers import DefaultRouter
 
 from .views import (
+    ExerciseEditRequestViewSet,
     ExerciseViewSet,
     LoggedExerciseViewSet,
     LoggedSetViewSet,
@@ -14,6 +15,7 @@ from .views import (
 router = DefaultRouter()
 router.register("muscle-groups", MuscleGroupViewSet, basename="musclegroup")
 router.register("exercises", ExerciseViewSet, basename="exercise")
+router.register("exercise-edit-requests", ExerciseEditRequestViewSet, basename="exerciseeditrequest")
 router.register("plans", WorkoutPlanViewSet, basename="workoutplan")
 router.register("plan-sessions", PlanSessionViewSet, basename="plansession")
 router.register("plan-exercises", PlanExerciseViewSet, basename="planexercise")

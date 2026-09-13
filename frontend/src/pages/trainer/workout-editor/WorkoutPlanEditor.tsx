@@ -29,10 +29,15 @@ export default function WorkoutPlanEditor({ traineeId }: { traineeId: number }) 
   const [sessionsPerWeek, setSessionsPerWeek] = useState('3')
   const [savingPlan, setSavingPlan] = useState(false)
 
+  // Deliberately doesn't touch `loading` - this also runs after every edit
+  // (add a session/exercise, reorder, ...) via onChanged, and swapping the
+  // whole tree for a "Loading…" placeholder on every one of those would
+  // unmount every SessionEditor, collapsing whichever session the trainer had
+  // open back down each time. Only the very first load (below) needs the
+  // full-page loading state.
   function reload() {
-    setLoading(true)
-    listWorkoutPlans(traineeId)
-      .then((plans) => (plans.length ? getWorkoutPlan(plans[0].id) : null))
+    return listWorkoutPlans(traineeId)
+      .then((plans) => (plans.length ? getWorkoutPlan(plans[0].id, traineeId) : null))
       .then((detail) => {
         setPlan(detail)
         if (detail) {
@@ -40,11 +45,11 @@ export default function WorkoutPlanEditor({ traineeId }: { traineeId: number }) 
           setSessionsPerWeek(String(detail.sessions_per_week))
         }
       })
-      .finally(() => setLoading(false))
   }
 
   useEffect(() => {
-    reload()
+    setLoading(true)
+    reload().finally(() => setLoading(false))
     listExercises()
       .then(setExercises)
       .catch(() => setExercises([]))

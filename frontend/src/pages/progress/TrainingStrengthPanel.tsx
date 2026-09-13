@@ -23,6 +23,7 @@ export default function TrainingStrengthPanel({ range, traineeId }: Props) {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [prEvents, setPrEvents] = useState<PrEvent[]>([])
+  const [currentPr, setCurrentPr] = useState<{ weight: number; reps: number; unit: string } | null>(null)
   const [strengthGoals, setStrengthGoals] = useState<Goal[]>([])
 
   useEffect(() => {
@@ -59,23 +60,37 @@ export default function TrainingStrengthPanel({ range, traineeId }: Props) {
   useEffect(() => {
     if (selectedId === null) {
       setPrEvents([])
+      setCurrentPr(null)
       return
     }
     let cancelled = false
     // Unbounded - a PR check needs everything before it, not just the
     // selected range, so this is a separate fetch from ExerciseHistoryContent's
-    // own range-scoped one for display.
-    listExerciseHistory(selectedId)
+    // own range-scoped one for display. Also doubles as the source for the
+    // all-time PR summary, for the same reason.
+    listExerciseHistory(selectedId, undefined, traineeId)
       .then((history) => {
-        if (!cancelled) setPrEvents(computePrTimeline(history))
+        if (cancelled) return
+        setPrEvents(computePrTimeline(history))
+        const working = history.filter((s) => !s.is_warmup)
+        if (working.length === 0) {
+          setCurrentPr(null)
+          return
+        }
+        const maxWeight = Math.max(...working.map((s) => Number(s.weight)))
+        const maxReps = Math.max(...working.filter((s) => Number(s.weight) === maxWeight).map((s) => s.reps_done))
+        setCurrentPr({ weight: maxWeight, reps: maxReps, unit: working[0].weight_unit })
       })
       .catch(() => {
-        if (!cancelled) setPrEvents([])
+        if (!cancelled) {
+          setPrEvents([])
+          setCurrentPr(null)
+        }
       })
     return () => {
       cancelled = true
     }
-  }, [selectedId])
+  }, [selectedId, traineeId])
 
   const selected = options.find((o) => o.exercise_id === selectedId)
   const query = search.trim().toLowerCase()
@@ -138,6 +153,9 @@ export default function TrainingStrengthPanel({ range, traineeId }: Props) {
             exerciseId={selectedId}
             range={range}
             prEvents={prEvents}
+            traineeId={traineeId}
+            showVolume
+            currentPr={currentPr ?? undefined}
             goalWeightKg={(() => {
               const goal = strengthGoals.find((g) => g.exercise === selectedId)
               return goal && goal.target_value && goal.target_value_unit

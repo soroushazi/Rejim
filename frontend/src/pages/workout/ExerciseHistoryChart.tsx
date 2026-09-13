@@ -1,9 +1,11 @@
+import { X } from 'lucide-react'
 import { useState } from 'react'
 import type { ExerciseHistorySet } from '@/api/types'
 import type { PrEvent } from '@/lib/personalRecord'
 import { cn } from '@/lib/utils'
 
-type DayPoint = { date: string; maxWeight: number; avgReps: number; weightUnit: string }
+type DayPoint = { date: string; maxWeight: number; avgReps: number; volume: number; weightUnit: string }
+type SeriesKey = 'weight' | 'reps' | 'volume'
 
 const W = 600
 const H = 240
@@ -33,6 +35,11 @@ function formatDateShort(date: string) {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
+function formatDateFull(date: string) {
+  const d = new Date(`${date}T00:00:00`)
+  return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+}
+
 /** Dual-axis by explicit spec: weight and avg reps/set are unrelated scales
  * (not meant to be compared 1:1), so unlike the Diet Progress chart (which
  * avoided a dual axis by indexing to % of target) there's no common base to
@@ -42,6 +49,8 @@ export default function ExerciseHistoryChart({
   history,
   prEvents,
   goalWeight,
+  showVolume,
+  currentPr,
 }: {
   history: ExerciseHistorySet[]
   /** Optional PR markers drawn on the weight line - used by the Progress tab's
@@ -52,8 +61,22 @@ export default function ExerciseHistoryChart({
    * own display unit (the most recent session's weight_unit) - draws a dashed
    * reference line, same idiom as OverviewChart's weight-goal line. */
   goalWeight?: number
+  /** Adds a third toggleable "Volume" line (sum of weight x reps across a
+   * day's working sets, i.e. tonnage) - a fuller picture of overall strength
+   * than the weight line alone, since it also reflects how many reps/sets were
+   * done at that weight. Opt-in (used by the trainer's Progress > Training >
+   * Strength view) so the trainee's own simpler history view is unchanged. */
+  showVolume?: boolean
+  /** All-time personal record for this exercise - shown as a summary line
+   * above the chart. Independent of whatever date range `history` covers, so
+   * it stays accurate even when the chart itself is showing a narrower window. */
+  currentPr?: { weight: number; reps: number; unit: string }
 }) {
-  const [visible, setVisible] = useState({ weight: true, reps: true })
+  const [visible, setVisible] = useState({ weight: true, reps: true, volume: true })
+  // Stored by date (not index) so it naturally clears itself if the
+  // underlying history changes (different exercise, narrower range, ...)
+  // instead of pointing at a now-unrelated day.
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
 
   const working = history.filter((s) => !s.is_warmup)
   const byDate = new Map<string, ExerciseHistorySet[]>()
@@ -67,6 +90,7 @@ export default function ExerciseHistoryChart({
       date,
       maxWeight: Math.max(...sets.map((s) => Number(s.weight))),
       avgReps: sets.reduce((sum, s) => sum + s.reps_done, 0) / sets.length,
+      volume: sets.reduce((sum, s) => sum + Number(s.weight) * s.reps_done, 0),
       weightUnit: sets[0].weight_unit,
     }))
     .sort((a, b) => a.date.localeCompare(b.date))
@@ -78,6 +102,7 @@ export default function ExerciseHistoryChart({
 
   const weightAxis = computeAxis(Math.max(...days.map((d) => d.maxWeight), goalWeight ?? 0))
   const repsAxis = computeAxis(Math.max(...days.map((d) => d.avgReps)))
+  const volumeAxis = computeAxis(Math.max(...days.map((d) => d.volume)))
 
   const labelStep = Math.max(1, Math.ceil(n / 5))
   const dateLabelIndices = new Set(days.map((_, i) => i).filter((i) => i === 0 || i === n - 1 || i % labelStep === 0))
@@ -88,18 +113,29 @@ export default function ExerciseHistoryChart({
   function repsPath() {
     return days.map((d, i) => `${i === 0 ? 'M' : 'L'}${x(i, n).toFixed(1)},${y(d.avgReps, repsAxis.niceMax).toFixed(1)}`).join(' ')
   }
+  function volumePath() {
+    return days.map((d, i) => `${i === 0 ? 'M' : 'L'}${x(i, n).toFixed(1)},${y(d.volume, volumeAxis.niceMax).toFixed(1)}`).join(' ')
+  }
 
   const last = days[n - 1]
+  const selectedDay = days.find((d) => d.date === selectedDate) ?? null
+  const bandWidth = n > 1 ? PLOT_W / (n - 1) : PLOT_W
+  const seriesToggles: { key: SeriesKey; label: string; cssVar: string }[] = [
+    { key: 'weight', label: `Weight (${last.weightUnit})`, cssVar: '--chart-1' },
+    { key: 'reps', label: 'Avg reps/set', cssVar: '--chart-2' },
+    ...(showVolume ? [{ key: 'volume' as const, label: `Volume (${last.weightUnit})`, cssVar: '--chart-3' }] : []),
+  ]
 
   return (
     <div className="flex flex-col gap-2">
+      {currentPr && (
+        <p className="text-sm">
+          <span aria-hidden="true">🏆</span> <span className="font-semibold">PR:</span> {currentPr.weight}
+          {currentPr.unit} × {currentPr.reps} reps
+        </p>
+      )}
       <div className="flex flex-wrap gap-1.5">
-        {(
-          [
-            { key: 'weight' as const, label: `Weight (${last.weightUnit})`, cssVar: '--chart-1' },
-            { key: 'reps' as const, label: 'Avg reps/set', cssVar: '--chart-2' },
-          ]
-        ).map((s) => (
+        {seriesToggles.map((s) => (
           <button
             key={s.key}
             type="button"
@@ -115,7 +151,12 @@ export default function ExerciseHistoryChart({
         ))}
       </div>
 
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full select-none" role="img" aria-label="Weight and average reps per set over time">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="w-full select-none"
+        role="img"
+        aria-label={showVolume ? 'Weight, average reps per set, and volume over time' : 'Weight and average reps per set over time'}
+      >
         {visible.weight &&
           weightAxis.ticks.map((t) => (
             <text key={`wl-${t}`} x={PAD.left - 6} y={y(t, weightAxis.niceMax)} textAnchor="end" dominantBaseline="middle" fontSize={9} fill="var(--chart-1)">
@@ -140,9 +181,23 @@ export default function ExerciseHistoryChart({
           ) : null,
         )}
 
+        {selectedDay && (
+          <line
+            x1={x(days.indexOf(selectedDay), n)}
+            x2={x(days.indexOf(selectedDay), n)}
+            y1={PAD.top}
+            y2={H - PAD.bottom}
+            stroke="var(--foreground)"
+            strokeOpacity={0.15}
+            strokeWidth={1}
+          />
+        )}
         {visible.weight && (
           <g>
             <path d={weightPath()} fill="none" stroke="var(--chart-1)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            {days.map((d, i) => (
+              <circle key={d.date} cx={x(i, n)} cy={y(d.maxWeight, weightAxis.niceMax)} r={2.5} fill="var(--chart-1)" />
+            ))}
             <text x={x(n - 1, n) + 6} y={y(last.maxWeight, weightAxis.niceMax)} dominantBaseline="middle" fontSize={9} fontWeight={600} fill="var(--chart-1)">
               {last.maxWeight}
             </text>
@@ -169,6 +224,14 @@ export default function ExerciseHistoryChart({
             <path d={repsPath()} fill="none" stroke="var(--chart-2)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
             <text x={x(n - 1, n) + 6} y={y(last.avgReps, repsAxis.niceMax) - 10} dominantBaseline="middle" fontSize={9} fontWeight={600} fill="var(--chart-2)">
               {Math.round(last.avgReps * 10) / 10}
+            </text>
+          </g>
+        )}
+        {showVolume && visible.volume && (
+          <g>
+            <path d={volumePath()} fill="none" stroke="var(--chart-3)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            <text x={x(n - 1, n) + 6} y={y(last.volume, volumeAxis.niceMax) + 10} dominantBaseline="middle" fontSize={9} fontWeight={600} fill="var(--chart-3)">
+              {Math.round(last.volume)}
             </text>
           </g>
         )}
@@ -202,7 +265,51 @@ export default function ExerciseHistoryChart({
               </rect>
             )
           })}
+
+        {days.map((d, i) => (
+          <rect
+            key={`hit-${d.date}`}
+            x={x(i, n) - bandWidth / 2}
+            y={PAD.top}
+            width={bandWidth}
+            height={PLOT_H}
+            fill="transparent"
+            className="cursor-pointer"
+            onClick={() => setSelectedDate((cur) => (cur === d.date ? null : d.date))}
+          >
+            <title>{formatDateFull(d.date)}</title>
+          </rect>
+        ))}
       </svg>
+
+      {selectedDay && (
+        <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-muted/30 p-2.5 text-sm">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-medium">{formatDateFull(selectedDay.date)}</span>
+            <button
+              type="button"
+              onClick={() => setSelectedDate(null)}
+              aria-label="Close"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
+          <div className="flex flex-col gap-0.5 text-muted-foreground">
+            <span>
+              Weight: <span className="font-medium text-foreground">{selectedDay.maxWeight}{selectedDay.weightUnit}</span>
+            </span>
+            <span>
+              Avg reps/set: <span className="font-medium text-foreground">{Math.round(selectedDay.avgReps * 10) / 10}</span>
+            </span>
+            {showVolume && (
+              <span>
+                Volume: <span className="font-medium text-foreground">{Math.round(selectedDay.volume)}{selectedDay.weightUnit}</span>
+              </span>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

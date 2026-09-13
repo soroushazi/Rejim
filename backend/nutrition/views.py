@@ -3,13 +3,19 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from accounts.mixins import TraineeScopedQuerysetMixin
-from accounts.permissions import IsTrainer, IsTraineeWriteTrainerReadOnly, IsTrainerWriteTraineeReadOnly
+from accounts.permissions import (
+    EditRequestPermission,
+    IsTrainer,
+    IsTraineeWriteTrainerReadOnly,
+    IsTrainerWriteTraineeReadOnly,
+)
 from connection.mixins import PlanChangeLoggingMixin
 
 from .models import (
     DietaryTag,
     DietPlan,
     FoodItem,
+    FoodItemEditRequest,
     FoodLog,
     LoggedMeal,
     MacroFilter,
@@ -23,6 +29,7 @@ from .serializers import (
     DietaryTagSerializer,
     DietPlanDetailSerializer,
     DietPlanSerializer,
+    FoodItemEditRequestSerializer,
     FoodItemSerializer,
     FoodLogSerializer,
     LoggedMealSerializer,
@@ -92,6 +99,24 @@ class FoodItemViewSet(viewsets.ModelViewSet):
         )
         candidates = sorted(candidates, key=lambda c: abs(c.calories_per_100g - food_item.calories_per_100g))[:10]
         return Response(self.get_serializer(candidates, many=True).data)
+
+
+class FoodItemEditRequestViewSet(viewsets.ModelViewSet):
+    serializer_class = FoodItemEditRequestSerializer
+    permission_classes = [EditRequestPermission]
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = FoodItemEditRequest.objects.select_related("food_item", "requested_by")
+        if not user.is_trainer:
+            queryset = queryset.filter(requested_by=user)
+        food_item_id = self.request.query_params.get("food_item")
+        if food_item_id:
+            queryset = queryset.filter(food_item_id=food_item_id)
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(requested_by=self.request.user)
 
 
 class QuickLogItemViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):

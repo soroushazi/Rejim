@@ -55,6 +55,35 @@ class Exercise(models.Model):
         return self.name
 
 
+class ExerciseEditRequest(models.Model):
+    """A trainee's freeform request to change something about a shared Exercise
+    Bank entry - trainees can't edit Exercise directly (see CLAUDE.md's shared
+    reference-data trust model), so this is how they flag a correction for a
+    trainer to make. A trainer reviews the description, edits the exercise
+    themselves, then marks this resolved."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        RESOLVED = "resolved", "Resolved"
+
+    exercise = models.ForeignKey(Exercise, on_delete=models.CASCADE, related_name="edit_requests")
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        limit_choices_to={"is_trainee": True},
+        related_name="exercise_edit_requests",
+    )
+    description = models.TextField()
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Edit request for {self.exercise.name} by {self.requested_by}"
+
+
 class WorkoutPlan(models.Model):
     trainee = models.ForeignKey(
         settings.AUTH_USER_MODEL,

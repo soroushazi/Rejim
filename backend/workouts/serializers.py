@@ -2,6 +2,7 @@ from rest_framework import serializers
 
 from .models import (
     Exercise,
+    ExerciseEditRequest,
     LoggedExercise,
     LoggedSet,
     MuscleGroup,
@@ -33,6 +34,25 @@ class ExerciseSerializer(serializers.ModelSerializer):
             "video_url",
             "alternatives",
         ]
+
+
+class ExerciseEditRequestSerializer(serializers.ModelSerializer):
+    exercise_name = serializers.CharField(source="exercise.name", read_only=True)
+    requested_by_username = serializers.CharField(source="requested_by.username", read_only=True)
+
+    class Meta:
+        model = ExerciseEditRequest
+        fields = [
+            "id",
+            "exercise",
+            "exercise_name",
+            "requested_by",
+            "requested_by_username",
+            "description",
+            "status",
+            "created_at",
+        ]
+        read_only_fields = ["requested_by", "created_at"]
 
 
 class WorkoutPlanSerializer(serializers.ModelSerializer):

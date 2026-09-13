@@ -1,5 +1,13 @@
 import { apiFetch } from './client'
-import type { DietaryTag, FoodItem, FoodItemApprovalStatus, MacroFilter, NewFoodItem } from './types'
+import type {
+  DietaryTag,
+  FoodItem,
+  FoodItemApprovalStatus,
+  FoodItemEditRequest,
+  MacroFilter,
+  NewFoodItem,
+  NewFoodItemEditRequest,
+} from './types'
 
 export type FoodItemFilters = {
   search?: string
@@ -24,6 +32,34 @@ export function createFoodItem(data: NewFoodItem): Promise<FoodItem> {
   return apiFetch<FoodItem>('/nutrition/food-items/', {
     method: 'POST',
     body: JSON.stringify(data),
+  })
+}
+
+export function updateFoodItem(id: number, data: Omit<NewFoodItem, 'barcode'>): Promise<FoodItem> {
+  return apiFetch<FoodItem>(`/nutrition/food-items/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  })
+}
+
+/** Fetched in full alongside the bank (trainers see every request, trainees only
+ * their own - see FoodItemEditRequestViewSet.get_queryset) and grouped client-side
+ * by food item, mirroring listExerciseEditRequests. */
+export function listFoodItemEditRequests(): Promise<FoodItemEditRequest[]> {
+  return apiFetch<FoodItemEditRequest[]>('/nutrition/food-item-edit-requests/')
+}
+
+export function createFoodItemEditRequest(data: NewFoodItemEditRequest): Promise<FoodItemEditRequest> {
+  return apiFetch<FoodItemEditRequest>('/nutrition/food-item-edit-requests/', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export function resolveFoodItemEditRequest(id: number): Promise<FoodItemEditRequest> {
+  return apiFetch<FoodItemEditRequest>(`/nutrition/food-item-edit-requests/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status: 'resolved' }),
   })
 }
 

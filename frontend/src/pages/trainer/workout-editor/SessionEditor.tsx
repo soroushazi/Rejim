@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPlanExercise, deletePlanExercise, deletePlanSession, updatePlanExercise, updatePlanSession } from '@/api/workoutPlans'
 import type { Exercise, PlanExerciseDetail, PlanSessionDetail } from '@/api/types'
 import { Button } from '@/components/ui/button'
@@ -15,6 +15,7 @@ function ExerciseRow({
   onMoveUp,
   onMoveDown,
   onChanged,
+  autoExpand,
 }: {
   exercise: PlanExerciseDetail
   isFirst: boolean
@@ -22,8 +23,13 @@ function ExerciseRow({
   onMoveUp: () => void
   onMoveDown: () => void
   onChanged: () => void
+  // Set right after this exercise is added to the session, so the trainer
+  // lands straight in its sets/reps/rest details instead of a collapsed row
+  // they'd have to re-open.
+  autoExpand?: boolean
 }) {
-  const [editing, setEditing] = useState(false)
+  const [editing, setEditing] = useState(!!autoExpand)
+  const containerRef = useRef<HTMLDivElement>(null)
   const [sets, setSets] = useState(String(exercise.target_sets))
   const [repsMin, setRepsMin] = useState(String(exercise.target_reps_min))
   const [repsMax, setRepsMax] = useState(String(exercise.target_reps_max))
@@ -54,8 +60,14 @@ function ExerciseRow({
     onChanged()
   }
 
+  useEffect(() => {
+    // Only on mount - autoExpand is only ever true for the exercise's very
+    // first render, right after it was added.
+    if (autoExpand) containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [])
+
   return (
-    <div className="rounded-lg border border-border p-2.5">
+    <div ref={containerRef} className="rounded-lg border border-border p-2.5">
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1">
           <div className="flex flex-col">
@@ -86,7 +98,14 @@ function ExerciseRow({
       ) : (
         <div className="mt-2 flex flex-col gap-2">
           <div className="grid grid-cols-3 gap-2">
-            <Input type="number" min="1" value={sets} onChange={(e) => setSets(e.target.value)} placeholder="Sets" />
+            <Input
+              type="number"
+              min="1"
+              value={sets}
+              onChange={(e) => setSets(e.target.value)}
+              placeholder="Sets"
+              autoFocus={autoExpand}
+            />
             <Input type="number" min="1" value={repsMin} onChange={(e) => setRepsMin(e.target.value)} placeholder="Min reps" />
             <Input type="number" min="1" value={repsMax} onChange={(e) => setRepsMax(e.target.value)} placeholder="Max reps" />
           </div>
@@ -101,7 +120,19 @@ function ExerciseRow({
   )
 }
 
-function AddExerciseRow({ exercises, order, sessionId, onChanged }: { exercises: Exercise[]; order: number; sessionId: number; onChanged: () => void }) {
+function AddExerciseRow({
+  exercises,
+  order,
+  sessionId,
+  onChanged,
+  onAdded,
+}: {
+  exercises: Exercise[]
+  order: number
+  sessionId: number
+  onChanged: () => void
+  onAdded: (id: number) => void
+}) {
   const [adding, setAdding] = useState(false)
   const [exerciseId, setExerciseId] = useState('')
   const [saving, setSaving] = useState(false)
@@ -110,7 +141,7 @@ function AddExerciseRow({ exercises, order, sessionId, onChanged }: { exercises:
     if (!exerciseId) return
     setSaving(true)
     try {
-      await createPlanExercise({
+      const created = await createPlanExercise({
         session: sessionId,
         exercise: Number(exerciseId),
         target_sets: 3,
@@ -119,6 +150,7 @@ function AddExerciseRow({ exercises, order, sessionId, onChanged }: { exercises:
         default_rest_seconds: 120,
         order,
       })
+      onAdded(created.id)
       setAdding(false)
       setExerciseId('')
       onChanged()
@@ -175,6 +207,7 @@ export default function SessionEditor({ session, exercises, isFirst, isLast, onM
   const [label, setLabel] = useState(session.label)
   const [notes, setNotes] = useState(session.notes)
   const [saving, setSaving] = useState(false)
+  const [newlyAddedExerciseId, setNewlyAddedExerciseId] = useState<number | null>(null)
 
   async function saveDetails() {
     setSaving(true)
@@ -248,9 +281,16 @@ export default function SessionEditor({ session, exercises, isFirst, isLast, onM
                   onChanged()
                 }}
                 onChanged={onChanged}
+                autoExpand={ex.id === newlyAddedExerciseId}
               />
             ))}
-            <AddExerciseRow exercises={exercises} order={session.exercises.length} sessionId={session.id} onChanged={onChanged} />
+            <AddExerciseRow
+              exercises={exercises}
+              order={session.exercises.length}
+              sessionId={session.id}
+              onChanged={onChanged}
+              onAdded={setNewlyAddedExerciseId}
+            />
           </div>
         </CardContent>
       )}

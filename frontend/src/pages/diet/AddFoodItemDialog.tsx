@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useAuth } from '../../auth/AuthContext'
-import { createFoodItem, listDietaryTags, listMacroFilters } from '../../api/foodItems'
+import { createFoodItem, listDietaryTags, listMacroFilters, updateFoodItem } from '../../api/foodItems'
 import type { DietaryTag, FoodItem, FoodItemKind, FoodItemServingUnit, FoodItemVisibility, MacroFilter } from '../../api/types'
 import IngredientPicker, { type DraftComponent } from './IngredientPicker'
 import { FIXED_GRAMS_PER_UNIT, SERVING_UNIT_NOUN, SERVING_UNIT_OPTIONS } from '@/lib/servingUnits'
@@ -11,11 +11,17 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { round } from '@/lib/utils'
 
 type AddFoodItemDialogProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
   onCreated: (item: FoodItem) => void
+  // Set when this dialog is nested inside IngredientPicker's "Add a new ingredient" -
+  // an ingredient is always a single item, so the Type toggle has nothing to offer.
+  singleItemOnly?: boolean
+  // Set to edit an existing food item in place instead of creating a new one.
+  item?: FoodItem
 }
 
 const MACRO_FIELDS: { key: string; label: string }[] = [
@@ -46,13 +52,20 @@ function servingCaption(unit: FoodItemServingUnit, sizeGrams: string) {
   return `Per ${SERVING_UNIT_NOUN[unit]}${grams}`
 }
 
-export default function AddFoodItemDialog({ open, onOpenChange, onCreated }: AddFoodItemDialogProps) {
+export default function AddFoodItemDialog({
+  open,
+  onOpenChange,
+  onCreated,
+  singleItemOnly,
+  item,
+}: AddFoodItemDialogProps) {
+  const isEditing = item !== undefined
   const { user } = useAuth()
   const [macroFilters, setMacroFilters] = useState<MacroFilter[]>([])
   const [dietaryTags, setDietaryTags] = useState<DietaryTag[]>([])
   const [name, setName] = useState('')
   const [kind, setKind] = useState<FoodItemKind>('single')
-  const [visibility, setVisibility] = useState<FoodItemVisibility>('private')
+  const [visibility, setVisibility] = useState<FoodItemVisibility>(user?.is_trainer ? 'public' : 'private')
   const [servingUnit, setServingUnit] = useState<FoodItemServingUnit>('g')
   const [servingSizeGrams, setServingSizeGrams] = useState('')
   const [values, setValues] = useState(EMPTY_VALUES)
@@ -66,7 +79,7 @@ export default function AddFoodItemDialog({ open, onOpenChange, onCreated }: Add
   function reset() {
     setName('')
     setKind('single')
-    setVisibility('private')
+    setVisibility(user?.is_trainer ? 'public' : 'private')
     setServingUnit('g')
     setServingSizeGrams('')
     setValues(EMPTY_VALUES)
@@ -74,6 +87,31 @@ export default function AddFoodItemDialog({ open, onOpenChange, onCreated }: Add
     setComponents([])
     setSelectedMacroFilters([])
     setSelectedDietaryTags([])
+    setError(null)
+  }
+
+  function prefillFrom(existing: FoodItem) {
+    const basisGrams = existing.serving_unit === 'g' ? 100 : Number(existing.serving_size_grams ?? 100)
+    setName(existing.name)
+    setKind(existing.kind)
+    setVisibility(existing.visibility)
+    setServingUnit(existing.serving_unit)
+    setServingSizeGrams(existing.serving_size_grams ?? '')
+    setValues(
+      Object.fromEntries(
+        [...MACRO_FIELDS, ...MICRO_FIELDS].map(({ key }) => {
+          const raw = existing[key as keyof FoodItem] as string | null
+          if (raw === null || raw === undefined) return [key, '']
+          return [key, String(round((Number(raw) * basisGrams) / 100))]
+        }),
+      ) as Record<string, string>,
+    )
+    setShowMicros(MICRO_FIELDS.some(({ key }) => existing[key as keyof FoodItem]))
+    setComponents(
+      existing.components.map((c) => ({ ingredient: c.ingredient, name: c.ingredient_name, weight_grams: c.weight_grams })),
+    )
+    setSelectedMacroFilters(existing.macro_filters.map(String))
+    setSelectedDietaryTags(existing.dietary_tags.map(String))
     setError(null)
   }
 
@@ -85,7 +123,9 @@ export default function AddFoodItemDialog({ open, onOpenChange, onCreated }: Add
     listDietaryTags()
       .then(setDietaryTags)
       .catch(() => {})
-  }, [open])
+    if (item) prefillFrom(item)
+    else reset()
+  }, [open, item])
 
   function handleOpenChange(next: boolean) {
     if (!next) reset()
@@ -100,6 +140,12 @@ export default function AddFoodItemDialog({ open, onOpenChange, onCreated }: Add
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
+    // This dialog can be nested inside itself (IngredientPicker's "Add a new
+    // ingredient" opens one from within another already-open instance). React
+    // bubbles events through the React tree, not the DOM tree, so without this a
+    // submit here would also fire the outer instance's handleSubmit even though
+    // its form isn't a real DOM ancestor (it's portaled).
+    e.stopPropagation()
     setError(null)
 
     if (!name.trim()) {
@@ -129,30 +175,34 @@ export default function AddFoodItemDialog({ open, onOpenChange, onCreated }: Add
 
     const basisGrams = servingUnit === 'g' ? 100 : Number(servingSizeGrams)
 
+    const payload = {
+      name: name.trim(),
+      kind,
+      visibility,
+      serving_unit: servingUnit,
+      serving_size_grams: servingUnit === 'g' ? null : servingSizeGrams,
+      macro_filters: selectedMacroFilters.map(Number),
+      dietary_tags: selectedDietaryTags.map(Number),
+      ...(kind === 'single'
+        ? Object.fromEntries(
+            [...MACRO_FIELDS, ...MICRO_FIELDS].map(({ key }) => [
+              key,
+              values[key].trim() === '' ? null : ((Number(values[key]) * 100) / basisGrams).toFixed(2),
+            ]),
+          )
+        : {}),
+      ...(kind === 'composite'
+        ? { components: components.map(({ ingredient, weight_grams }) => ({ ingredient, weight_grams })) }
+        : {}),
+    }
+
     setSubmitting(true)
     try {
-      const created = await createFoodItem({
-        name: name.trim(),
-        barcode: null,
-        kind,
-        visibility,
-        serving_unit: servingUnit,
-        serving_size_grams: servingUnit === 'g' ? null : servingSizeGrams,
-        macro_filters: selectedMacroFilters.map(Number),
-        dietary_tags: selectedDietaryTags.map(Number),
-        ...(kind === 'single'
-          ? Object.fromEntries(
-              [...MACRO_FIELDS, ...MICRO_FIELDS].map(({ key }) => [
-                key,
-                values[key].trim() === '' ? null : ((Number(values[key]) * 100) / basisGrams).toFixed(2),
-              ]),
-            )
-          : {}),
-        ...(kind === 'composite'
-          ? { components: components.map(({ ingredient, weight_grams }) => ({ ingredient, weight_grams })) }
-          : {}),
-      })
-      onCreated(created)
+      // Editing never touches barcode (this form has no field for it) - only a
+      // fresh create sends barcode: null, so an edit can't blank out a seeded
+      // item's real barcode.
+      const saved = isEditing ? await updateFoodItem(item.id, payload) : await createFoodItem({ ...payload, barcode: null })
+      onCreated(saved)
       handleOpenChange(false)
     } catch {
       setError('Could not save this food item. Check the values and try again.')
@@ -161,11 +211,50 @@ export default function AddFoodItemDialog({ open, onOpenChange, onCreated }: Add
     }
   }
 
+  // Single item only - right after Type, since the unit applies to the macro values
+  // entered right below. Multiple ingredients has no equivalent: each ingredient gets
+  // its own unit + amount inside IngredientPicker, so there's nothing left for an
+  // overall recipe-level unit to mean.
+  const measurementFields = (
+    <div className="grid grid-cols-2 gap-3">
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <Label htmlFor="serving-unit">Measurement</Label>
+        <Select value={servingUnit} onValueChange={(v) => handleUnitChange(v as FoodItemServingUnit)}>
+          <SelectTrigger id="serving-unit" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SERVING_UNIT_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      {servingUnit !== 'g' && (
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <Label htmlFor="serving-size-grams">Grams per {SERVING_UNIT_NOUN[servingUnit]}</Label>
+          <Input
+            id="serving-size-grams"
+            type="number"
+            inputMode="decimal"
+            step="0.1"
+            min="0"
+            value={servingSizeGrams}
+            onChange={(e) => setServingSizeGrams(e.target.value)}
+            required
+          />
+        </div>
+      )}
+    </div>
+  )
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-h-[85svh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add food</DialogTitle>
+          <DialogTitle>{isEditing ? 'Edit food' : 'Add food'}</DialogTitle>
         </DialogHeader>
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
           <div className="flex flex-col gap-1.5">
@@ -173,58 +262,7 @@ export default function AddFoodItemDialog({ open, onOpenChange, onCreated }: Add
             <Input id="food-name" value={name} onChange={(e) => setName(e.target.value)} required />
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label>Type</Label>
-            <ToggleGroup
-              type="single"
-              variant="outline"
-              value={kind}
-              onValueChange={(v) => v && setKind(v as FoodItemKind)}
-              className="w-full"
-            >
-              <ToggleGroupItem value="single" className="flex-1">
-                Single item
-              </ToggleGroupItem>
-              <ToggleGroupItem value="composite" className="flex-1">
-                Multiple ingredients
-              </ToggleGroupItem>
-            </ToggleGroup>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex min-w-0 flex-col gap-1.5">
-              <Label htmlFor="serving-unit">Measurement</Label>
-              <Select value={servingUnit} onValueChange={(v) => handleUnitChange(v as FoodItemServingUnit)}>
-                <SelectTrigger id="serving-unit" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {SERVING_UNIT_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {servingUnit !== 'g' && (
-              <div className="flex min-w-0 flex-col gap-1.5">
-                <Label htmlFor="serving-size-grams">Grams per {SERVING_UNIT_NOUN[servingUnit]}</Label>
-                <Input
-                  id="serving-size-grams"
-                  type="number"
-                  inputMode="decimal"
-                  step="0.1"
-                  min="0"
-                  value={servingSizeGrams}
-                  onChange={(e) => setServingSizeGrams(e.target.value)}
-                  required
-                />
-              </div>
-            )}
-          </div>
-
-          {user?.is_trainee && (
+          {user?.is_trainer ? (
             <div className="flex flex-col gap-1.5">
               <Label>Visibility</Label>
               <ToggleGroup
@@ -234,23 +272,69 @@ export default function AddFoodItemDialog({ open, onOpenChange, onCreated }: Add
                 onValueChange={(v) => v && setVisibility(v as FoodItemVisibility)}
                 className="w-full"
               >
-                <ToggleGroupItem value="private" className="flex-1">
-                  Private
-                </ToggleGroupItem>
                 <ToggleGroupItem value="public" className="flex-1">
                   Public
                 </ToggleGroupItem>
+                <ToggleGroupItem value="trainees" className="flex-1">
+                  My Trainees
+                </ToggleGroupItem>
               </ToggleGroup>
               <p className="text-xs text-muted-foreground">
-                {visibility === 'private'
-                  ? 'Only visible to you.'
-                  : 'Shared with everyone once a trainer approves it.'}
+                {visibility === 'trainees'
+                  ? 'Only visible to your own trainees.'
+                  : 'Shared with everyone in the Food Bank.'}
               </p>
+            </div>
+          ) : (
+            user?.is_trainee && (
+              <div className="flex flex-col gap-1.5">
+                <Label>Visibility</Label>
+                <ToggleGroup
+                  type="single"
+                  variant="outline"
+                  value={visibility}
+                  onValueChange={(v) => v && setVisibility(v as FoodItemVisibility)}
+                  className="w-full"
+                >
+                  <ToggleGroupItem value="private" className="flex-1">
+                    Private
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="public" className="flex-1">
+                    Public
+                  </ToggleGroupItem>
+                </ToggleGroup>
+                <p className="text-xs text-muted-foreground">
+                  {visibility === 'private'
+                    ? 'Only visible to you.'
+                    : 'Shared with everyone once a trainer approves it.'}
+                </p>
+              </div>
+            )
+          )}
+
+          {!singleItemOnly && (
+            <div className="flex flex-col gap-1.5">
+              <Label>Type</Label>
+              <ToggleGroup
+                type="single"
+                variant="outline"
+                value={kind}
+                onValueChange={(v) => v && setKind(v as FoodItemKind)}
+                className="w-full"
+              >
+                <ToggleGroupItem value="single" className="flex-1">
+                  Single item
+                </ToggleGroupItem>
+                <ToggleGroupItem value="composite" className="flex-1">
+                  Multiple ingredients
+                </ToggleGroupItem>
+              </ToggleGroup>
             </div>
           )}
 
           {kind === 'single' ? (
             <>
+              {measurementFields}
               <p className="text-xs text-muted-foreground">{servingCaption(servingUnit, servingSizeGrams)}</p>
               <div className="grid grid-cols-2 gap-3">
                 {MACRO_FIELDS.map(({ key, label }) => (
@@ -299,7 +383,7 @@ export default function AddFoodItemDialog({ open, onOpenChange, onCreated }: Add
               )}
             </>
           ) : (
-            <IngredientPicker value={components} onChange={setComponents} visibility={visibility} />
+            <IngredientPicker value={components} onChange={setComponents} />
           )}
 
           {(macroFilters.length > 0 || dietaryTags.length > 0) && (
@@ -332,7 +416,7 @@ export default function AddFoodItemDialog({ open, onOpenChange, onCreated }: Add
           {error && <p className="text-sm text-destructive">{error}</p>}
 
           <Button type="submit" disabled={submitting}>
-            {submitting ? 'Saving…' : 'Save food item'}
+            {submitting ? 'Saving…' : isEditing ? 'Save changes' : 'Save food item'}
           </Button>
         </form>
       </DialogContent>

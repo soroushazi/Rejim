@@ -1,6 +1,16 @@
 from django.contrib import admin
 
-from .models import DietPlan, FoodItem, FoodLog, LoggedMeal, MealOption, QuickLogItem, ReferenceMeal, ReferenceMealItem
+from .models import (
+    DietPlan,
+    FoodItem,
+    FoodItemEditRequest,
+    FoodLog,
+    LoggedMeal,
+    MealOption,
+    QuickLogItem,
+    ReferenceMeal,
+    ReferenceMealItem,
+)
 
 
 class ReferenceMealInline(admin.TabularInline):
@@ -69,3 +79,9 @@ class LoggedMealAdmin(admin.ModelAdmin):
     list_display = ("trainee", "reference_meal", "date", "source")
     list_filter = ("trainee", "source")
     inlines = [LoggedMealItemInline]
+
+
+@admin.register(FoodItemEditRequest)
+class FoodItemEditRequestAdmin(admin.ModelAdmin):
+    list_display = ("food_item", "requested_by", "status", "created_at")
+    list_filter = ("status",)

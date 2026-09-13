@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import type { Exercise, ExerciseDifficulty, MuscleGroup } from '@/api/types'
+import type { Exercise, ExerciseDifficulty, ExerciseEditRequest, MuscleGroup } from '@/api/types'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import MuscleDiagram from './MuscleDiagram'
 
 const DIFFICULTY_LABEL: Record<ExerciseDifficulty, string> = {
@@ -19,12 +20,23 @@ export default function ExerciseCard({
   exercise,
   muscleGroups,
   exercisesById,
+  isTrainer,
+  editRequests,
+  onEdit,
+  onRequestEdit,
+  onResolveRequest,
 }: {
   exercise: Exercise
   muscleGroups: MuscleGroup[]
   exercisesById: Map<number, Exercise>
+  isTrainer: boolean
+  editRequests: ExerciseEditRequest[]
+  onEdit: () => void
+  onRequestEdit: () => void
+  onResolveRequest: (id: number) => void
 }) {
   const [expanded, setExpanded] = useState(false)
+  const pendingRequests = editRequests.filter((r) => r.status === 'pending')
 
   const muscleGroupsById = new Map(muscleGroups.map((m) => [m.id, m.name]))
   const primaryNames = exercise.primary_muscle_groups.map((id) => muscleGroupsById.get(id)).filter((n): n is string => !!n)
@@ -96,6 +108,33 @@ export default function ExerciseCard({
               </ul>
             </div>
           )}
+
+          <div className="flex flex-col gap-2 border-t border-border pt-3">
+            <Button type="button" variant="outline" size="sm" className="self-start" onClick={isTrainer ? onEdit : onRequestEdit}>
+              {isTrainer ? 'Edit exercise' : 'Request edit'}
+            </Button>
+
+            {isTrainer && pendingRequests.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <p className="text-xs font-medium text-muted-foreground">Edit requests</p>
+                {pendingRequests.map((req) => (
+                  <div key={req.id} className="flex flex-col gap-1.5 rounded-lg border border-border p-2.5 text-sm">
+                    <p>{req.description}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-muted-foreground">from {req.requested_by_username}</span>
+                      <Button type="button" size="sm" variant="ghost" onClick={() => onResolveRequest(req.id)}>
+                        Mark resolved
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!isTrainer && pendingRequests.length > 0 && (
+              <p className="text-xs text-muted-foreground">Your edit request is pending review.</p>
+            )}
+          </div>
         </div>
       )}
     </li>

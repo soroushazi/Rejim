@@ -1,6 +1,16 @@
 from django.contrib import admin
 
-from .models import Exercise, LoggedExercise, LoggedSet, MuscleGroup, PlanExercise, PlanSession, WorkoutPlan, WorkoutSession
+from .models import (
+    Exercise,
+    ExerciseEditRequest,
+    LoggedExercise,
+    LoggedSet,
+    MuscleGroup,
+    PlanExercise,
+    PlanSession,
+    WorkoutPlan,
+    WorkoutSession,
+)
 
 
 class PlanSessionInline(admin.TabularInline):
@@ -63,3 +73,9 @@ class LoggedExerciseAdmin(admin.ModelAdmin):
 
 admin.site.register(PlanExercise)
 admin.site.register(LoggedSet)
+
+
+@admin.register(ExerciseEditRequest)
+class ExerciseEditRequestAdmin(admin.ModelAdmin):
+    list_display = ("exercise", "requested_by", "status", "created_at")
+    list_filter = ("status",)

@@ -28,6 +28,27 @@ class IsTraineeWriteTrainerReadOnly(BasePermission):
         return request.user.is_trainee
 
 
+class EditRequestPermission(BasePermission):
+    """Shared reference data (Exercise/FoodItem) can't be edited directly by a
+    trainee - instead they file a freeform edit request a trainer reviews. A
+    trainee may only create one and see their own; a trainer may see every
+    request and update its status (e.g. mark it resolved) once acted on."""
+
+    def has_permission(self, request, view):
+        if not (request.user and request.user.is_authenticated):
+            return False
+        if request.method == "POST":
+            return request.user.is_trainee
+        if request.method in SAFE_METHODS:
+            return True
+        return request.user.is_trainer
+
+    def has_object_permission(self, request, view, obj):
+        if request.method in SAFE_METHODS:
+            return request.user.is_trainer or obj.requested_by_id == request.user.id
+        return request.user.is_trainer
+
+
 class GoalWritePermission(BasePermission):
     """Goal ownership flips once a trainer is assigned (TRAINER_DASHBOARD_SPEC.md):
     a trainee may write their own goals only while unassigned (trainer is None -

@@ -5,6 +5,7 @@ from .models import (
     DietPlan,
     FoodItem,
     FoodItemComponent,
+    FoodItemEditRequest,
     FoodLog,
     LoggedMeal,
     MacroFilter,
@@ -100,8 +101,14 @@ class FoodItemSerializer(serializers.ModelSerializer):
 
     def _visibility_and_approval(self, user, visibility):
         if user.is_trainer:
-            return FoodItem.Visibility.PUBLIC, FoodItem.ApprovalStatus.APPROVED
-        visibility = visibility or FoodItem.Visibility.PRIVATE
+            # A trainer has no use for a Private item (nobody but them could ever see
+            # it), so their choice is Public vs. Trainees-only - both trusted enough to
+            # skip the approval workflow that a trainee's own public submission needs.
+            if visibility not in (FoodItem.Visibility.PUBLIC, FoodItem.Visibility.TRAINEES):
+                visibility = FoodItem.Visibility.PUBLIC
+            return visibility, FoodItem.ApprovalStatus.APPROVED
+        if visibility not in (FoodItem.Visibility.PRIVATE, FoodItem.Visibility.PUBLIC):
+            visibility = FoodItem.Visibility.PRIVATE
         approval = (
             FoodItem.ApprovalStatus.APPROVED
             if visibility == FoodItem.Visibility.PRIVATE
@@ -135,6 +142,8 @@ class FoodItemSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         components_data = validated_data.pop("components", None)
+        macro_filters = validated_data.pop("macro_filters", None)
+        dietary_tags = validated_data.pop("dietary_tags", None)
         user = self.context["request"].user
         if "visibility" in validated_data:
             validated_data["visibility"], validated_data["approval_status"] = self._visibility_and_approval(
@@ -143,6 +152,10 @@ class FoodItemSerializer(serializers.ModelSerializer):
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
+        if macro_filters is not None:
+            instance.macro_filters.set(macro_filters)
+        if dietary_tags is not None:
+            instance.dietary_tags.set(dietary_tags)
         if components_data is not None:
             instance.components.all().delete()
             for component in components_data:
@@ -150,6 +163,31 @@ class FoodItemSerializer(serializers.ModelSerializer):
         if instance.kind == FoodItem.Kind.COMPOSITE:
             instance.recompute_from_components()
         return instance
+
+
+class FoodItemEditRequestSerializer(serializers.ModelSerializer):
+    food_item_name = serializers.CharField(source="food_item.name", read_only=True)
+    requested_by_username = serializers.CharField(source="requested_by.username", read_only=True)
+
+    class Meta:
+        model = FoodItemEditRequest
+        fields = [
+            "id",
+            "food_item",
+            "food_item_name",
+            "requested_by",
+            "requested_by_username",
+            "description",
+            "status",
+            "created_at",
+        ]
+        read_only_fields = ["requested_by", "created_at"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        if request is not None:
+            self.fields["food_item"].queryset = FoodItem.visible_to(request.user)
 
 
 class QuickLogItemSerializer(serializers.ModelSerializer):

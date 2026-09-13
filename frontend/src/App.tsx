@@ -73,6 +73,31 @@ export default function App() {
         <Route path="/onboarding" element={<OnboardingWizard />} />
         <Route path="/trainees" element={<TraineeListPage />} />
         <Route path="/trainees/:id" element={<TraineeDetailPage />} />
+        {/* Top-level, unguarded reuses of the same bank pages trainees reach via
+            /diet/food-bank and /workout/exercises - these are shared reference
+            data (any trainer can write, everyone can read), so a trainer in
+            trainer view mode needs a route to them too (their bottom nav links
+            here; see BottomNav.tsx TRAINER_NAV_ITEMS). Unlike the nested
+            trainee routes, there's no pill tab bar for context here, so these
+            get the page-title <h1> that other true top-level pages use. */}
+        <Route
+          path="/food-bank"
+          element={
+            <div className="flex flex-col gap-3">
+              <h1 className="text-lg font-semibold">Food Bank</h1>
+              <FoodBankPage />
+            </div>
+          }
+        />
+        <Route
+          path="/exercise-bank"
+          element={
+            <div className="flex flex-col gap-3">
+              <h1 className="text-lg font-semibold">Exercise Bank</h1>
+              <ExerciseBankPage />
+            </div>
+          }
+        />
         <Route
           path="/diet"
           element={

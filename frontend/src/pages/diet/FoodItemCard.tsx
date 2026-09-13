@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../../auth/AuthContext'
 import { reviewFoodItem } from '../../api/foodItems'
-import type { DietaryTag, FoodItem, MacroFilter } from '../../api/types'
+import type { DietaryTag, FoodItem, FoodItemEditRequest, MacroFilter } from '../../api/types'
 import { SERVING_UNIT_NOUN } from '@/lib/servingUnits'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -13,12 +13,20 @@ export default function FoodItemCard({
   item,
   macroFilters,
   dietaryTags,
+  editRequests,
   onUpdated,
+  onEdit,
+  onRequestEdit,
+  onResolveRequest,
 }: {
   item: FoodItem
   macroFilters: MacroFilter[]
   dietaryTags: DietaryTag[]
+  editRequests: FoodItemEditRequest[]
   onUpdated: (item: FoodItem) => void
+  onEdit: () => void
+  onRequestEdit: () => void
+  onResolveRequest: (id: number) => void
 }) {
   const { user } = useAuth()
   const [expanded, setExpanded] = useState(false)
@@ -26,6 +34,8 @@ export default function FoodItemCard({
   const [detailOpen, setDetailOpen] = useState(false)
   const isOwner = user?.id === item.created_by
   const isTrainer = user?.is_trainer
+  const canEdit = !!(isTrainer || isOwner)
+  const pendingRequests = editRequests.filter((r) => r.status === 'pending')
 
   const servingGrams = item.serving_size_grams ? Number(item.serving_size_grams) : null
   const factor = servingGrams ? servingGrams / 100 : 1
@@ -66,6 +76,11 @@ export default function FoodItemCard({
             {item.visibility === 'private' && (
               <Badge variant="outline" className="font-normal">
                 Private
+              </Badge>
+            )}
+            {item.visibility === 'trainees' && (
+              <Badge variant="outline" className="font-normal">
+                My Trainees
               </Badge>
             )}
             {item.visibility === 'public' && item.approval_status === 'pending' && (
@@ -121,6 +136,33 @@ export default function FoodItemCard({
               </Button>
             </div>
           )}
+
+          <div className="flex flex-col gap-2 border-t border-border pt-3">
+            <Button type="button" variant="outline" size="sm" className="self-start" onClick={canEdit ? onEdit : onRequestEdit}>
+              {canEdit ? 'Edit food item' : 'Request edit'}
+            </Button>
+
+            {isTrainer && pendingRequests.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <p className="text-xs font-medium text-muted-foreground">Edit requests</p>
+                {pendingRequests.map((req) => (
+                  <div key={req.id} className="flex flex-col gap-1.5 rounded-lg border border-border p-2.5 text-sm">
+                    <p>{req.description}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-muted-foreground">from {req.requested_by_username}</span>
+                      <Button type="button" size="sm" variant="ghost" onClick={() => onResolveRequest(req.id)}>
+                        Mark resolved
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!canEdit && pendingRequests.length > 0 && (
+              <p className="text-xs text-muted-foreground">Your edit request is pending review.</p>
+            )}
+          </div>
         </div>
       )}
 

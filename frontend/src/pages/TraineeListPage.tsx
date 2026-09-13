@@ -2,9 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { listTraineeRoster } from '@/api/trainerDashboard'
 import type { TraineeListRow, WeightTrend } from '@/api/types'
-import { useAuth } from '@/auth/AuthContext'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -21,7 +19,6 @@ function formatLastActive(value: string | null) {
  * assigned trainees (see TRAINER_DASHBOARD_SPEC.md). */
 export default function TraineeListPage() {
   const navigate = useNavigate()
-  const { user, setViewMode } = useAuth()
   const [rows, setRows] = useState<TraineeListRow[] | null>(null)
   const [search, setSearch] = useState('')
   const [trend, setTrend] = useState<WeightTrend | 'any'>('any')
@@ -52,29 +49,13 @@ export default function TraineeListPage() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-2">
-        <h1 className="text-lg font-semibold">My Trainees</h1>
-        {user?.is_trainer && user?.is_trainee && (
-          <Button
-            type="button"
-            variant="link"
-            size="sm"
-            className="h-auto p-0 text-xs text-muted-foreground"
-            onClick={() => {
-              setViewMode('trainee')
-              navigate('/diet')
-            }}
-          >
-            Log my own training
-          </Button>
-        )}
-      </div>
+      <h1 className="text-lg font-semibold">My Trainees</h1>
 
       <Input placeholder="Search by name…" value={search} onChange={(e) => setSearch(e.target.value)} />
 
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="flex items-center gap-1.5">
         <Select value={trend} onValueChange={(v) => setTrend(v as WeightTrend | 'any')}>
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="flex-1">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -84,11 +65,8 @@ export default function TraineeListPage() {
             <SelectItem value="maintaining">Maintaining</SelectItem>
           </SelectContent>
         </Select>
-        <Toggle pressed={lowConsistency} onPressedChange={setLowConsistency} variant="outline" size="sm">
-          Low consistency
-        </Toggle>
         <Select value={inactiveDays} onValueChange={setInactiveDays}>
-          <SelectTrigger className="w-44">
+          <SelectTrigger className="flex-1">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -99,6 +77,16 @@ export default function TraineeListPage() {
           </SelectContent>
         </Select>
       </div>
+
+      <Toggle
+        pressed={lowConsistency}
+        onPressedChange={setLowConsistency}
+        variant="outline"
+        size="sm"
+        className="self-start"
+      >
+        Low consistency
+      </Toggle>
 
       {rows === null ? (
         <p className="mt-6 text-center text-sm text-muted-foreground">Loading…</p>

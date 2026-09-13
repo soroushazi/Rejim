@@ -20,19 +20,39 @@ type Props = {
    * whatever unit the most recent session actually used before being passed
    * to the chart (see ExerciseHistoryChart's goalWeight prop). */
   goalWeightKg?: number
+  /** Set only when a trainer is viewing a specific trainee's history (Progress
+   * > Training > Strength) - forwarded to the fetch so it's scoped to that
+   * trainee instead of the trainer's own (usually empty) history, and also
+   * switches the empty-state wording since "this is your first time" reads
+   * wrong from a trainer's point of view. */
+  traineeId?: number
+  /** Adds a third "Volume" (sum of weight x reps for working sets) line to the
+   * chart - see ExerciseHistoryChart's showVolume prop. */
+  showVolume?: boolean
+  /** All-time personal record for this exercise, independent of whatever date
+   * range `history` is narrowed to - see ExerciseHistoryChart's currentPr prop. */
+  currentPr?: { weight: number; reps: number; unit: string }
 }
 
 /** Fetches and renders one exercise's history (chart + date-grouped set list) -
  * shared between the Log-time popup (ExerciseHistoryDialog) and the Progress
  * page's inline exercise-history card, so both stay in sync automatically. */
-export default function ExerciseHistoryContent({ exerciseId, range, prEvents, goalWeightKg }: Props) {
+export default function ExerciseHistoryContent({
+  exerciseId,
+  range,
+  prEvents,
+  goalWeightKg,
+  traineeId,
+  showVolume,
+  currentPr,
+}: Props) {
   const [history, setHistory] = useState<ExerciseHistorySet[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    listExerciseHistory(exerciseId, range)
+    listExerciseHistory(exerciseId, range, traineeId)
       .then((data) => {
         if (!cancelled) setHistory(data)
       })
@@ -46,7 +66,7 @@ export default function ExerciseHistoryContent({ exerciseId, range, prEvents, go
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [exerciseId, range?.start, range?.end])
+  }, [exerciseId, range?.start, range?.end, traineeId])
 
   if (loading) {
     return <p className="text-sm text-muted-foreground">Loading…</p>
@@ -54,7 +74,9 @@ export default function ExerciseHistoryContent({ exerciseId, range, prEvents, go
   if (history.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        No history available — this is your first time doing this exercise.
+        {traineeId !== undefined
+          ? 'No history available for this exercise yet.'
+          : 'No history available — this is your first time doing this exercise.'}
       </p>
     )
   }
@@ -71,7 +93,13 @@ export default function ExerciseHistoryContent({ exerciseId, range, prEvents, go
 
   return (
     <div className="flex flex-col gap-4">
-      <ExerciseHistoryChart history={history} prEvents={prEvents} goalWeight={goalWeight} />
+      <ExerciseHistoryChart
+        history={history}
+        prEvents={prEvents}
+        goalWeight={goalWeight}
+        showVolume={showVolume}
+        currentPr={currentPr}
+      />
       <div className="flex flex-col gap-2 border-t border-border pt-3">
         {days.map(([date, sets]) => (
           <div key={date} className="rounded-lg border border-border p-2.5">

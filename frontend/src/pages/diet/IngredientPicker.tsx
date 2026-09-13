@@ -1,37 +1,41 @@
 import { useEffect, useState } from 'react'
 import { Plus, X } from 'lucide-react'
-import { createFoodItem, listFoodItems } from '../../api/foodItems'
-import type { FoodItemVisibility } from '../../api/types'
+import { listFoodItems } from '../../api/foodItems'
+import type { FoodItem, FoodItemServingUnit } from '../../api/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { gramsForQuantity, gramsPerUnit, SERVING_UNIT_NOUN, SERVING_UNIT_OPTIONS } from '@/lib/servingUnits'
+import AddFoodItemDialog from './AddFoodItemDialog'
 
 export type DraftComponent = {
   ingredient: number
   name: string
   weight_grams: string
+  // Only set for a row added by search or by "Add a new ingredient" in this session -
+  // enables the per-ingredient unit picker below, since it needs the item's own
+  // serving_unit/serving_size_grams to convert. Rows a caller preloads from an API that
+  // only returns id/name/weight (e.g. ReferenceMealEditor's existing meal items) won't
+  // have it, and fall back to a plain grams input.
+  food_item?: FoodItem
+  unit?: FoodItemServingUnit
+  quantity?: string
 }
 
 type IngredientPickerProps = {
   value: DraftComponent[]
   onChange: (next: DraftComponent[]) => void
-  visibility: FoodItemVisibility
+  // Focuses the search box as soon as this picker mounts - used when a meal
+  // option was just created, so the trainer can start adding ingredients
+  // immediately instead of having to re-expand back down to this card.
+  autoFocusSearch?: boolean
 }
 
-const NEW_INGREDIENT_FIELDS: { key: 'calories' | 'protein' | 'carbs' | 'fat'; label: string }[] = [
-  { key: 'calories', label: 'Calories (kcal)' },
-  { key: 'protein', label: 'Protein (g)' },
-  { key: 'carbs', label: 'Carbs (g)' },
-  { key: 'fat', label: 'Fat (g)' },
-]
-
-export default function IngredientPicker({ value, onChange, visibility }: IngredientPickerProps) {
+export default function IngredientPicker({ value, onChange, autoFocusSearch }: IngredientPickerProps) {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<{ id: number; name: string; calories_per_100g: string }[]>([])
-  const [showCreate, setShowCreate] = useState(false)
-  const [newIngredient, setNewIngredient] = useState({ name: '', calories: '', protein: '', carbs: '', fat: '' })
-  const [creating, setCreating] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [results, setResults] = useState<FoodItem[]>([])
+  const [addOpen, setAddOpen] = useState(false)
 
   useEffect(() => {
     if (!query.trim()) {
@@ -50,11 +54,23 @@ export default function IngredientPicker({ value, onChange, visibility }: Ingred
     }
   }, [query])
 
-  function addComponent(ingredient: { id: number; name: string }) {
-    if (value.some((c) => c.ingredient === ingredient.id)) return
-    onChange([...value, { ingredient: ingredient.id, name: ingredient.name, weight_grams: '' }])
+  function addComponent(item: FoodItem) {
+    if (value.some((c) => c.ingredient === item.id)) return
+    onChange([...value, { ingredient: item.id, name: item.name, weight_grams: '', food_item: item, unit: 'g', quantity: '' }])
     setQuery('')
     setResults([])
+  }
+
+  function updateMeasurement(ingredientId: number, patch: Partial<Pick<DraftComponent, 'unit' | 'quantity'>>) {
+    onChange(
+      value.map((c) => {
+        if (c.ingredient !== ingredientId || !c.food_item) return c
+        const unit = patch.unit ?? c.unit ?? 'g'
+        const quantity = patch.quantity ?? c.quantity ?? ''
+        const grams = gramsForQuantity(c.food_item, unit, quantity)
+        return { ...c, unit, quantity, weight_grams: grams !== null ? String(grams) : '' }
+      }),
+    )
   }
 
   function updateWeight(ingredientId: number, weight_grams: string) {
@@ -63,36 +79,6 @@ export default function IngredientPicker({ value, onChange, visibility }: Ingred
 
   function removeComponent(ingredientId: number) {
     onChange(value.filter((c) => c.ingredient !== ingredientId))
-  }
-
-  async function handleCreateIngredient() {
-    setError(null)
-    const { name, calories, protein, carbs, fat } = newIngredient
-    if (!name.trim() || !calories || !protein || !carbs || !fat) {
-      setError('Name, calories, protein, carbs, and fat are all required.')
-      return
-    }
-    setCreating(true)
-    try {
-      const created = await createFoodItem({
-        name: name.trim(),
-        barcode: null,
-        kind: 'single',
-        visibility,
-        serving_unit: 'g',
-        calories_per_100g: calories,
-        protein_g_per_100g: protein,
-        carbs_g_per_100g: carbs,
-        fat_g_per_100g: fat,
-      })
-      addComponent(created)
-      setNewIngredient({ name: '', calories: '', protein: '', carbs: '', fat: '' })
-      setShowCreate(false)
-    } catch {
-      setError('Could not save that ingredient.')
-    } finally {
-      setCreating(false)
-    }
   }
 
   return (
@@ -104,6 +90,7 @@ export default function IngredientPicker({ value, onChange, visibility }: Ingred
           placeholder="Search food bank…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          autoFocus={autoFocusSearch}
         />
       </div>
 
@@ -124,74 +111,70 @@ export default function IngredientPicker({ value, onChange, visibility }: Ingred
         </ul>
       )}
 
-      {!showCreate ? (
-        <Button type="button" variant="link" className="h-auto justify-start px-0" onClick={() => setShowCreate(true)}>
-          Can't find it? Add a new ingredient
-        </Button>
-      ) : (
-        <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="new-ingredient-name">New ingredient name</Label>
-            <Input
-              id="new-ingredient-name"
-              value={newIngredient.name}
-              onChange={(e) => setNewIngredient((v) => ({ ...v, name: e.target.value }))}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            {NEW_INGREDIENT_FIELDS.map(({ key, label }) => (
-              <div key={key} className="flex min-w-0 flex-col gap-1.5">
-                <Label htmlFor={`new-ingredient-${key}`}>{label}</Label>
-                <Input
-                  id={`new-ingredient-${key}`}
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="0.1"
-                  value={newIngredient[key]}
-                  onChange={(e) => setNewIngredient((v) => ({ ...v, [key]: e.target.value }))}
-                />
-              </div>
-            ))}
-          </div>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <div className="flex gap-2">
-            <Button type="button" size="sm" disabled={creating} onClick={handleCreateIngredient}>
-              {creating ? 'Adding…' : 'Add ingredient'}
-            </Button>
-            <Button type="button" size="sm" variant="ghost" onClick={() => setShowCreate(false)}>
-              Cancel
-            </Button>
-          </div>
-        </div>
-      )}
+      <Button type="button" variant="link" className="h-auto justify-start px-0" onClick={() => setAddOpen(true)}>
+        Can't find it? Add a new ingredient
+      </Button>
 
       {value.length > 0 && (
         <div className="flex flex-col gap-2">
           <Label>Added ({value.length})</Label>
           {value.map((component) => (
-            <div key={component.ingredient} className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 truncate text-sm">{component.name}</span>
-              <Input
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="1"
-                placeholder="grams"
-                className="w-24"
-                value={component.weight_grams}
-                onChange={(e) => updateWeight(component.ingredient, e.target.value)}
-                required
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`Remove ${component.name}`}
-                onClick={() => removeComponent(component.ingredient)}
-              >
-                <X className="size-4" />
-              </Button>
+            <div key={component.ingredient} className="flex flex-col gap-1.5 rounded-lg border border-border p-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">{component.name}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Remove ${component.name}`}
+                  onClick={() => removeComponent(component.ingredient)}
+                >
+                  <X className="size-4" />
+                </Button>
+              </div>
+
+              {component.food_item ? (
+                <>
+                  <Select
+                    value={component.unit ?? 'g'}
+                    onValueChange={(v) => updateMeasurement(component.ingredient, { unit: v as FoodItemServingUnit })}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SERVING_UNIT_OPTIONS.filter((opt) => gramsPerUnit(component.food_item!, opt.value) !== null).map(
+                        (opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ),
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.1"
+                    placeholder={`Amount (${SERVING_UNIT_NOUN[component.unit ?? 'g']})`}
+                    value={component.quantity ?? ''}
+                    onChange={(e) => updateMeasurement(component.ingredient, { quantity: e.target.value })}
+                    required
+                  />
+                </>
+              ) : (
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="1"
+                  placeholder="grams"
+                  value={component.weight_grams}
+                  onChange={(e) => updateWeight(component.ingredient, e.target.value)}
+                  required
+                />
+              )}
             </div>
           ))}
         </div>
@@ -202,6 +185,8 @@ export default function IngredientPicker({ value, onChange, visibility }: Ingred
           <Plus className="size-3.5" /> Search and add at least one ingredient.
         </p>
       )}
+
+      <AddFoodItemDialog open={addOpen} onOpenChange={setAddOpen} onCreated={addComponent} singleItemOnly />
     </div>
   )
 }

@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     DietaryTagViewSet,
     DietPlanViewSet,
+    FoodItemEditRequestViewSet,
     FoodItemViewSet,
     FoodLogViewSet,
     LoggedMealViewSet,
@@ -15,6 +16,7 @@ from .views import (
 
 router = DefaultRouter()
 router.register("food-items", FoodItemViewSet, basename="fooditem")
+router.register("food-item-edit-requests", FoodItemEditRequestViewSet, basename="fooditemeditrequest")
 router.register("macro-filters", MacroFilterViewSet, basename="macrofilter")
 router.register("dietary-tags", DietaryTagViewSet, basename="dietarytag")
 router.register("quick-log-items", QuickLogItemViewSet, basename="quicklogitem")

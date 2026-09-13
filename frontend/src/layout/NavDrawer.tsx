@@ -21,13 +21,13 @@ const MENU_ITEMS = [
 // Trainer-only - the first role-conditional item in this menu, shown only in
 // trainee view mode (trainer mode's own menu is trimmed to just Profile
 // below - this item lives in the bottom nav's "Trainees" tab instead). For a
-// dual-role account this is also their way back into the trainer dashboard
-// after using the "Log my own training" link (see TraineeListPage.tsx).
+// dual-role account this is their way back into the trainer dashboard.
 const TRAINER_MENU_ITEMS = [{ to: '/trainees', label: 'My Trainees' }]
 
-// A trainer's sole job here is managing trainees - "Settings" (name/password)
-// is the only thing left to offer once Diet/Workout/Daily-adjacent items
-// (Goals, Plan Management, Preferences, Reminders, Data Export) don't apply.
+// "Settings" (name/password) is the only thing left to offer here once
+// Diet/Workout/Daily-adjacent items (Goals, Plan Management, Preferences,
+// Reminders, Data Export) don't apply - Trainees/Food Bank/Exercise Bank live
+// in the bottom nav instead (see BottomNav.tsx TRAINER_NAV_ITEMS).
 const TRAINER_MODE_MENU_ITEMS = [{ to: '/profile', label: 'Profile' }]
 
 export default function NavDrawer({ open, onOpenChange }: NavDrawerProps) {

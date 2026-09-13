@@ -19,19 +19,24 @@ export default function DietPlanEditor({ traineeId }: { traineeId: number }) {
   const [planName, setPlanName] = useState('')
   const [savingPlan, setSavingPlan] = useState(false)
 
+  // Deliberately doesn't touch `loading` - this also runs after every edit
+  // (add a meal/option, save ingredients, reorder, ...) via onChanged, and
+  // swapping the whole tree for a "Loading…" placeholder on every one of
+  // those would unmount every ReferenceMealEditor/MealOptionEditor, collapsing
+  // whichever meal/option the trainer had open back down each time. Only the
+  // very first load (below) needs the full-page loading state.
   function reload() {
-    setLoading(true)
-    listDietPlans(traineeId)
-      .then((plans) => (plans.length ? getDietPlan(plans[0].id) : null))
+    return listDietPlans(traineeId)
+      .then((plans) => (plans.length ? getDietPlan(plans[0].id, traineeId) : null))
       .then((detail) => {
         setPlan(detail)
         if (detail) setPlanName(detail.name)
       })
-      .finally(() => setLoading(false))
   }
 
   useEffect(() => {
-    reload()
+    setLoading(true)
+    reload().finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [traineeId])
 

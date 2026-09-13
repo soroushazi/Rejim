@@ -51,6 +51,7 @@ class FoodItem(models.Model):
     class Visibility(models.TextChoices):
         PRIVATE = "private", "Private"
         PUBLIC = "public", "Public"
+        TRAINEES = "trainees", "My Trainees"
 
     class ApprovalStatus(models.TextChoices):
         PENDING = "pending", "Pending"
@@ -78,9 +79,12 @@ class FoodItem(models.Model):
         on_delete=models.SET_NULL,
         related_name="created_food_items",
     )
-    # Private items are only visible to their creator. Public items are shared reference
-    # data like the seeded/trainer-authored set, but a trainee's public submission needs
-    # trainer approval before anyone besides the creator can see it.
+    # Private items are only visible to their creator (a trainee-only option - a trainer
+    # has no use for a food item nobody else can see). Trainees items are trainer-authored
+    # and visible only to that trainer's own trainees, not the whole Food Bank. Public
+    # items are shared reference data like the seeded/trainer-authored set, but a
+    # trainee's public submission needs trainer approval before anyone besides the
+    # creator can see it.
     visibility = models.CharField(max_length=10, choices=Visibility.choices, default=Visibility.PUBLIC)
     approval_status = models.CharField(
         max_length=10, choices=ApprovalStatus.choices, default=ApprovalStatus.APPROVED
@@ -128,14 +132,18 @@ class FoodItem(models.Model):
     def visible_to(cls, user):
         """FoodItems a given user is allowed to see: everyone's approved public items,
         plus anything the user created themselves (their own private/pending/rejected
-        items). Trainers additionally see every public item regardless of approval
-        status, so they can find and review pending submissions."""
+        items), plus their own trainer's Trainees-scoped items. Trainers additionally
+        see every public item regardless of approval status, so they can find and
+        review pending submissions."""
         qs = cls.objects.all()
+        own_or_trainer_scoped = Q(created_by=user)
+        if user.trainer_id:
+            own_or_trainer_scoped |= Q(visibility=cls.Visibility.TRAINEES, created_by_id=user.trainer_id)
         if user.is_trainer:
-            return qs.filter(Q(visibility=cls.Visibility.PUBLIC) | Q(created_by=user)).distinct()
+            return qs.filter(Q(visibility=cls.Visibility.PUBLIC) | own_or_trainer_scoped).distinct()
         return qs.filter(
             Q(visibility=cls.Visibility.PUBLIC, approval_status=cls.ApprovalStatus.APPROVED)
-            | Q(created_by=user)
+            | own_or_trainer_scoped
         ).distinct()
 
     def recompute_from_components(self):
@@ -167,6 +175,33 @@ class FoodItemComponent(models.Model):
 
     def __str__(self):
         return f"{self.composite.name} - {self.ingredient.name} ({self.weight_grams}g)"
+
+
+class FoodItemEditRequest(models.Model):
+    """A trainee's freeform request to change something about a Food Bank entry
+    they don't own - mirrors ExerciseEditRequest. A trainer reviews the
+    description, edits the item themselves, then marks this resolved."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        RESOLVED = "resolved", "Resolved"
+
+    food_item = models.ForeignKey(FoodItem, on_delete=models.CASCADE, related_name="edit_requests")
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        limit_choices_to={"is_trainee": True},
+        related_name="food_item_edit_requests",
+    )
+    description = models.TextField()
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Edit request for {self.food_item.name} by {self.requested_by}"
 
 
 class QuickLogItem(models.Model):

@@ -6,8 +6,13 @@ export function listWorkoutPlans(traineeId?: number): Promise<WorkoutPlanSummary
   return apiFetch<WorkoutPlanSummary[]>(`/workouts/plans/${query}`)
 }
 
-export function getWorkoutPlan(id: number): Promise<WorkoutPlanDetail> {
-  return apiFetch<WorkoutPlanDetail>(`/workouts/plans/${id}/`)
+/** traineeId disambiguates a dual-role account's own retrieve requests (see
+ * TraineeScopedQuerysetMixin) - the trainer dashboard always has one on hand
+ * and must pass it, or a trainer who is also a trainee gets scoped to their
+ * own records instead of the trainee's. Self-view pages omit it. */
+export function getWorkoutPlan(id: number, traineeId?: number): Promise<WorkoutPlanDetail> {
+  const query = traineeId ? `?trainee_id=${traineeId}` : ''
+  return apiFetch<WorkoutPlanDetail>(`/workouts/plans/${id}/${query}`)
 }
 
 export function createWorkoutPlan(data: { trainee: number; name: string; sessions_per_week: number }): Promise<WorkoutPlanSummary> {

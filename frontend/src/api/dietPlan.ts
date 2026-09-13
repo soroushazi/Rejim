@@ -6,8 +6,13 @@ export function listDietPlans(traineeId?: number): Promise<DietPlanSummary[]> {
   return apiFetch<DietPlanSummary[]>(`/nutrition/diet-plans/${query}`)
 }
 
-export function getDietPlan(id: number): Promise<DietPlanDetail> {
-  return apiFetch<DietPlanDetail>(`/nutrition/diet-plans/${id}/`)
+/** traineeId disambiguates a dual-role account's own retrieve requests (see
+ * TraineeScopedQuerysetMixin) - the trainer dashboard always has one on hand
+ * and must pass it, or a trainer who is also a trainee gets scoped to their
+ * own records instead of the trainee's. Self-view pages omit it. */
+export function getDietPlan(id: number, traineeId?: number): Promise<DietPlanDetail> {
+  const query = traineeId ? `?trainee_id=${traineeId}` : ''
+  return apiFetch<DietPlanDetail>(`/nutrition/diet-plans/${id}/${query}`)
 }
 
 export function createDietPlan(data: { trainee: number; name: string }): Promise<DietPlanSummary> {

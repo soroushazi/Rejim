@@ -45,7 +45,7 @@ export type NewTrainerConnection = {
 }
 
 export type FoodItemKind = 'single' | 'composite'
-export type FoodItemVisibility = 'private' | 'public'
+export type FoodItemVisibility = 'private' | 'public' | 'trainees'
 export type FoodItemApprovalStatus = 'pending' | 'approved' | 'rejected'
 export type FoodItemServingUnit = 'g' | 'cup' | 'oz' | 'lb' | 'each' | 'serving'
 
@@ -228,6 +228,50 @@ export type Exercise = {
   image: string | null
   video_url: string | null
   alternatives: number[]
+}
+
+export type NewExercise = {
+  name: string
+  description: string
+  equipment: string
+  primary_muscle_groups: number[]
+  secondary_muscle_groups: number[]
+  difficulty_level: ExerciseDifficulty
+  video_url: string | null
+}
+
+export type EditRequestStatus = 'pending' | 'resolved'
+
+export type ExerciseEditRequest = {
+  id: number
+  exercise: number
+  exercise_name: string
+  requested_by: number
+  requested_by_username: string
+  description: string
+  status: EditRequestStatus
+  created_at: string
+}
+
+export type NewExerciseEditRequest = {
+  exercise: number
+  description: string
+}
+
+export type FoodItemEditRequest = {
+  id: number
+  food_item: number
+  food_item_name: string
+  requested_by: number
+  requested_by_username: string
+  description: string
+  status: EditRequestStatus
+  created_at: string
+}
+
+export type NewFoodItemEditRequest = {
+  food_item: number
+  description: string
 }
 
 export type WorkoutPlanSummary = {

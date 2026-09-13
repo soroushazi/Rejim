@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   createMealOption,
   createReferenceMealItem,
@@ -12,6 +12,7 @@ import type { MealOptionDetail, ReferenceMealDetail } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import IngredientPicker, { type DraftComponent } from '../IngredientPicker'
 
 function MealOptionEditor({
@@ -21,6 +22,7 @@ function MealOptionEditor({
   onMoveUp,
   onMoveDown,
   onChanged,
+  autoExpand,
 }: {
   option: MealOptionDetail
   isFirst: boolean
@@ -28,13 +30,18 @@ function MealOptionEditor({
   onMoveUp: () => void
   onMoveDown: () => void
   onChanged: () => void
+  // Set right after this option is created, so the trainer lands straight in
+  // its ingredient picker instead of a collapsed row they'd have to re-open.
+  autoExpand?: boolean
 }) {
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(!!autoExpand)
+  const containerRef = useRef<HTMLDivElement>(null)
   const [label, setLabel] = useState(option.label)
   const [draft, setDraft] = useState<DraftComponent[]>(
     option.items.map((item) => ({ ingredient: item.food_item, name: item.food_item_name, weight_grams: item.reference_weight_grams })),
   )
   const [saving, setSaving] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   async function saveLabel() {
     setSaving(true)
@@ -65,13 +72,27 @@ function MealOptionEditor({
   }
 
   async function removeOption() {
-    if (!window.confirm(`Delete option '${option.label}'?`)) return
     await deleteMealOption(option.id)
     onChanged()
   }
 
+  // "Save ingredients" reads as "save this one ingredient I just added" to a
+  // first-time user, when it actually replaces the whole list - this is the
+  // explicit "I'm done with this option" action: same save, then collapses
+  // the card so finishing one option doesn't require a separate manual close.
+  async function finishOption() {
+    await saveIngredients()
+    setExpanded(false)
+  }
+
+  useEffect(() => {
+    // Only on mount - autoExpand is only ever true for the option's very first
+    // render, right after it was created.
+    if (autoExpand) containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [])
+
   return (
-    <div className="rounded-lg border border-border p-2.5">
+    <div ref={containerRef} className="rounded-lg border border-border p-2.5">
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1">
           <div className="flex flex-col">
@@ -86,10 +107,17 @@ function MealOptionEditor({
             {option.label} ({option.items.length} ingredients)
           </button>
         </div>
-        <button type="button" onClick={removeOption} aria-label="Remove option">
+        <button type="button" onClick={() => setConfirmingDelete(true)} aria-label="Remove option">
           <Trash2 className="size-4 text-destructive" />
         </button>
       </div>
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        onOpenChange={setConfirmingDelete}
+        title={`Delete option '${option.label}'?`}
+        onConfirm={removeOption}
+      />
 
       {expanded && (
         <div className="mt-2 flex flex-col gap-2 border-t border-border pt-2">
@@ -99,10 +127,15 @@ function MealOptionEditor({
               Rename
             </Button>
           </div>
-          <IngredientPicker value={draft} onChange={setDraft} visibility="public" />
-          <Button type="button" size="sm" className="w-fit" disabled={saving} onClick={saveIngredients}>
-            {saving ? 'Saving…' : 'Save ingredients'}
-          </Button>
+          <IngredientPicker value={draft} onChange={setDraft} autoFocusSearch={autoExpand} />
+          <div className="flex items-center gap-1.5">
+            <Button type="button" variant="outline" size="sm" disabled={saving} onClick={saveIngredients}>
+              {saving ? 'Saving…' : 'Save ingredients'}
+            </Button>
+            <Button type="button" size="sm" disabled={saving} onClick={finishOption}>
+              {saving ? 'Saving…' : 'Done'}
+            </Button>
+          </div>
         </div>
       )}
     </div>
@@ -123,9 +156,10 @@ export default function ReferenceMealEditor({ meal, isFirst, isLast, onMoveUp, o
   const [addingOption, setAddingOption] = useState(false)
   const [newOptionLabel, setNewOptionLabel] = useState('')
   const [saving, setSaving] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [newlyAddedOptionId, setNewlyAddedOptionId] = useState<number | null>(null)
 
   async function removeMeal() {
-    if (!window.confirm(`Delete meal '${meal.label}'? This removes all its options too.`)) return
     await deleteReferenceMeal(meal.id)
     onChanged()
   }
@@ -134,7 +168,8 @@ export default function ReferenceMealEditor({ meal, isFirst, isLast, onMoveUp, o
     if (!newOptionLabel.trim()) return
     setSaving(true)
     try {
-      await createMealOption({ meal: meal.id, label: newOptionLabel.trim(), order: meal.options.length })
+      const created = await createMealOption({ meal: meal.id, label: newOptionLabel.trim(), order: meal.options.length })
+      setNewlyAddedOptionId(created.id)
       setNewOptionLabel('')
       setAddingOption(false)
       onChanged()
@@ -156,7 +191,7 @@ export default function ReferenceMealEditor({ meal, isFirst, isLast, onMoveUp, o
 
   return (
     <Card>
-      <CardHeader className="flex-row items-center justify-between space-y-0">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <div className="flex min-w-0 items-center gap-2">
           <div className="flex flex-col">
             <button type="button" disabled={isFirst} onClick={onMoveUp} className="disabled:opacity-30">
@@ -170,10 +205,18 @@ export default function ReferenceMealEditor({ meal, isFirst, isLast, onMoveUp, o
             {meal.label} ({meal.options.length} option{meal.options.length === 1 ? '' : 's'})
           </button>
         </div>
-        <button type="button" onClick={removeMeal} aria-label="Delete meal">
+        <button type="button" onClick={() => setConfirmingDelete(true)} aria-label="Delete meal">
           <Trash2 className="size-4 text-destructive" />
         </button>
       </CardHeader>
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        onOpenChange={setConfirmingDelete}
+        title={`Delete meal '${meal.label}'?`}
+        description="This removes all its options too."
+        onConfirm={removeMeal}
+      />
       {expanded && (
         <CardContent className="flex flex-col gap-2">
           {meal.options.map((option, i) => (
@@ -185,6 +228,7 @@ export default function ReferenceMealEditor({ meal, isFirst, isLast, onMoveUp, o
               onMoveUp={() => moveOption(i, -1)}
               onMoveDown={() => moveOption(i, 1)}
               onChanged={onChanged}
+              autoExpand={option.id === newlyAddedOptionId}
             />
           ))}
 

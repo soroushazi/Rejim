@@ -1,11 +1,12 @@
 from rest_framework import viewsets
 
 from accounts.mixins import TraineeScopedQuerysetMixin
-from accounts.permissions import IsTraineeWriteTrainerReadOnly, IsTrainerWriteTraineeReadOnly
+from accounts.permissions import EditRequestPermission, IsTraineeWriteTrainerReadOnly, IsTrainerWriteTraineeReadOnly
 from connection.mixins import PlanChangeLoggingMixin
 
 from .models import (
     Exercise,
+    ExerciseEditRequest,
     LoggedExercise,
     LoggedSet,
     MuscleGroup,
@@ -15,6 +16,7 @@ from .models import (
     WorkoutSession,
 )
 from .serializers import (
+    ExerciseEditRequestSerializer,
     ExerciseSerializer,
     LoggedExerciseSerializer,
     LoggedSetSerializer,
@@ -37,6 +39,24 @@ class ExerciseViewSet(viewsets.ModelViewSet):
     queryset = Exercise.objects.all()
     serializer_class = ExerciseSerializer
     permission_classes = [IsTrainerWriteTraineeReadOnly]
+
+
+class ExerciseEditRequestViewSet(viewsets.ModelViewSet):
+    serializer_class = ExerciseEditRequestSerializer
+    permission_classes = [EditRequestPermission]
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = ExerciseEditRequest.objects.select_related("exercise", "requested_by")
+        if not user.is_trainer:
+            queryset = queryset.filter(requested_by=user)
+        exercise_id = self.request.query_params.get("exercise")
+        if exercise_id:
+            queryset = queryset.filter(exercise_id=exercise_id)
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(requested_by=self.request.user)
 
 
 class WorkoutPlanViewSet(PlanChangeLoggingMixin, TraineeScopedQuerysetMixin, viewsets.ModelViewSet):

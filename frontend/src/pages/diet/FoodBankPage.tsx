@@ -1,12 +1,20 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Plus } from 'lucide-react'
-import { listDietaryTags, listFoodItems, listMacroFilters } from '../../api/foodItems'
-import type { DietaryTag, FoodItem, MacroFilter } from '../../api/types'
+import {
+  createFoodItemEditRequest,
+  listDietaryTags,
+  listFoodItemEditRequests,
+  listFoodItems,
+  listMacroFilters,
+  resolveFoodItemEditRequest,
+} from '../../api/foodItems'
+import type { DietaryTag, FoodItem, FoodItemEditRequest, MacroFilter } from '../../api/types'
 import FoodItemCard from './FoodItemCard'
 import AddFoodItemDialog from './AddFoodItemDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import MultiSelectDropdown from '@/components/MultiSelectDropdown'
+import RequestEditDialog from '@/components/RequestEditDialog'
 
 export default function FoodBankPage() {
   const [search, setSearch] = useState('')
@@ -15,9 +23,12 @@ export default function FoodBankPage() {
   const [selectedMacroFilters, setSelectedMacroFilters] = useState<string[]>([])
   const [selectedDietaryTags, setSelectedDietaryTags] = useState<string[]>([])
   const [items, setItems] = useState<FoodItem[]>([])
+  const [editRequests, setEditRequests] = useState<FoodItemEditRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
+  const [editingItem, setEditingItem] = useState<FoodItem | null>(null)
+  const [requestEditItem, setRequestEditItem] = useState<FoodItem | null>(null)
 
   useEffect(() => {
     listMacroFilters()
@@ -26,7 +37,31 @@ export default function FoodBankPage() {
     listDietaryTags()
       .then(setDietaryTags)
       .catch(() => {})
+    listFoodItemEditRequests()
+      .then(setEditRequests)
+      .catch(() => {})
   }, [])
+
+  const editRequestsByItem = useMemo(() => {
+    const map = new Map<number, FoodItemEditRequest[]>()
+    for (const req of editRequests) {
+      const list = map.get(req.food_item)
+      if (list) list.push(req)
+      else map.set(req.food_item, [req])
+    }
+    return map
+  }, [editRequests])
+
+  async function handleRequestEditSubmit(description: string) {
+    if (!requestEditItem) return
+    const created = await createFoodItemEditRequest({ food_item: requestEditItem.id, description })
+    setEditRequests((prev) => [created, ...prev])
+  }
+
+  async function handleResolveRequest(id: number) {
+    const updated = await resolveFoodItemEditRequest(id)
+    setEditRequests((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -115,7 +150,11 @@ export default function FoodBankPage() {
               item={item}
               macroFilters={macroFilters}
               dietaryTags={dietaryTags}
+              editRequests={editRequestsByItem.get(item.id) ?? []}
               onUpdated={handleUpdated}
+              onEdit={() => setEditingItem(item)}
+              onRequestEdit={() => setRequestEditItem(item)}
+              onResolveRequest={handleResolveRequest}
             />
           ))}
         </ul>
@@ -136,6 +175,23 @@ export default function FoodBankPage() {
         open={addOpen}
         onOpenChange={setAddOpen}
         onCreated={(item) => setItems((prev) => [item, ...prev])}
+      />
+
+      <AddFoodItemDialog
+        open={editingItem !== null}
+        onOpenChange={(open) => !open && setEditingItem(null)}
+        item={editingItem ?? undefined}
+        onCreated={(item) => {
+          handleUpdated(item)
+          setEditingItem(null)
+        }}
+      />
+
+      <RequestEditDialog
+        open={requestEditItem !== null}
+        onOpenChange={(open) => !open && setRequestEditItem(null)}
+        itemName={requestEditItem?.name ?? ''}
+        onSubmit={handleRequestEditSubmit}
       />
     </div>
   )
