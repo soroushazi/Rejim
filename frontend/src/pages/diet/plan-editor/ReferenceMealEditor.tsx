@@ -78,11 +78,12 @@ function MealOptionEditor({
 
   // "Save ingredients" reads as "save this one ingredient I just added" to a
   // first-time user, when it actually replaces the whole list - this is the
-  // explicit "I'm done with this option" action: same save, then collapses
-  // the card so finishing one option doesn't require a separate manual close.
+  // explicit "I'm done with this option" action: same save, but leaves the
+  // card open so the trainer can see the ingredients they just saved instead
+  // of having it disappear from view.
   async function finishOption() {
     await saveIngredients()
-    setExpanded(false)
+    setExpanded(true)
   }
 
   useEffect(() => {

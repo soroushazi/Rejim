@@ -1,12 +1,14 @@
-import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Plus, Search, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { createPlanExercise, deletePlanExercise, deletePlanSession, updatePlanExercise, updatePlanSession } from '@/api/workoutPlans'
-import type { Exercise, PlanExerciseDetail, PlanSessionDetail } from '@/api/types'
+import type { Exercise, MuscleGroup, PlanExerciseDetail, PlanSessionDetail } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import ConfirmDialog from '@/components/ConfirmDialog'
+import AddExerciseDialog from '@/pages/workout/AddExerciseDialog'
 
 function ExerciseRow({
   exercise,
@@ -36,6 +38,7 @@ function ExerciseRow({
   const [rest, setRest] = useState(String(exercise.default_rest_seconds))
   const [notes, setNotes] = useState(exercise.notes)
   const [saving, setSaving] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   async function save() {
     setSaving(true)
@@ -55,7 +58,6 @@ function ExerciseRow({
   }
 
   async function remove() {
-    if (!window.confirm(`Remove ${exercise.exercise_name}?`)) return
     await deletePlanExercise(exercise.id)
     onChanged()
   }
@@ -84,11 +86,18 @@ function ExerciseRow({
           <Button type="button" variant="ghost" size="sm" onClick={() => setEditing((v) => !v)}>
             {editing ? 'Close' : 'Edit'}
           </Button>
-          <button type="button" onClick={remove} aria-label="Remove">
+          <button type="button" onClick={() => setConfirmingDelete(true)} aria-label="Remove">
             <Trash2 className="size-4 text-destructive" />
           </button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        onOpenChange={setConfirmingDelete}
+        title={`Remove ${exercise.exercise_name}?`}
+        onConfirm={remove}
+      />
 
       {!editing ? (
         <p className="mt-1 text-xs text-muted-foreground">
@@ -122,28 +131,33 @@ function ExerciseRow({
 
 function AddExerciseRow({
   exercises,
+  muscleGroups,
   order,
   sessionId,
   onChanged,
   onAdded,
+  onExerciseCreated,
 }: {
   exercises: Exercise[]
+  muscleGroups: MuscleGroup[]
   order: number
   sessionId: number
   onChanged: () => void
   onAdded: (id: number) => void
+  onExerciseCreated: (exercise: Exercise) => void
 }) {
   const [adding, setAdding] = useState(false)
   const [exerciseId, setExerciseId] = useState('')
+  const [search, setSearch] = useState('')
   const [saving, setSaving] = useState(false)
+  const [addNewOpen, setAddNewOpen] = useState(false)
 
-  async function handleAdd() {
-    if (!exerciseId) return
+  async function addExerciseToSession(id: number) {
     setSaving(true)
     try {
       const created = await createPlanExercise({
         session: sessionId,
-        exercise: Number(exerciseId),
+        exercise: id,
         target_sets: 3,
         target_reps_min: 8,
         target_reps_max: 12,
@@ -159,35 +173,74 @@ function AddExerciseRow({
     }
   }
 
+  function handleExerciseCreated(exercise: Exercise) {
+    onExerciseCreated(exercise)
+    addExerciseToSession(exercise.id)
+  }
+
   if (!adding) {
     return (
-      <Button type="button" variant="outline" size="sm" className="w-fit" onClick={() => setAdding(true)}>
+      <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => setAdding(true)}>
         <Plus className="size-4" />
         Add exercise
       </Button>
     )
   }
 
+  const selectedExercise = exercises.find((ex) => String(ex.id) === exerciseId)
+  const query = search.trim().toLowerCase()
+  const results = query ? exercises.filter((ex) => ex.name.toLowerCase().includes(query)) : exercises
+
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <Select value={exerciseId} onValueChange={setExerciseId}>
-        <SelectTrigger className="w-56">
-          <SelectValue placeholder="Pick an exercise…" />
-        </SelectTrigger>
-        <SelectContent>
-          {exercises.map((ex) => (
-            <SelectItem key={ex.id} value={String(ex.id)}>
+    <div className="flex flex-col gap-1.5">
+      <DropdownMenu onOpenChange={(open) => !open && setSearch('')}>
+        <DropdownMenuTrigger asChild>
+          <Button type="button" variant="outline" className="w-full justify-between gap-2 rounded-full font-normal">
+            <span className="flex items-center gap-2 truncate">
+              <Search className="size-4 shrink-0 text-muted-foreground" />
+              {selectedExercise ? selectedExercise.name : 'Pick an exercise…'}
+            </span>
+            <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)]">
+          <div className="p-1">
+            <Input
+              type="search"
+              placeholder="Search…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => e.stopPropagation()}
+              autoFocus
+              className="h-8"
+            />
+          </div>
+          {results.length === 0 && <p className="px-2 py-1.5 text-xs text-muted-foreground">No matches.</p>}
+          {results.map((ex) => (
+            <DropdownMenuItem key={ex.id} onSelect={() => setExerciseId(String(ex.id))}>
               {ex.name}
-            </SelectItem>
+            </DropdownMenuItem>
           ))}
-        </SelectContent>
-      </Select>
-      <Button type="button" size="sm" disabled={saving || !exerciseId} onClick={handleAdd}>
-        {saving ? 'Adding…' : 'Add'}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <div className="flex items-center gap-1.5">
+        <Button
+          type="button"
+          size="sm"
+          className="flex-1"
+          disabled={saving || !exerciseId}
+          onClick={() => addExerciseToSession(Number(exerciseId))}
+        >
+          {saving ? 'Adding…' : 'Add'}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => setAdding(false)}>
+          Cancel
+        </Button>
+      </div>
+      <Button type="button" variant="link" className="h-auto w-fit justify-start px-0" onClick={() => setAddNewOpen(true)}>
+        Can't find it? Add a new exercise
       </Button>
-      <Button type="button" size="sm" variant="ghost" onClick={() => setAdding(false)}>
-        Cancel
-      </Button>
+      <AddExerciseDialog open={addNewOpen} onOpenChange={setAddNewOpen} onCreated={handleExerciseCreated} muscleGroups={muscleGroups} />
     </div>
   )
 }
@@ -195,6 +248,8 @@ function AddExerciseRow({
 type Props = {
   session: PlanSessionDetail
   exercises: Exercise[]
+  muscleGroups: MuscleGroup[]
+  onExerciseCreated: (exercise: Exercise) => void
   isFirst: boolean
   isLast: boolean
   onMoveUp: () => void
@@ -202,12 +257,23 @@ type Props = {
   onChanged: () => void
 }
 
-export default function SessionEditor({ session, exercises, isFirst, isLast, onMoveUp, onMoveDown, onChanged }: Props) {
+export default function SessionEditor({
+  session,
+  exercises,
+  muscleGroups,
+  onExerciseCreated,
+  isFirst,
+  isLast,
+  onMoveUp,
+  onMoveDown,
+  onChanged,
+}: Props) {
   const [expanded, setExpanded] = useState(false)
   const [label, setLabel] = useState(session.label)
   const [notes, setNotes] = useState(session.notes)
   const [saving, setSaving] = useState(false)
   const [newlyAddedExerciseId, setNewlyAddedExerciseId] = useState<number | null>(null)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   async function saveDetails() {
     setSaving(true)
@@ -220,14 +286,13 @@ export default function SessionEditor({ session, exercises, isFirst, isLast, onM
   }
 
   async function removeSession() {
-    if (!window.confirm(`Delete session '${session.label}'? This removes all its exercises too.`)) return
     await deletePlanSession(session.id)
     onChanged()
   }
 
   return (
     <Card>
-      <CardHeader className="flex-row items-center justify-between space-y-0">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <div className="flex min-w-0 items-center gap-2">
           <div className="flex flex-col">
             <button type="button" disabled={isFirst} onClick={onMoveUp} className="disabled:opacity-30">
@@ -241,10 +306,18 @@ export default function SessionEditor({ session, exercises, isFirst, isLast, onM
             {session.label} ({session.exercises.length})
           </button>
         </div>
-        <button type="button" onClick={removeSession} aria-label="Delete session">
+        <button type="button" onClick={() => setConfirmingDelete(true)} aria-label="Delete session">
           <Trash2 className="size-4 text-destructive" />
         </button>
       </CardHeader>
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        onOpenChange={setConfirmingDelete}
+        title={`Delete session '${session.label}'?`}
+        description="This removes all its exercises too."
+        onConfirm={removeSession}
+      />
       {expanded && (
         <CardContent className="flex flex-col gap-3">
           <div className="flex flex-col gap-2">
@@ -286,10 +359,12 @@ export default function SessionEditor({ session, exercises, isFirst, isLast, onM
             ))}
             <AddExerciseRow
               exercises={exercises}
+              muscleGroups={muscleGroups}
               order={session.exercises.length}
               sessionId={session.id}
               onChanged={onChanged}
               onAdded={setNewlyAddedExerciseId}
+              onExerciseCreated={onExerciseCreated}
             />
           </div>
         </CardContent>

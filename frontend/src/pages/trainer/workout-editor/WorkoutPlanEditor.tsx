@@ -1,6 +1,6 @@
 import { Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { listExercises } from '@/api/exercises'
+import { listExercises, listMuscleGroups } from '@/api/exercises'
 import {
   createPlanSession,
   createWorkoutPlan,
@@ -9,7 +9,7 @@ import {
   updatePlanSession,
   updateWorkoutPlan,
 } from '@/api/workoutPlans'
-import type { Exercise, WorkoutPlanDetail } from '@/api/types'
+import type { Exercise, MuscleGroup, WorkoutPlanDetail } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -25,6 +25,7 @@ export default function WorkoutPlanEditor({ traineeId }: { traineeId: number }) 
   const [plan, setPlan] = useState<WorkoutPlanDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [exercises, setExercises] = useState<Exercise[]>([])
+  const [muscleGroups, setMuscleGroups] = useState<MuscleGroup[]>([])
   const [planName, setPlanName] = useState('')
   const [sessionsPerWeek, setSessionsPerWeek] = useState('3')
   const [savingPlan, setSavingPlan] = useState(false)
@@ -53,8 +54,17 @@ export default function WorkoutPlanEditor({ traineeId }: { traineeId: number }) 
     listExercises()
       .then(setExercises)
       .catch(() => setExercises([]))
+    listMuscleGroups()
+      .then(setMuscleGroups)
+      .catch(() => setMuscleGroups([]))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [traineeId])
+
+  // New exercises are shared reference data (same trust model as FoodItem) -
+  // append it so every session's picker sees it immediately, without a refetch.
+  function handleExerciseCreated(exercise: Exercise) {
+    setExercises((prev) => [...prev, exercise])
+  }
 
   async function handleCreatePlan() {
     setSavingPlan(true)
@@ -172,6 +182,8 @@ export default function WorkoutPlanEditor({ traineeId }: { traineeId: number }) 
                 key={session.id}
                 session={session}
                 exercises={exercises}
+                muscleGroups={muscleGroups}
+                onExerciseCreated={handleExerciseCreated}
                 isFirst={i === 0}
                 isLast={i === plan.sessions.length - 1}
                 onMoveUp={() => moveSession(i, -1)}

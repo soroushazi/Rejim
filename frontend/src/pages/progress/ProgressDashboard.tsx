@@ -1,5 +1,5 @@
 import { Camera, Dumbbell, Flame, Moon, Utensils } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { listGoals } from '@/api/goals'
 import { getProgressOverview } from '@/api/progress'
 import type { ProgressOverviewDay } from '@/api/types'
@@ -34,6 +34,17 @@ export default function ProgressDashboard({ traineeId }: { traineeId?: number })
   const [overviewDays, setOverviewDays] = useState<ProgressOverviewDay[]>([])
   const [overviewLoading, setOverviewLoading] = useState(true)
   const [weightGoalKg, setWeightGoalKg] = useState<number | undefined>(undefined)
+  const sectionTabsRef = useRef<HTMLDivElement>(null)
+
+  // Pin the section tab bar right under the app's own sticky header (it
+  // occupies the real top of the viewport - scrolling to y=0 would tuck the
+  // tab bar behind it, not "above the page"). `scroll-mt` below tells
+  // scrollIntoView to stop there instead of at the very top.
+  function handleSectionChange() {
+    requestAnimationFrame(() => {
+      sectionTabsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
 
   const range = resolvePreset(preset, customStart, customEnd)
   const rangeInvalid = preset === 'custom' && customStart > customEnd
@@ -101,37 +112,48 @@ export default function ProgressDashboard({ traineeId }: { traineeId?: number })
       </Card>
 
       {!rangeInvalid && (
-        <Tabs defaultValue="training">
-          <TabsList variant="line" className="h-auto w-full justify-between gap-0 bg-transparent p-0">
-            {SECTIONS.map(({ value, label, Icon }) => (
-              <TabsTrigger
-                key={value}
-                value={value}
-                className={cn(
-                  'h-auto flex-1 flex-col gap-1 rounded-none border-none py-2 text-muted-foreground',
-                  'data-active:bg-transparent data-active:text-primary data-active:shadow-none',
-                )}
-              >
-                <Icon className="size-[20px]" strokeWidth={1.8} />
-                <span className="text-center text-[10px] leading-tight font-medium">{label}</span>
-              </TabsTrigger>
-            ))}
-          </TabsList>
-          <TabsContent value="training" className="mt-3">
-            <TrainingDashboard range={range} traineeId={traineeId} />
-          </TabsContent>
-          <TabsContent value="nutrition" className="mt-3">
-            <NutritionDashboard range={range} traineeId={traineeId} />
-          </TabsContent>
-          <TabsContent value="recovery" className="mt-3">
-            <RecoveryDashboard range={range} traineeId={traineeId} />
-          </TabsContent>
-          <TabsContent value="consistency" className="mt-3">
-            <ConsistencyDashboard range={range} traineeId={traineeId} />
-          </TabsContent>
-          <TabsContent value="photos" className="mt-3">
-            <PhotosPlaceholder />
-          </TabsContent>
+        <Tabs defaultValue="training" onValueChange={handleSectionChange}>
+          <div
+            ref={sectionTabsRef}
+            className="sticky z-10 -mx-4 bg-background px-4"
+            style={{ top: 'var(--header-height)', scrollMarginTop: 'var(--header-height)' }}
+          >
+            <TabsList variant="line" className="h-auto w-full justify-between gap-0 bg-transparent p-0">
+              {SECTIONS.map(({ value, label, Icon }) => (
+                <TabsTrigger
+                  key={value}
+                  value={value}
+                  className={cn(
+                    'h-auto flex-1 flex-col gap-1 rounded-none border-none py-2 text-muted-foreground',
+                    'data-active:bg-transparent data-active:text-primary data-active:shadow-none',
+                  )}
+                >
+                  <Icon className="size-[20px]" strokeWidth={1.8} />
+                  <span className="text-center text-[10px] leading-tight font-medium">{label}</span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
+          {/* min-height guarantees enough room to scroll even the shortest
+              section (e.g. Photos, or Nutrition with no diet plan set) far
+              enough for the tab bar above to actually reach its pinned spot. */}
+          <div className="min-h-[calc(100dvh-var(--header-height))]">
+            <TabsContent value="training" className="mt-3">
+              <TrainingDashboard range={range} traineeId={traineeId} />
+            </TabsContent>
+            <TabsContent value="nutrition" className="mt-3">
+              <NutritionDashboard range={range} traineeId={traineeId} />
+            </TabsContent>
+            <TabsContent value="recovery" className="mt-3">
+              <RecoveryDashboard range={range} traineeId={traineeId} />
+            </TabsContent>
+            <TabsContent value="consistency" className="mt-3">
+              <ConsistencyDashboard range={range} traineeId={traineeId} />
+            </TabsContent>
+            <TabsContent value="photos" className="mt-3">
+              <PhotosPlaceholder />
+            </TabsContent>
+          </div>
         </Tabs>
       )}
     </div>
