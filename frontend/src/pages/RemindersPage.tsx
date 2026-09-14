@@ -4,6 +4,7 @@ import type { ReminderSetting, ReminderType } from '@/api/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { Toggle } from '@/components/ui/toggle'
 import { subscribeToPush, unsubscribeFromPush } from '@/lib/push'
 
@@ -83,17 +84,27 @@ function ReminderRow({ type, label, initial }: { type: ReminderType; label: stri
     <Card>
       <CardHeader className="flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base">{label}</CardTitle>
-        <Toggle pressed={state.is_enabled} onPressedChange={(v) => update({ ...state, is_enabled: v })} size="sm">
-          {state.is_enabled ? 'Enabled' : 'Disabled'}
-        </Toggle>
+        <div className="flex items-center gap-2">
+          <Label
+            htmlFor={`reminder-enabled-${type}`}
+            className={state.is_enabled ? 'text-foreground' : 'text-muted-foreground'}
+          >
+            {state.is_enabled ? 'Enabled' : 'Disabled'}
+          </Label>
+          <Switch
+            id={`reminder-enabled-${type}`}
+            checked={state.is_enabled}
+            onCheckedChange={(v) => update({ ...state, is_enabled: v })}
+          />
+        </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        <div className="flex flex-col gap-1">
+        <div className="flex items-center justify-between gap-2">
           <Label htmlFor={`reminder-time-${type}`}>Time</Label>
           <Input
             id={`reminder-time-${type}`}
             type="time"
-            className="w-32"
+            className="w-40"
             value={state.time_of_day}
             disabled={!state.is_enabled}
             onChange={(e) => update({ ...state, time_of_day: e.target.value })}
