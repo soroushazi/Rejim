@@ -134,6 +134,15 @@ class PlanExercise(models.Model):
     # Trainer-authored cue for this specific exercise (e.g. "keep your back
     # straight, use a spotter") - shown to the trainee in Log.
     notes = models.TextField(blank=True)
+    # Superset pairing: always mirrored on both sides by PlanExerciseViewSet's
+    # pair/unpair actions (never set directly through the plain serializer),
+    # so at most one partner exists at a time and either side can be read from
+    # this same field - no reverse accessor needed. Deleting either exercise
+    # nulls the other's side automatically via SET_NULL. Pairs only (not
+    # trisets+) - matches how the feature was requested.
+    superset_with = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
 
     class Meta:
         ordering = ["order"]
@@ -168,6 +177,24 @@ class LoggedExercise(models.Model):
     session = models.ForeignKey(WorkoutSession, on_delete=models.CASCADE, related_name="logged_exercises")
     plan_exercise = models.ForeignKey(PlanExercise, on_delete=models.CASCADE, related_name="logged_instances")
     order = models.PositiveSmallIntegerField(default=0)
+    # Off-program substitution: the trainee did a different exercise than the
+    # plan calls for (e.g. their usual equipment was unavailable), while
+    # keeping the plan's own target sets/reps/rest - trainees can't edit the
+    # plan itself (see CLAUDE.md), so this is a per-log override rather than a
+    # PlanExercise change. Null means "did the planned exercise as normal".
+    substituted_exercise = models.ForeignKey(
+        Exercise, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    # Per-log superset override: which PlanExercise (in the same session) this
+    # logged instance was paired with *today*, independent of the plan's own
+    # PlanExercise.superset_with default - lets a trainee ad hoc pair/unpair
+    # exercises for a single session (e.g. because they substituted one side
+    # of the plan's own pairing). The frontend always resolves and saves the
+    # effective value (falling back to the plan default when untouched), so
+    # this is never ambiguous once a log is saved. Not enforced symmetric
+    # server-side - it's a pure logging-UI concern with no effect on stored
+    # history/PR data.
+    superset_partner = models.ForeignKey(PlanExercise, null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
 
     class Meta:
         ordering = ["order"]

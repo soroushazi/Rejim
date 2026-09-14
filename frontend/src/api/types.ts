@@ -292,6 +292,10 @@ export type PlanExerciseDetail = {
   default_rest_seconds: number
   order: number
   notes: string
+  /** Superset pairing - always mirrored on both sides, pairs only (not
+   * trisets+). Null when this exercise isn't part of a superset. */
+  superset_with: number | null
+  superset_with_exercise_name: string | null
 }
 
 export type PlanSessionDetail = {
@@ -322,7 +326,16 @@ export type LoggedSetEntry = {
 export type LoggedExerciseEntry = {
   id: number
   plan_exercise: number
+  /** Reflects an off-program substitution when one was logged (see
+   * substituted_exercise) - always the exercise actually performed. */
   exercise_name: string
+  /** Off-program swap: the trainee did this exercise instead of the plan's
+   * own, keeping the plan's target sets/reps/rest. Null = logged as planned. */
+  substituted_exercise: number | null
+  /** Per-log superset override (a plan_exercise id in this same session) -
+   * independent of the plan's own PlanExercise.superset_with default. Null =
+   * not paired for this log. */
+  superset_partner: number | null
   order: number
   sets: LoggedSetEntry[]
 }
@@ -350,6 +363,8 @@ export type NewLoggedSet = {
 
 export type NewLoggedExercise = {
   plan_exercise: number
+  substituted_exercise?: number | null
+  superset_partner?: number | null
   sets: NewLoggedSet[]
 }
 

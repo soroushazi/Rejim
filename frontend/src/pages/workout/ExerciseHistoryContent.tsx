@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { listExerciseHistory } from '@/api/loggedSets'
 import type { ExerciseHistorySet } from '@/api/types'
 import type { PrEvent } from '@/lib/personalRecord'
+import { rpeLabel } from '@/lib/rpe'
 import { fromKg } from '@/lib/weightUnits'
 import ExerciseHistoryChart from './ExerciseHistoryChart'
 
@@ -122,7 +123,7 @@ export default function ExerciseHistoryContent({
                     <span>
                       {s.weight}
                       {s.weight_unit} × {s.reps_done}
-                      {s.rpe !== null ? ` · RPE ${s.rpe}` : ''}
+                      {s.rpe !== null ? ` · ${rpeLabel(s.rpe)}` : ''}
                     </span>
                   </li>
                 ))}

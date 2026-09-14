@@ -70,6 +70,7 @@ class WorkoutPlanSerializer(serializers.ModelSerializer):
 
 class PlanExerciseDetailSerializer(serializers.ModelSerializer):
     exercise_name = serializers.CharField(source="exercise.name", read_only=True)
+    superset_with_exercise_name = serializers.SerializerMethodField()
 
     class Meta:
         model = PlanExercise
@@ -83,7 +84,13 @@ class PlanExerciseDetailSerializer(serializers.ModelSerializer):
             "default_rest_seconds",
             "order",
             "notes",
+            "superset_with",
+            "superset_with_exercise_name",
         ]
+        read_only_fields = ["superset_with"]
+
+    def get_superset_with_exercise_name(self, obj):
+        return obj.superset_with.exercise.name if obj.superset_with_id else None
 
 
 class PlanSessionDetailSerializer(serializers.ModelSerializer):
@@ -118,19 +125,29 @@ class PlanSessionSerializer(serializers.ModelSerializer):
 
 
 class PlanExerciseSerializer(serializers.ModelSerializer):
+    exercise_name = serializers.CharField(source="exercise.name", read_only=True)
+    superset_with_exercise_name = serializers.SerializerMethodField()
+
     class Meta:
         model = PlanExercise
         fields = [
             "id",
             "session",
             "exercise",
+            "exercise_name",
             "target_sets",
             "target_reps_min",
             "target_reps_max",
             "default_rest_seconds",
             "order",
             "notes",
+            "superset_with",
+            "superset_with_exercise_name",
         ]
+        read_only_fields = ["superset_with"]
+
+    def get_superset_with_exercise_name(self, obj):
+        return obj.superset_with.exercise.name if obj.superset_with_id else None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -153,12 +170,20 @@ class LoggedSetNestedSerializer(serializers.ModelSerializer):
 
 class LoggedExerciseNestedSerializer(serializers.ModelSerializer):
     sets = LoggedSetNestedSerializer(many=True)
-    exercise_name = serializers.CharField(source="plan_exercise.exercise.name", read_only=True)
+    exercise_name = serializers.SerializerMethodField()
 
     class Meta:
         model = LoggedExercise
-        fields = ["id", "plan_exercise", "exercise_name", "order", "sets"]
+        fields = ["id", "plan_exercise", "exercise_name", "substituted_exercise", "superset_partner", "order", "sets"]
         read_only_fields = ["id"]
+
+    def get_exercise_name(self, obj):
+        # Reflects the off-program substitution when one was logged, so
+        # anything reading this field (history browsers, etc.) shows what was
+        # actually performed without needing to know about substitution.
+        if obj.substituted_exercise_id:
+            return obj.substituted_exercise.name
+        return obj.plan_exercise.exercise.name
 
 
 class WorkoutSessionSerializer(serializers.ModelSerializer):
@@ -193,17 +218,24 @@ class WorkoutSessionSerializer(serializers.ModelSerializer):
             self.fields["logged_exercises"].child.fields["plan_exercise"].queryset = PlanExercise.objects.filter(
                 session__plan__trainee=request.user
             )
+            self.fields["logged_exercises"].child.fields["superset_partner"].queryset = PlanExercise.objects.filter(
+                session__plan__trainee=request.user
+            )
 
     def validate(self, attrs):
         logged_exercises = attrs.get("logged_exercises") or []
         if not logged_exercises:
             raise serializers.ValidationError("At least one logged exercise is required.")
         plan_session = attrs.get("plan_session", getattr(self.instance, "plan_session", None))
+        plan_exercise_ids = {le["plan_exercise"].id for le in logged_exercises}
         for logged_exercise in logged_exercises:
             if logged_exercise["plan_exercise"].session_id != plan_session.id:
                 raise serializers.ValidationError("Every logged exercise must belong to the session being logged.")
             if not logged_exercise.get("sets"):
                 raise serializers.ValidationError("Every logged exercise needs at least one set.")
+            partner = logged_exercise.get("superset_partner")
+            if partner and partner.id not in plan_exercise_ids:
+                raise serializers.ValidationError("A superset partner must also be logged in this same session.")
         return attrs
 
     def create(self, validated_data):
@@ -228,7 +260,11 @@ class WorkoutSessionSerializer(serializers.ModelSerializer):
         for order, logged_exercise_data in enumerate(logged_exercises_data):
             sets_data = logged_exercise_data.pop("sets")
             logged_exercise = LoggedExercise.objects.create(
-                session=session, plan_exercise=logged_exercise_data["plan_exercise"], order=order
+                session=session,
+                plan_exercise=logged_exercise_data["plan_exercise"],
+                substituted_exercise=logged_exercise_data.get("substituted_exercise"),
+                superset_partner=logged_exercise_data.get("superset_partner"),
+                order=order,
             )
             for set_data in sets_data:
                 LoggedSet.objects.create(logged_exercise=logged_exercise, **set_data)
@@ -254,7 +290,13 @@ class LoggedSetSerializer(serializers.ModelSerializer):
     frontend build both the history list and chart from one flat fetch."""
 
     session_date = serializers.DateField(source="logged_exercise.session.date", read_only=True)
-    exercise = serializers.IntegerField(source="logged_exercise.plan_exercise.exercise_id", read_only=True)
+    exercise = serializers.SerializerMethodField()
+
+    def get_exercise(self, obj):
+        # Off-program substitutions attribute history/PR-detection to the
+        # exercise actually performed, not the one the plan called for.
+        le = obj.logged_exercise
+        return le.substituted_exercise_id or le.plan_exercise.exercise_id
 
     class Meta:
         model = LoggedSet

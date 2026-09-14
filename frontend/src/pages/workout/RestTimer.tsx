@@ -43,7 +43,7 @@ export default function RestTimer({ defaultSeconds }: { defaultSeconds: number }
   }, [remaining])
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex w-full items-center gap-2">
       {remaining === null ? (
         <>
           <Input
@@ -53,17 +53,17 @@ export default function RestTimer({ defaultSeconds }: { defaultSeconds: number }
             step="5"
             value={duration}
             onChange={(e) => setDuration(Number(e.target.value))}
-            className="h-7 w-16"
+            className="h-7 w-16 shrink-0"
           />
-          <span className="text-xs text-muted-foreground">sec rest</span>
-          <Button type="button" size="sm" variant="outline" onClick={() => setRemaining(duration)}>
+          <span className="shrink-0 text-xs text-muted-foreground">sec rest</span>
+          <Button type="button" size="sm" variant="outline" className="flex-1" onClick={() => setRemaining(duration)}>
             Start rest
           </Button>
         </>
       ) : (
         <>
-          <span className="text-sm font-medium tabular-nums">{remaining}s</span>
-          <Button type="button" size="sm" variant="ghost" onClick={() => setRemaining(null)}>
+          <span className="shrink-0 text-sm font-medium tabular-nums">{remaining}s</span>
+          <Button type="button" size="sm" variant="ghost" className="flex-1" onClick={() => setRemaining(null)}>
             Cancel
           </Button>
         </>

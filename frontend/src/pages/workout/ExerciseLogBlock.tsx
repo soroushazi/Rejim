@@ -1,164 +1,23 @@
 import { useEffect, useState } from 'react'
-import { Check, ChevronDown, ChevronUp, Trophy, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, Info } from 'lucide-react'
 import { listExerciseHistory } from '@/api/loggedSets'
-import type { ExerciseHistorySet, PlanExerciseDetail, WeightUnit } from '@/api/types'
-import { Badge } from '@/components/ui/badge'
+import type { Exercise, ExerciseHistorySet, MuscleGroup, PlanExerciseDetail, WeightUnit } from '@/api/types'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { checkPersonalRecord, type PersonalRecordKind } from '@/lib/personalRecord'
 import { cn } from '@/lib/utils'
-import { suggestWeight, weightDirectionFeedback, type WeightSuggestion } from '@/lib/weightSuggestion'
+import { suggestWeight } from '@/lib/weightSuggestion'
+import ExerciseDetailDialog from './ExerciseDetailDialog'
 import ExerciseHistoryDialog from './ExerciseHistoryDialog'
 import RestTimer from './RestTimer'
+import { newDraftSet, SetEditorRow, SetSummaryRow, type DraftSet } from './SetRows'
 
-export type DraftSet = {
-  weight: string
-  reps_done: string
-  is_warmup: boolean
-  rpe: string
-  /** UI-only: has the user finished entering this set (collapsed to a
-   * one-line summary)? Never sent to the backend. */
-  confirmed: boolean
-}
-
-function newDraftSet(isWarmup: boolean): DraftSet {
-  return { weight: '', reps_done: '', is_warmup: isWarmup, rpe: '', confirmed: false }
-}
-
-/** One row's worth of inputs for a set still being entered. For working sets,
- * `suggestion` drives live feedback on the weight actually typed - not just a
- * static tint tied to the suggestion's direction, but whether *this* entry
- * follows it (e.g. still red if the suggestion says lower and the trainee
- * types the same or a higher weight). */
-function SetEditorRow({
-  label,
-  set,
-  onChange,
-  onConfirm,
-  onRemove,
-  suggestion,
-}: {
-  label: string
-  set: DraftSet
-  onChange: (patch: Partial<DraftSet>) => void
-  onConfirm: () => void
-  onRemove: () => void
-  suggestion?: WeightSuggestion
-}) {
-  const canConfirm = set.weight.trim() !== '' && set.reps_done.trim() !== ''
-  const feedback =
-    suggestion && set.weight.trim() !== '' ? weightDirectionFeedback(suggestion, Number(set.weight)) : null
-
-  return (
-    <div className="flex flex-col gap-1.5 rounded-md border border-border p-2">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="w-16 shrink-0 text-xs font-medium text-muted-foreground">{label}</span>
-        <Input
-          type="number"
-          inputMode="decimal"
-          step="0.5"
-          min="0"
-          placeholder="Weight"
-          value={set.weight}
-          onChange={(e) => onChange({ weight: e.target.value })}
-          className={cn(
-            'h-8 w-20',
-            feedback?.tone === 'good' && 'border-emerald-500/50 bg-emerald-500/5',
-            feedback?.tone === 'bad' && 'border-destructive/50 bg-destructive/5',
-          )}
-        />
-        <Input
-          type="number"
-          inputMode="numeric"
-          step="1"
-          min="0"
-          placeholder="Reps"
-          value={set.reps_done}
-          onChange={(e) => onChange({ reps_done: e.target.value })}
-          className="h-8 w-16"
-        />
-        <Input
-          type="number"
-          inputMode="decimal"
-          step="0.5"
-          min="1"
-          max="10"
-          placeholder="RPE"
-          value={set.rpe}
-          onChange={(e) => onChange({ rpe: e.target.value })}
-          className="h-8 w-14"
-        />
-        <Button
-          type="button"
-          size="icon-sm"
-          disabled={!canConfirm}
-          onClick={onConfirm}
-          aria-label={`Confirm ${label.toLowerCase()}`}
-          className="ml-auto"
-        >
-          <Check className="size-4" />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          className="text-muted-foreground hover:text-destructive"
-          onClick={onRemove}
-          aria-label={`Remove ${label.toLowerCase()}`}
-        >
-          <X className="size-3.5" />
-        </Button>
-      </div>
-      {feedback && (
-        <p className={cn('text-xs', feedback.tone === 'good' ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive')}>
-          {feedback.note}
-        </p>
-      )}
-    </div>
-  )
-}
-
-/** A finished set, collapsed to one line - tap to re-open for editing. */
-function SetSummaryRow({
-  label,
-  set,
-  isPr,
-  onEdit,
-  onRemove,
-}: {
-  label: string
-  set: DraftSet
-  isPr: PersonalRecordKind
-  onEdit: () => void
-  onRemove: () => void
-}) {
-  return (
-    <div className="flex items-center gap-2 rounded-md bg-muted px-2.5 py-1.5 text-sm">
-      <button type="button" onClick={onEdit} className="min-w-0 flex-1 text-left">
-        <span className="text-muted-foreground">{label}</span> {set.weight} × {set.reps_done}
-        {set.rpe.trim() ? ` · RPE ${set.rpe}` : ''}
-      </button>
-      {isPr && (
-        <Badge className="gap-1 font-normal">
-          <Trophy className="size-3" /> PR
-        </Badge>
-      )}
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        className="shrink-0 text-muted-foreground hover:text-destructive"
-        onClick={onRemove}
-        aria-label={`Remove ${label.toLowerCase()}`}
-      >
-        <X className="size-3.5" />
-      </Button>
-    </div>
-  )
-}
+export type { DraftSet }
 
 type Props = {
   planExercise: PlanExerciseDetail
+  exercise: Exercise | null
+  exercisesById: Map<number, Exercise>
+  muscleGroups: MuscleGroup[]
   warmupSets: DraftSet[]
   workingSets: DraftSet[]
   onWarmupSetsChange: (sets: DraftSet[]) => void
@@ -169,12 +28,16 @@ type Props = {
   onMoveDown: () => void
   canMoveUp: boolean
   canMoveDown: boolean
+  reordering: boolean
   expanded: boolean
   onToggleExpanded: () => void
 }
 
 export default function ExerciseLogBlock({
   planExercise,
+  exercise,
+  exercisesById,
+  muscleGroups,
   warmupSets,
   workingSets,
   onWarmupSetsChange,
@@ -185,11 +48,13 @@ export default function ExerciseLogBlock({
   onMoveDown,
   canMoveUp,
   canMoveDown,
+  reordering,
   expanded,
   onToggleExpanded,
 }: Props) {
   const [history, setHistory] = useState<ExerciseHistorySet[]>([])
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [detailsOpen, setDetailsOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -245,38 +110,51 @@ export default function ExerciseLogBlock({
   return (
     <div className="overflow-hidden rounded-lg border border-border">
       <div className="flex items-center gap-0.5 px-3 py-2.5">
+        <span className="min-w-0 shrink truncate font-medium">{planExercise.exercise_name}</span>
         <button
           type="button"
-          className="flex min-w-0 flex-1 items-baseline justify-between gap-2 text-left"
+          className="shrink-0 text-muted-foreground hover:text-foreground"
+          onClick={() => setDetailsOpen(true)}
+          aria-label={`View details for ${planExercise.exercise_name}`}
+        >
+          <Info className="size-4" />
+        </button>
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-baseline justify-end gap-2 text-left"
           onClick={onToggleExpanded}
           aria-expanded={expanded}
+          aria-label={`${expanded ? 'Collapse' : 'Expand'} ${planExercise.exercise_name}`}
         >
-          <span className="min-w-0 truncate font-medium">{planExercise.exercise_name}</span>
           <span className="whitespace-nowrap text-xs text-muted-foreground">
             {confirmedWorkingCount}/{planExercise.target_sets} sets · {planExercise.target_reps_min}-
             {planExercise.target_reps_max} reps
           </span>
         </button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          disabled={!canMoveUp}
-          onClick={onMoveUp}
-          aria-label={`Move ${planExercise.exercise_name} earlier`}
-        >
-          <ChevronUp className="size-4" />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          disabled={!canMoveDown}
-          onClick={onMoveDown}
-          aria-label={`Move ${planExercise.exercise_name} later`}
-        >
-          <ChevronDown className="size-4" />
-        </Button>
+        {reordering && (
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              disabled={!canMoveUp}
+              onClick={onMoveUp}
+              aria-label={`Move ${planExercise.exercise_name} earlier`}
+            >
+              <ChevronUp className="size-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              disabled={!canMoveDown}
+              onClick={onMoveDown}
+              aria-label={`Move ${planExercise.exercise_name} later`}
+            >
+              <ChevronDown className="size-4" />
+            </Button>
+          </>
+        )}
       </div>
 
       {expanded && (
@@ -406,6 +284,13 @@ export default function ExerciseLogBlock({
         exerciseId={historyOpen ? planExercise.exercise : null}
         exerciseName={planExercise.exercise_name}
         onOpenChange={setHistoryOpen}
+      />
+
+      <ExerciseDetailDialog
+        exercise={detailsOpen ? exercise : null}
+        exercisesById={exercisesById}
+        muscleGroups={muscleGroups}
+        onOpenChange={setDetailsOpen}
       />
     </div>
   )

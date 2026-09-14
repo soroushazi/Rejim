@@ -1,8 +1,14 @@
-from rest_framework import viewsets
+from django.db import transaction
+from django.db.models import Q
+from django.shortcuts import get_object_or_404
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
 
 from accounts.mixins import TraineeScopedQuerysetMixin
 from accounts.permissions import EditRequestPermission, IsTraineeWriteTrainerReadOnly, IsTrainerWriteTraineeReadOnly
 from connection.mixins import PlanChangeLoggingMixin
+from connection.services import log_plan_change
 
 from .models import (
     Exercise,
@@ -102,8 +108,57 @@ class PlanExerciseViewSet(PlanChangeLoggingMixin, TraineeScopedQuerysetMixin, vi
     trainee_path = "session__plan__trainee"
     plan_type = "workout"
 
+    def get_queryset(self):
+        # pair/unpair are detail (by-id) actions like retrieve/update/destroy -
+        # the pk already pins the object, so they should match either capacity
+        # (own record, or a trainee's as their trainer) rather than picking
+        # just one via the list/create trainee_id branch (see
+        # TraineeScopedQuerysetMixin's docstring).
+        if self.action in ("pair", "unpair"):
+            user = self.request.user
+            condition = Q(**{self.trainee_path: user})
+            if user.is_trainer:
+                condition |= Q(**{f"{self.trainee_path}__trainer": user})
+            return self.queryset.filter(condition)
+        return super().get_queryset()
+
     def _change_log_context(self, instance):
         return instance.session.plan.trainee, f"{instance.exercise.name} in {instance.session.label}"
+
+    @action(detail=True, methods=["post"])
+    def pair(self, request, pk=None):
+        """Links this exercise and `partner` (must be in the same session) as a
+        superset - always mirrored on both sides. Pairs only: pairing either
+        one with a third exercise first unpairs its previous partner."""
+        plan_exercise = self.get_object()
+        partner = get_object_or_404(self.get_queryset(), pk=request.data.get("partner"), session_id=plan_exercise.session_id)
+        if partner.id == plan_exercise.id:
+            return Response({"detail": "Cannot pair an exercise with itself."}, status=status.HTTP_400_BAD_REQUEST)
+        with transaction.atomic():
+            for stale_id in {plan_exercise.superset_with_id, partner.superset_with_id}:
+                if stale_id and stale_id not in (plan_exercise.id, partner.id):
+                    PlanExercise.objects.filter(pk=stale_id).update(superset_with=None)
+            plan_exercise.superset_with = partner
+            partner.superset_with = plan_exercise
+            plan_exercise.save(update_fields=["superset_with"])
+            partner.save(update_fields=["superset_with"])
+        trainee, _ = self._change_log_context(plan_exercise)
+        log_plan_change(
+            trainee, request.user, self.plan_type, f"Paired {plan_exercise.exercise.name} + {partner.exercise.name} as a superset"
+        )
+        return Response(self.get_serializer(plan_exercise).data)
+
+    @action(detail=True, methods=["post"])
+    def unpair(self, request, pk=None):
+        plan_exercise = self.get_object()
+        if plan_exercise.superset_with_id:
+            with transaction.atomic():
+                partner = plan_exercise.superset_with
+                PlanExercise.objects.filter(pk__in=[plan_exercise.id, partner.id]).update(superset_with=None)
+            trainee, _ = self._change_log_context(plan_exercise)
+            log_plan_change(trainee, request.user, self.plan_type, f"Unpaired {plan_exercise.exercise.name} superset")
+            plan_exercise.refresh_from_db()
+        return Response(self.get_serializer(plan_exercise).data)
 
 
 class WorkoutSessionViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
@@ -113,7 +168,9 @@ class WorkoutSessionViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
     trainee_path = "trainee"
 
     def get_queryset(self):
-        queryset = super().get_queryset().prefetch_related("logged_exercises__sets", "logged_exercises__plan_exercise__exercise")
+        queryset = super().get_queryset().prefetch_related(
+            "logged_exercises__sets", "logged_exercises__plan_exercise__exercise", "logged_exercises__substituted_exercise"
+        )
         start = self.request.query_params.get("start")
         if start:
             queryset = queryset.filter(date__gte=start)
@@ -146,5 +203,12 @@ class LoggedSetViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
             queryset = queryset.filter(logged_exercise__session__date__lte=end)
         exercise_id = self.request.query_params.get("exercise")
         if exercise_id:
-            queryset = queryset.filter(logged_exercise__plan_exercise__exercise_id=exercise_id)
+            # An off-program substitution moves a set's "true" exercise away
+            # from its plan_exercise default - match sets substituted *to*
+            # this exercise, or un-substituted sets whose plan default *is*
+            # this exercise (mirrors LoggedSetSerializer.get_exercise).
+            queryset = queryset.filter(
+                Q(logged_exercise__substituted_exercise_id=exercise_id)
+                | (Q(logged_exercise__substituted_exercise__isnull=True) & Q(logged_exercise__plan_exercise__exercise_id=exercise_id))
+            )
         return queryset

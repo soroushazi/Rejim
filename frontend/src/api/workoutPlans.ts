@@ -82,3 +82,17 @@ export function updatePlanExerciseNotes(id: number, notes: string): Promise<{ no
     body: JSON.stringify({ notes }),
   })
 }
+
+/** Trainer-only (enforced server-side) - links two exercises in the same
+ * session as a superset. Always mirrored on both sides server-side; pairing
+ * either one with a third exercise first unpairs its previous partner. */
+export function pairPlanExercises(id: number, partnerId: number): Promise<{ id: number }> {
+  return apiFetch(`/workouts/plan-exercises/${id}/pair/`, {
+    method: 'POST',
+    body: JSON.stringify({ partner: partnerId }),
+  })
+}
+
+export function unpairPlanExercise(id: number): Promise<{ id: number }> {
+  return apiFetch(`/workouts/plan-exercises/${id}/unpair/`, { method: 'POST' })
+}

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { WorkoutSessionLog } from '@/api/types'
+import { rpeLabel } from '@/lib/rpe'
 
 export default function SessionHistoryRow({ session }: { session: WorkoutSessionLog }) {
   const [expanded, setExpanded] = useState(false)
@@ -53,7 +54,7 @@ export default function SessionHistoryRow({ session }: { session: WorkoutSession
                           <span>
                             {s.weight}
                             {s.weight_unit} × {s.reps_done}
-                            {s.rpe !== null ? ` · RPE ${s.rpe}` : ''}
+                            {s.rpe !== null ? ` · ${rpeLabel(s.rpe)}` : ''}
                           </span>
                         </li>
                       ))}

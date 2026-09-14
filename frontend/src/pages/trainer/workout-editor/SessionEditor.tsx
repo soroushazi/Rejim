@@ -1,6 +1,14 @@
-import { ChevronDown, ChevronUp, Plus, Search, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Link2, Plus, Search, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { createPlanExercise, deletePlanExercise, deletePlanSession, updatePlanExercise, updatePlanSession } from '@/api/workoutPlans'
+import {
+  createPlanExercise,
+  deletePlanExercise,
+  deletePlanSession,
+  pairPlanExercises,
+  unpairPlanExercise,
+  updatePlanExercise,
+  updatePlanSession,
+} from '@/api/workoutPlans'
 import type { Exercise, MuscleGroup, PlanExerciseDetail, PlanSessionDetail } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
@@ -12,6 +20,7 @@ import AddExerciseDialog from '@/pages/workout/AddExerciseDialog'
 
 function ExerciseRow({
   exercise,
+  siblings,
   isFirst,
   isLast,
   onMoveUp,
@@ -20,6 +29,8 @@ function ExerciseRow({
   autoExpand,
 }: {
   exercise: PlanExerciseDetail
+  // Other exercises in the same session - candidates for pairing as a superset.
+  siblings: PlanExerciseDetail[]
   isFirst: boolean
   isLast: boolean
   onMoveUp: () => void
@@ -39,6 +50,27 @@ function ExerciseRow({
   const [notes, setNotes] = useState(exercise.notes)
   const [saving, setSaving] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [pairing, setPairing] = useState(false)
+
+  async function pairWith(partnerId: number) {
+    setPairing(true)
+    try {
+      await pairPlanExercises(exercise.id, partnerId)
+      onChanged()
+    } finally {
+      setPairing(false)
+    }
+  }
+
+  async function unpair() {
+    setPairing(true)
+    try {
+      await unpairPlanExercise(exercise.id)
+      onChanged()
+    } finally {
+      setPairing(false)
+    }
+  }
 
   async function save() {
     setSaving(true)
@@ -83,6 +115,32 @@ function ExerciseRow({
           <span className="truncate text-sm font-medium">{exercise.exercise_name}</span>
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                disabled={pairing}
+                aria-label="Superset options"
+                title={exercise.superset_with ? `Superset with ${exercise.superset_with_exercise_name}` : 'Pair as superset'}
+              >
+                <Link2 className={exercise.superset_with ? 'size-4 text-primary' : 'size-4 text-muted-foreground'} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {exercise.superset_with ? (
+                <DropdownMenuItem onSelect={unpair}>Unpair (currently with {exercise.superset_with_exercise_name})</DropdownMenuItem>
+              ) : siblings.length === 0 ? (
+                <DropdownMenuItem disabled>No other exercises in this session yet</DropdownMenuItem>
+              ) : (
+                siblings.map((s) => (
+                  <DropdownMenuItem key={s.id} onSelect={() => pairWith(s.id)}>
+                    Pair with {s.exercise_name}
+                    {s.superset_with ? ` (currently with ${s.superset_with_exercise_name})` : ''}
+                  </DropdownMenuItem>
+                ))
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button type="button" variant="ghost" size="sm" onClick={() => setEditing((v) => !v)}>
             {editing ? 'Close' : 'Edit'}
           </Button>
@@ -98,6 +156,12 @@ function ExerciseRow({
         title={`Remove ${exercise.exercise_name}?`}
         onConfirm={remove}
       />
+
+      {exercise.superset_with && (
+        <p className="mt-1 flex items-center gap-1 text-xs font-medium text-primary">
+          <Link2 className="size-3" /> Superset with {exercise.superset_with_exercise_name}
+        </p>
+      )}
 
       {!editing ? (
         <p className="mt-1 text-xs text-muted-foreground">
@@ -333,6 +397,7 @@ export default function SessionEditor({
               <ExerciseRow
                 key={ex.id}
                 exercise={ex}
+                siblings={session.exercises.filter((other) => other.id !== ex.id)}
                 isFirst={i === 0}
                 isLast={i === session.exercises.length - 1}
                 onMoveUp={async () => {

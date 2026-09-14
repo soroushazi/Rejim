@@ -1,0 +1,366 @@
+import { useEffect, useState } from 'react'
+import { ChevronDown, ChevronUp, Info, Link2, Trophy, X } from 'lucide-react'
+import { listExerciseHistory } from '@/api/loggedSets'
+import type { Exercise, ExerciseHistorySet, MuscleGroup, PlanExerciseDetail, WeightUnit } from '@/api/types'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { checkPersonalRecord } from '@/lib/personalRecord'
+import { cn } from '@/lib/utils'
+import { suggestWeight } from '@/lib/weightSuggestion'
+import ExerciseDetailDialog from './ExerciseDetailDialog'
+import ExerciseHistoryDialog from './ExerciseHistoryDialog'
+import RestTimer from './RestTimer'
+import { newDraftSet, SetEditorRow, SetSummaryRow, type DraftSet } from './SetRows'
+
+/** One exercise's slice of a superset - its plan config, drafts, and the
+ * setters SessionLogForm already keeps per plan_exercise id. Bundled so
+ * SupersetLogBlock takes exactly two of these instead of ~8 parallel props. */
+export type ExerciseLogEntry = {
+  planExercise: PlanExerciseDetail
+  exercise: Exercise | null
+  warmupSets: DraftSet[]
+  workingSets: DraftSet[]
+  onWarmupSetsChange: (sets: DraftSet[]) => void
+  onWorkingSetsChange: (sets: DraftSet[]) => void
+}
+
+function useHistory(exerciseId: number) {
+  const [history, setHistory] = useState<ExerciseHistorySet[]>([])
+  useEffect(() => {
+    let cancelled = false
+    listExerciseHistory(exerciseId)
+      .then((data) => {
+        if (!cancelled) setHistory(data)
+      })
+      .catch(() => {
+        if (!cancelled) setHistory([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [exerciseId])
+  return history
+}
+
+/** One side's warm-up section - independent per exercise, since which side
+ * (if either) needs warming up varies by pairing. */
+function WarmupColumn({ entry }: { entry: ExerciseLogEntry }) {
+  const { planExercise, warmupSets, onWarmupSetsChange } = entry
+  const hasActive = warmupSets.some((s) => !s.confirmed)
+
+  function update(index: number, patch: Partial<DraftSet>) {
+    onWarmupSetsChange(warmupSets.map((s, i) => (i === index ? { ...s, ...patch } : s)))
+  }
+  function remove(index: number) {
+    onWarmupSetsChange(warmupSets.filter((_, i) => i !== index))
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className="text-xs font-semibold text-muted-foreground">{planExercise.exercise_name} warm-up</p>
+      {warmupSets.map((set, i) =>
+        set.confirmed ? (
+          <SetSummaryRow
+            key={i}
+            label={`Warm-up ${i + 1}`}
+            set={set}
+            isPr={null}
+            onEdit={() => update(i, { confirmed: false })}
+            onRemove={() => remove(i)}
+          />
+        ) : (
+          <SetEditorRow
+            key={i}
+            label={`Warm-up ${i + 1}`}
+            set={set}
+            onChange={(patch) => update(i, patch)}
+            onConfirm={() => update(i, { confirmed: true })}
+            onRemove={() => remove(i)}
+          />
+        ),
+      )}
+      {!hasActive && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="self-start"
+          onClick={() => onWarmupSetsChange([...warmupSets, newDraftSet(true)])}
+        >
+          + Add warm-up set
+        </Button>
+      )}
+    </div>
+  )
+}
+
+type Props = {
+  entries: [ExerciseLogEntry, ExerciseLogEntry]
+  exercisesById: Map<number, Exercise>
+  muscleGroups: MuscleGroup[]
+  weightUnit: WeightUnit
+  onWeightUnitChange: (unit: WeightUnit) => void
+  onMoveUp: () => void
+  onMoveDown: () => void
+  canMoveUp: boolean
+  canMoveDown: boolean
+  reordering: boolean
+  expanded: boolean
+  onToggleExpanded: () => void
+}
+
+/** Logs a pair of exercises tied together as a superset: one working set of
+ * each, back to back with no rest between them, counts as a single "round" -
+ * rest only happens once the round is done. Warm-ups stay independent per
+ * exercise (see WarmupColumn); only working sets are paired into rounds. No
+ * backend concept of a "round" exists - saving still produces two ordinary
+ * LoggedExercise entries (see SessionLogForm), one set_number per round. */
+export default function SupersetLogBlock({
+  entries,
+  exercisesById,
+  muscleGroups,
+  weightUnit,
+  onWeightUnitChange,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp,
+  canMoveDown,
+  reordering,
+  expanded,
+  onToggleExpanded,
+}: Props) {
+  const [a, b] = entries
+  const historyA = useHistory(a.planExercise.exercise)
+  const historyB = useHistory(b.planExercise.exercise)
+  const [detailsFor, setDetailsFor] = useState<0 | 1 | null>(null)
+  const [historyFor, setHistoryFor] = useState<0 | 1 | null>(null)
+
+  const suggestionA = suggestWeight(historyA, a.planExercise.target_reps_min, a.planExercise.target_reps_max)
+  const suggestionB = suggestWeight(historyB, b.planExercise.target_reps_min, b.planExercise.target_reps_max)
+
+  const roundCount = Math.max(a.workingSets.length, b.workingSets.length, 1)
+  const targetRounds = Math.max(a.planExercise.target_sets, b.planExercise.target_sets)
+  const roundsAt = (i: number) => [a.workingSets[i] ?? newDraftSet(false), b.workingSets[i] ?? newDraftSet(false)] as const
+  const confirmedRounds = Array.from({ length: roundCount }, (_, i) => roundsAt(i)).filter(
+    ([sa, sb]) => sa.confirmed && sb.confirmed,
+  ).length
+  const allRoundsConfirmed = roundCount > 0 && confirmedRounds === roundCount
+
+  function writeRound(i: number, patchA: Partial<DraftSet> | null, patchB: Partial<DraftSet> | null) {
+    const [curA, curB] = roundsAt(i)
+    const nextA = [...Array.from({ length: roundCount }, (_, j) => a.workingSets[j] ?? newDraftSet(false))]
+    const nextB = [...Array.from({ length: roundCount }, (_, j) => b.workingSets[j] ?? newDraftSet(false))]
+    nextA[i] = patchA ? { ...curA, ...patchA } : curA
+    nextB[i] = patchB ? { ...curB, ...patchB } : curB
+    a.onWorkingSetsChange(nextA)
+    b.onWorkingSetsChange(nextB)
+  }
+
+  function confirmRound(i: number) {
+    const nextA = Array.from({ length: roundCount }, (_, j) => (j === i ? { ...roundsAt(j)[0], confirmed: true } : roundsAt(j)[0]))
+    const nextB = Array.from({ length: roundCount }, (_, j) => (j === i ? { ...roundsAt(j)[1], confirmed: true } : roundsAt(j)[1]))
+    if (i === roundCount - 1 && roundCount < targetRounds) {
+      nextA.push(newDraftSet(false))
+      nextB.push(newDraftSet(false))
+    }
+    a.onWorkingSetsChange(nextA)
+    b.onWorkingSetsChange(nextB)
+  }
+
+  function removeRound(i: number) {
+    a.onWorkingSetsChange(Array.from({ length: roundCount }, (_, j) => roundsAt(j)[0]).filter((_, j) => j !== i))
+    b.onWorkingSetsChange(Array.from({ length: roundCount }, (_, j) => roundsAt(j)[1]).filter((_, j) => j !== i))
+  }
+
+  function addRound() {
+    a.onWorkingSetsChange([...Array.from({ length: roundCount }, (_, j) => roundsAt(j)[0]), newDraftSet(false)])
+    b.onWorkingSetsChange([...Array.from({ length: roundCount }, (_, j) => roundsAt(j)[1]), newDraftSet(false)])
+  }
+
+  const restSeconds = Math.max(a.planExercise.default_rest_seconds, b.planExercise.default_rest_seconds)
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-primary/30">
+      <div className="flex items-center gap-0.5 bg-primary/5 px-3 py-2.5">
+        <Link2 className="size-3.5 shrink-0 text-primary" />
+        <div className="flex min-w-0 shrink flex-col leading-tight">
+          <span className="flex min-w-0 items-center gap-1 truncate text-sm font-medium">
+            <span className="min-w-0 truncate">{a.planExercise.exercise_name}</span>
+            <button
+              type="button"
+              className="shrink-0 text-muted-foreground hover:text-foreground"
+              onClick={() => setDetailsFor(0)}
+              aria-label={`View details for ${a.planExercise.exercise_name}`}
+            >
+              <Info className="size-3.5" />
+            </button>
+          </span>
+          <span className="flex min-w-0 items-center gap-1 truncate text-sm font-medium">
+            <span className="min-w-0 truncate">+ {b.planExercise.exercise_name}</span>
+            <button
+              type="button"
+              className="shrink-0 text-muted-foreground hover:text-foreground"
+              onClick={() => setDetailsFor(1)}
+              aria-label={`View details for ${b.planExercise.exercise_name}`}
+            >
+              <Info className="size-3.5" />
+            </button>
+          </span>
+        </div>
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-baseline justify-end gap-2 text-left"
+          onClick={onToggleExpanded}
+          aria-expanded={expanded}
+          aria-label={`${expanded ? 'Collapse' : 'Expand'} superset`}
+        >
+          <span className="whitespace-nowrap text-xs text-muted-foreground">
+            {confirmedRounds}/{targetRounds} rounds
+          </span>
+        </button>
+        {reordering && (
+          <>
+            <Button type="button" variant="ghost" size="icon-sm" disabled={!canMoveUp} onClick={onMoveUp} aria-label="Move superset earlier">
+              <ChevronUp className="size-4" />
+            </Button>
+            <Button type="button" variant="ghost" size="icon-sm" disabled={!canMoveDown} onClick={onMoveDown} aria-label="Move superset later">
+              <ChevronDown className="size-4" />
+            </Button>
+          </>
+        )}
+      </div>
+
+      {expanded && (
+        <div className="flex flex-col gap-3 border-t border-border p-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex gap-3">
+              <button type="button" className="text-xs text-muted-foreground underline-offset-2 hover:underline" onClick={() => setHistoryFor(0)}>
+                {a.planExercise.exercise_name} history
+              </button>
+              <button type="button" className="text-xs text-muted-foreground underline-offset-2 hover:underline" onClick={() => setHistoryFor(1)}>
+                {b.planExercise.exercise_name} history
+              </button>
+            </div>
+            <div className="flex gap-1 rounded-full bg-muted p-0.5 text-xs">
+              {(['lb', 'kg'] as const).map((unit) => (
+                <button
+                  key={unit}
+                  type="button"
+                  onClick={() => onWeightUnitChange(unit)}
+                  className={cn(
+                    'rounded-full px-2 py-0.5 font-medium',
+                    weightUnit === unit ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground',
+                  )}
+                >
+                  {unit}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {[a, b].map((entry, idx) =>
+            entry.planExercise.notes.trim() !== '' ? (
+              <div key={idx} className="rounded-md border border-primary/20 bg-primary/5 px-2.5 py-1.5">
+                <p className="mb-0.5 text-xs font-semibold text-primary">Note for {entry.planExercise.exercise_name}</p>
+                <p className="text-sm text-foreground">{entry.planExercise.notes}</p>
+              </div>
+            ) : null,
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <WarmupColumn entry={a} />
+            <WarmupColumn entry={b} />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-semibold text-muted-foreground">Rounds (one set of each, back to back)</p>
+            {Array.from({ length: roundCount }, (_, i) => i).map((i) => {
+              const [setA, setB] = roundsAt(i)
+              const bothConfirmed = setA.confirmed && setB.confirmed
+              if (bothConfirmed) {
+                const prA = checkPersonalRecord(historyA, Number(setA.weight), Number(setA.reps_done), setA.is_warmup)
+                const prB = checkPersonalRecord(historyB, Number(setB.weight), Number(setB.reps_done), setB.is_warmup)
+                return (
+                  <div key={i} className="flex items-center gap-2 rounded-md bg-muted px-2.5 py-1.5 text-sm">
+                    <button
+                      type="button"
+                      onClick={() => writeRound(i, { confirmed: false }, { confirmed: false })}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <span className="text-muted-foreground">Round {i + 1}</span>{' '}
+                      {a.planExercise.exercise_name} {setA.weight}×{setA.reps_done}
+                      {' → '}
+                      {b.planExercise.exercise_name} {setB.weight}×{setB.reps_done}
+                    </button>
+                    {(prA || prB) && (
+                      <Badge className="gap-1 font-normal">
+                        <Trophy className="size-3" /> PR
+                      </Badge>
+                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => removeRound(i)}
+                      aria-label={`Remove round ${i + 1}`}
+                    >
+                      <X className="size-3.5" />
+                    </Button>
+                  </div>
+                )
+              }
+              const canConfirm = setA.weight.trim() !== '' && setA.reps_done.trim() !== '' && setB.weight.trim() !== '' && setB.reps_done.trim() !== ''
+              return (
+                <div key={i} className="flex flex-col gap-1.5 rounded-md border border-border p-2">
+                  <span className="text-xs font-medium text-muted-foreground">Round {i + 1}</span>
+                  <SetEditorRow
+                    label={a.planExercise.exercise_name}
+                    set={setA}
+                    suggestion={suggestionA}
+                    onChange={(patch) => writeRound(i, patch, null)}
+                    onConfirm={() => {}}
+                    onRemove={() => {}}
+                    hideActions
+                  />
+                  <SetEditorRow
+                    label={b.planExercise.exercise_name}
+                    set={setB}
+                    suggestion={suggestionB}
+                    onChange={(patch) => writeRound(i, null, patch)}
+                    onConfirm={() => {}}
+                    onRemove={() => {}}
+                    hideActions
+                  />
+                  <Button type="button" className="w-full" disabled={!canConfirm} onClick={() => confirmRound(i)}>
+                    Confirm round {i + 1}
+                  </Button>
+                </div>
+              )
+            })}
+            {allRoundsConfirmed && (
+              <Button type="button" variant="outline" size="sm" className="self-start" onClick={addRound}>
+                + Add round
+              </Button>
+            )}
+          </div>
+
+          <RestTimer defaultSeconds={restSeconds} />
+        </div>
+      )}
+
+      <ExerciseHistoryDialog
+        exerciseId={historyFor !== null ? entries[historyFor].planExercise.exercise : null}
+        exerciseName={historyFor !== null ? entries[historyFor].planExercise.exercise_name : ''}
+        onOpenChange={(open) => !open && setHistoryFor(null)}
+      />
+
+      <ExerciseDetailDialog
+        exercise={detailsFor !== null ? entries[detailsFor].exercise : null}
+        exercisesById={exercisesById}
+        muscleGroups={muscleGroups}
+        onOpenChange={(open) => !open && setDetailsFor(null)}
+      />
+    </div>
+  )
+}

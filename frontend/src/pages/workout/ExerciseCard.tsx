@@ -1,20 +1,9 @@
 import { useState } from 'react'
-import type { Exercise, ExerciseDifficulty, ExerciseEditRequest, MuscleGroup } from '@/api/types'
+import type { Exercise, ExerciseEditRequest, MuscleGroup } from '@/api/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { DIFFICULTY_BADGE_VARIANT, DIFFICULTY_LABEL } from '@/lib/exerciseDifficulty'
 import MuscleDiagram from './MuscleDiagram'
-
-const DIFFICULTY_LABEL: Record<ExerciseDifficulty, string> = {
-  beginner: 'Beginner',
-  intermediate: 'Intermediate',
-  advanced: 'Advanced',
-}
-
-const DIFFICULTY_BADGE_VARIANT: Record<ExerciseDifficulty, 'secondary' | 'outline' | 'default'> = {
-  beginner: 'secondary',
-  intermediate: 'outline',
-  advanced: 'default',
-}
 
 export default function ExerciseCard({
   exercise,
