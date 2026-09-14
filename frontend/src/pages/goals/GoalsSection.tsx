@@ -4,7 +4,8 @@ import { createGoal, deleteGoal, listGoals, updateGoal } from '@/api/goals'
 import { listExercises } from '@/api/exercises'
 import type { Exercise, Goal, NewGoal } from '@/api/types'
 import { Button } from '@/components/ui/button'
-import GoalCard from './GoalCard'
+import ConfirmDialog from '@/components/ConfirmDialog'
+import GoalCard, { goalSummary } from './GoalCard'
 import GoalForm from './GoalForm'
 
 type Props = {
@@ -23,6 +24,7 @@ export default function GoalsSection({ traineeId, canEdit }: Props) {
   const [loading, setLoading] = useState(true)
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Goal | null>(null)
+  const [deleting, setDeleting] = useState<Goal | null>(null)
 
   useEffect(() => {
     listExercises()
@@ -54,9 +56,9 @@ export default function GoalsSection({ traineeId, canEdit }: Props) {
     reload()
   }
 
-  async function handleDelete(goal: Goal) {
-    if (!window.confirm('Delete this goal? This cannot be undone.')) return
-    await deleteGoal(goal.id)
+  async function confirmDelete() {
+    if (!deleting) return
+    await deleteGoal(deleting.id)
     reload()
   }
 
@@ -94,7 +96,7 @@ export default function GoalsSection({ traineeId, canEdit }: Props) {
                 setFormOpen(true)
               }}
               onToggleActive={() => handleToggleActive(goal)}
-              onDelete={() => handleDelete(goal)}
+              onDelete={() => setDeleting(goal)}
             />
           ))}
         </div>
@@ -103,6 +105,14 @@ export default function GoalsSection({ traineeId, canEdit }: Props) {
       {canEdit && (
         <GoalForm open={formOpen} onOpenChange={setFormOpen} exercises={exercises} initial={editing} onSave={handleSave} />
       )}
+
+      <ConfirmDialog
+        open={deleting !== null}
+        onOpenChange={(open) => !open && setDeleting(null)}
+        title="Delete this goal?"
+        description={deleting ? goalSummary(deleting, exercises) : undefined}
+        onConfirm={confirmDelete}
+      />
     </div>
   )
 }

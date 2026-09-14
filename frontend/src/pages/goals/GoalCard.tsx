@@ -13,13 +13,17 @@ type Props = {
   onDelete: () => void
 }
 
-export default function GoalCard({ goal, exercises, canEdit, onEdit, onToggleActive, onDelete }: Props) {
+/** Shared with GoalsSection's delete-confirmation dialog, so the card being
+ * removed is identifiable there too instead of a generic "delete this?". */
+export function goalSummary(goal: Goal, exercises: Exercise[]): string {
   const exerciseName = goal.exercise ? exercises.find((e) => e.id === goal.exercise)?.name : null
+  return goal.goal_type === 'weight'
+    ? `${goal.direction === 'lose' ? 'Lose to' : goal.direction === 'gain' ? 'Gain to' : 'Maintain'} ${goal.target_weight}${goal.target_weight_unit}`
+    : `${exerciseName ?? 'Exercise'}: ${goal.target_value}${goal.target_value_unit}`
+}
 
-  const summary =
-    goal.goal_type === 'weight'
-      ? `${goal.direction === 'lose' ? 'Lose to' : goal.direction === 'gain' ? 'Gain to' : 'Maintain'} ${goal.target_weight}${goal.target_weight_unit}`
-      : `${exerciseName ?? 'Exercise'}: ${goal.target_value}${goal.target_value_unit}`
+export default function GoalCard({ goal, exercises, canEdit, onEdit, onToggleActive, onDelete }: Props) {
+  const summary = goalSummary(goal, exercises)
 
   return (
     <Card className={!goal.is_active ? 'opacity-60' : undefined}>
@@ -46,7 +50,7 @@ export default function GoalCard({ goal, exercises, canEdit, onEdit, onToggleAct
             <Button type="button" variant="ghost" size="sm" onClick={onToggleActive}>
               {goal.is_active ? 'Archive' : 'Unarchive'}
             </Button>
-            <Button type="button" variant="ghost" size="icon" onClick={onDelete}>
+            <Button type="button" variant="ghost" size="icon" onClick={onDelete} aria-label="Delete goal">
               <Trash2 className="size-4 text-destructive" />
             </Button>
           </div>

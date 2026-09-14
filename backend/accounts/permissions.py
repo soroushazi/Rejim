@@ -50,12 +50,8 @@ class EditRequestPermission(BasePermission):
 
 
 class GoalWritePermission(BasePermission):
-    """Goal ownership flips once a trainer is assigned (TRAINER_DASHBOARD_SPEC.md):
-    a trainee may write their own goals only while unassigned (trainer is None -
-    covers the onboarding wizard, used before any TrainerConnection resolves);
-    once a trainer is assigned, only that trainer may write, and the trainee's
-    own view goes read-only. State-based, not "goals created after assignment" -
-    applies retroactively to goals a trainee made before being assigned too.
+    """A trainee can always write their own goals, and so can their assigned
+    trainer - both sides can add/edit/remove, regardless of assignment state.
 
     Object-level access is decided by whose trainee the goal actually belongs
     to (obj.trainee_id), not by the requester's own capability flags - this is
@@ -75,5 +71,5 @@ class GoalWritePermission(BasePermission):
             return True
         user = request.user
         if obj.trainee_id == user.id:
-            return user.is_trainee and user.trainer_id is None
+            return user.is_trainee
         return user.is_trainer and obj.trainee.trainer_id == user.id
