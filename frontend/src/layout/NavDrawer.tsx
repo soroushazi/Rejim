@@ -39,8 +39,12 @@ export default function NavDrawer({ open, onOpenChange }: NavDrawerProps) {
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-3/4 sm:max-w-xs">
-        <SheetHeader>
+      <SheetContent
+        side="right"
+        className="w-3/4 sm:max-w-xs"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
+        <SheetHeader style={{ paddingTop: 'calc(1rem + env(safe-area-inset-top))' }}>
           <SheetTitle className="text-left">
             {user && (
               <span className="flex flex-col gap-0.5">

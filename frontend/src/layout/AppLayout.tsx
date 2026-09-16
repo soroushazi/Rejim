@@ -9,7 +9,9 @@ export default function AppLayout() {
   const [menuOpen, setMenuOpen] = useState(false)
 
   return (
-    <div className="flex min-h-svh flex-col">
+    // +1px forces the page to always be scrollable, so iOS Safari never gets stuck with a
+    // stale viewport for the fixed BottomNav on short, otherwise-unscrollable pages (e.g. Diet, Trainer).
+    <div className="flex min-h-[calc(100svh+1px)] flex-col">
       <Header menuOpen={menuOpen} onToggleMenu={() => setMenuOpen((open) => !open)} />
       <NotificationBanner />
       <main
