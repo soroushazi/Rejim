@@ -100,7 +100,7 @@ export default function FoodBankPage() {
       className="relative flex flex-col gap-3"
       style={{
         minHeight:
-          'calc(100svh - var(--header-height) - 92px - var(--nav-height) - env(safe-area-inset-bottom))',
+          'calc(100svh - var(--header-height) - env(safe-area-inset-top) - 92px - var(--nav-height) - env(safe-area-inset-bottom))',
       }}
     >
       <Input
@@ -139,7 +139,14 @@ export default function FoodBankPage() {
         <p className="mt-6 text-center text-sm text-muted-foreground">Couldn't load the food bank.</p>
       )}
       {!loading && !error && items.length === 0 && (
-        <p className="mt-6 text-center text-sm text-muted-foreground">No foods found.</p>
+        <div className="mt-6 flex flex-col items-center gap-2 text-center">
+          <p className="text-sm text-muted-foreground">No foods found.</p>
+          {search.trim() && (
+            <Button type="button" variant="link" className="h-auto p-0" onClick={() => setAddOpen(true)}>
+              Add "{search.trim()}" to the Food Bank
+            </Button>
+          )}
+        </div>
       )}
 
       {!loading && !error && items.length > 0 && (
@@ -175,6 +182,7 @@ export default function FoodBankPage() {
         open={addOpen}
         onOpenChange={setAddOpen}
         onCreated={(item) => setItems((prev) => [item, ...prev])}
+        initialName={items.length === 0 ? search.trim() : ''}
       />
 
       <AddFoodItemDialog

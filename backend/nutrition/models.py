@@ -58,14 +58,6 @@ class FoodItem(models.Model):
         APPROVED = "approved", "Approved"
         REJECTED = "rejected", "Rejected"
 
-    class ServingUnit(models.TextChoices):
-        GRAM = "g", "Grams"
-        CUP = "cup", "Cups"
-        OUNCE = "oz", "Ounces"
-        POUND = "lb", "Pounds"
-        EACH = "each", "Each"
-        SERVING = "serving", "Serving"
-
     name = models.CharField(max_length=255)
     barcode = models.CharField(max_length=64, null=True, blank=True, unique=True)
     source = models.CharField(max_length=10, choices=Source.choices, default=Source.SEEDED)
@@ -89,13 +81,6 @@ class FoodItem(models.Model):
     approval_status = models.CharField(
         max_length=10, choices=ApprovalStatus.choices, default=ApprovalStatus.APPROVED
     )
-
-    # A convenience unit for display/entry so contributors don't have to hand-convert a
-    # nutrition label to per-100g themselves (e.g. "1 serving = 170g" for a yogurt tub).
-    # Purely a display/entry aid - nutrient values below are always canonically per 100g,
-    # and every other part of the app (logging, composites) stays gram-based.
-    serving_unit = models.CharField(max_length=10, choices=ServingUnit.choices, default=ServingUnit.GRAM)
-    serving_size_grams = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
 
     # Nutrition values per 100g. For composite items these are computed from `components`
     # (see recompute_from_components) rather than entered directly.
@@ -175,6 +160,28 @@ class FoodItemComponent(models.Model):
 
     def __str__(self):
         return f"{self.composite.name} - {self.ingredient.name} ({self.weight_grams}g)"
+
+
+class FoodItemMeasure(models.Model):
+    """A named, food-specific unit this item can be logged in (e.g. "tbsp", "whole
+    (thigh)", "cup (chopped)"), in addition to the universal g/oz/lb weight units
+    every item already supports. At most one measure per item is is_default - the
+    unit AddFoodItemDialog offers as the basis for entering nutrition values,
+    instead of always requiring per-100g."""
+
+    food_item = models.ForeignKey(FoodItem, on_delete=models.CASCADE, related_name="measures")
+    label = models.CharField(max_length=50)
+    grams_per_unit = models.DecimalField(max_digits=7, decimal_places=2)
+    is_default = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["id"]
+        constraints = [
+            models.UniqueConstraint(fields=["food_item", "label"], name="unique_measure_label_per_food_item"),
+        ]
+
+    def __str__(self):
+        return f"{self.food_item.name} - {self.label} ({self.grams_per_unit}g)"
 
 
 class FoodItemEditRequest(models.Model):

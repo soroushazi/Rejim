@@ -47,13 +47,28 @@ export type NewTrainerConnection = {
 export type FoodItemKind = 'single' | 'composite'
 export type FoodItemVisibility = 'private' | 'public' | 'trainees'
 export type FoodItemApprovalStatus = 'pending' | 'approved' | 'rejected'
-export type FoodItemServingUnit = 'g' | 'cup' | 'oz' | 'lb' | 'each' | 'serving'
 
 export type FoodItemComponent = {
   id: number
   ingredient: number
   ingredient_name: string
   weight_grams: string
+}
+
+/** A named, food-specific unit this item can be logged in (e.g. "tbsp", "whole
+ * (thigh)"), in addition to the universal g/oz/lb weight units every item supports.
+ * At most one measure per item is is_default - see lib/servingUnits.ts. */
+export type FoodItemMeasure = {
+  id: number
+  label: string
+  grams_per_unit: string
+  is_default: boolean
+}
+
+export type NewFoodItemMeasure = {
+  label: string
+  grams_per_unit: string
+  is_default: boolean
 }
 
 export type MacroFilter = {
@@ -72,8 +87,7 @@ export type FoodItem = {
   barcode: string | null
   source: 'seeded' | 'off'
   kind: FoodItemKind
-  serving_unit: FoodItemServingUnit
-  serving_size_grams: string | null
+  measures: FoodItemMeasure[]
   calories_per_100g: string
   protein_g_per_100g: string
   carbs_g_per_100g: string
@@ -121,6 +135,7 @@ export type ReferenceMealItemDetail = {
   id: number
   food_item: number
   food_item_name: string
+  food_item_measures: FoodItemMeasure[]
   reference_weight_grams: string
   reference_nutrients: Nutrients
 }
@@ -191,8 +206,7 @@ export type NewFoodItem = {
   barcode: null
   kind: FoodItemKind
   visibility: FoodItemVisibility
-  serving_unit: FoodItemServingUnit
-  serving_size_grams?: string | null
+  measures?: NewFoodItemMeasure[]
   calories_per_100g?: string | null
   protein_g_per_100g?: string | null
   carbs_g_per_100g?: string | null

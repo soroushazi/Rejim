@@ -1,22 +1,13 @@
 import { useEffect, useState } from 'react'
 import { getFoodItem } from '@/api/foodItems'
-import type { FoodItem, FoodItemServingUnit, Nutrients } from '@/api/types'
+import type { FoodItem, Nutrients } from '@/api/types'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { nutrientsForWeight } from '@/lib/nutrients'
-import { gramsPerUnit, SERVING_UNIT_OPTIONS } from '@/lib/servingUnits'
+import { availableUnits, gramsPerUnit } from '@/lib/servingUnits'
 import { round } from '@/lib/utils'
-
-const UNIT_PLURAL_LABEL: Record<FoodItemServingUnit, string> = {
-  g: 'grams',
-  cup: 'cups',
-  oz: 'ounces',
-  lb: 'pounds',
-  each: 'each',
-  serving: 'servings',
-}
 
 const MACRO_ROWS: { key: keyof Nutrients; label: string }[] = [
   { key: 'protein_g', label: 'P' },
@@ -45,7 +36,7 @@ export default function IngredientNutrientDialog({ foodItemId, defaultWeightGram
   const [item, setItem] = useState<FoodItem | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(false)
-  const [unit, setUnit] = useState<FoodItemServingUnit>('g')
+  const [unit, setUnit] = useState('g')
   const [quantity, setQuantity] = useState('')
 
   useEffect(() => {
@@ -72,9 +63,7 @@ export default function IngredientNutrientDialog({ foodItemId, defaultWeightGram
     }
   }, [foodItemId, defaultWeightGrams])
 
-  const availableUnits = item
-    ? SERVING_UNIT_OPTIONS.filter((opt) => gramsPerUnit(item, opt.value) !== null)
-    : []
+  const units = item ? availableUnits(item) : []
 
   const qtyNumber = Number(quantity)
   const perUnit = item && quantity.trim() !== '' && !Number.isNaN(qtyNumber) ? gramsPerUnit(item, unit) : null
@@ -110,14 +99,14 @@ export default function IngredientNutrientDialog({ foodItemId, defaultWeightGram
               </div>
               <div className="flex min-w-0 flex-col gap-1.5">
                 <Label htmlFor="ingredient-unit">Measure</Label>
-                <Select value={unit} onValueChange={(v) => setUnit(v as FoodItemServingUnit)}>
+                <Select value={unit} onValueChange={setUnit}>
                   <SelectTrigger id="ingredient-unit" className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {availableUnits.map((opt) => (
+                    {units.map((opt) => (
                       <SelectItem key={opt.value} value={opt.value}>
-                        {UNIT_PLURAL_LABEL[opt.value]}
+                        {opt.label}
                       </SelectItem>
                     ))}
                   </SelectContent>

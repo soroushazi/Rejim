@@ -1,49 +1,46 @@
-import type { FoodItem, FoodItemServingUnit } from '@/api/types'
+import type { FoodItemMeasure } from '@/api/types'
 
-export const SERVING_UNIT_OPTIONS: { value: FoodItemServingUnit; label: string }[] = [
-  { value: 'g', label: 'Grams' },
-  { value: 'cup', label: 'Cups' },
-  { value: 'oz', label: 'Ounces' },
-  { value: 'lb', label: 'Pounds' },
-  { value: 'each', label: 'Each' },
-  { value: 'serving', label: 'Serving' },
+export type UnitOption = { value: string; label: string }
+
+/** Anything with its own list of named measures - a full FoodItem, or a lighter
+ * shape like ReferenceMealItemDetail's food_item_measures (a plan item logged by a
+ * trainee should switch units too, even though the trainer authored it in grams). */
+type MeasuredItem = { measures: FoodItemMeasure[] }
+
+// Grams-per-unit is a fixed physical conversion for weight, available for every
+// item regardless of what measures it defines.
+export const UNIVERSAL_UNITS: UnitOption[] = [
+  { value: 'g', label: 'g' },
+  { value: 'oz', label: 'oz' },
+  { value: 'lb', label: 'lb' },
 ]
 
-// Grams-per-unit is a fixed physical conversion for weight units, but is food-specific
-// (and must be supplied by whoever adds the item) for cup/each/serving.
-export const FIXED_GRAMS_PER_UNIT: Partial<Record<FoodItemServingUnit, number>> = {
-  oz: 28.35,
-  lb: 453.59,
+const FIXED_GRAMS_PER_UNIT: Record<string, number> = { g: 1, oz: 28.35, lb: 453.59 }
+
+/** Every unit this specific item can be logged in: the universal weight units plus
+ * whatever food-specific measures (e.g. "tbsp", "whole (thigh)") it defines. */
+export function availableUnits(item: MeasuredItem): UnitOption[] {
+  return [...UNIVERSAL_UNITS, ...item.measures.map((m) => ({ value: m.label, label: m.label }))]
 }
 
-export const SERVING_UNIT_NOUN: Record<FoodItemServingUnit, string> = {
-  g: 'gram',
-  cup: 'cup',
-  oz: 'ounce',
-  lb: 'pound',
-  each: 'each',
-  serving: 'serving',
+/** This item's own measure marked as default, if any - used as the entry basis in
+ * AddFoodItemDialog and the caption shown for how its nutrition values are labeled. */
+export function defaultMeasure(item: MeasuredItem) {
+  return item.measures.find((m) => m.is_default)
 }
 
-/** Nutrient values scaled from per-100g storage to the item's own display unit. */
-export function scaleToServingUnit(perHundredGrams: number, servingSizeGrams: number | null) {
-  if (!servingSizeGrams) return perHundredGrams
-  return (perHundredGrams * servingSizeGrams) / 100
-}
-
-/** Grams equal to 1 unit of `unit` for this specific item - only known for the two
- * fixed weight units (oz/lb) or for the item's own defined serving unit. */
-export function gramsPerUnit(item: FoodItem, unit: FoodItemServingUnit): number | null {
-  if (unit === 'g') return 1
+/** Grams equal to 1 unit of `unit` for this item, or null if unresolvable (an
+ * arbitrary label that isn't one of this item's own measures). */
+export function gramsPerUnit(item: MeasuredItem, unit: string): number | null {
   const fixed = FIXED_GRAMS_PER_UNIT[unit]
   if (fixed !== undefined) return fixed
-  if (unit === item.serving_unit && item.serving_size_grams) return Number(item.serving_size_grams)
-  return null
+  const measure = item.measures.find((m) => m.label === unit)
+  return measure ? Number(measure.grams_per_unit) : null
 }
 
 /** Converts a quantity entered in `unit` to grams, or null if the amount/unit combo
  * can't be resolved (empty/invalid amount, or a unit with no known gram conversion). */
-export function gramsForQuantity(item: FoodItem, unit: FoodItemServingUnit, quantity: string): number | null {
+export function gramsForQuantity(item: MeasuredItem, unit: string, quantity: string): number | null {
   const per = gramsPerUnit(item, unit)
   const qty = Number(quantity)
   if (per === null || quantity.trim() === '' || Number.isNaN(qty)) return null

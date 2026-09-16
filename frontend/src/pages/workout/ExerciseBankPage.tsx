@@ -93,7 +93,7 @@ export default function ExerciseBankPage() {
       className="relative flex flex-col gap-3"
       style={{
         minHeight:
-          'calc(100svh - var(--header-height) - 92px - var(--nav-height) - env(safe-area-inset-bottom))',
+          'calc(100svh - var(--header-height) - env(safe-area-inset-top) - 92px - var(--nav-height) - env(safe-area-inset-bottom))',
       }}
     >
       <Input
@@ -127,7 +127,14 @@ export default function ExerciseBankPage() {
         <p className="mt-6 text-center text-sm text-muted-foreground">Couldn't load the exercise bank.</p>
       )}
       {!loading && !error && filtered.length === 0 && (
-        <p className="mt-6 text-center text-sm text-muted-foreground">No exercises found.</p>
+        <div className="mt-6 flex flex-col items-center gap-2 text-center">
+          <p className="text-sm text-muted-foreground">No exercises found.</p>
+          {user?.is_trainer && search.trim() && (
+            <Button type="button" variant="link" className="h-auto p-0" onClick={() => setAddOpen(true)}>
+              Add "{search.trim()}" to the Exercise Bank
+            </Button>
+          )}
+        </div>
       )}
 
       {!loading && !error && filtered.length > 0 && (
@@ -166,6 +173,7 @@ export default function ExerciseBankPage() {
             onOpenChange={setAddOpen}
             muscleGroups={muscleGroups}
             onCreated={(exercise) => setExercises((prev) => [exercise, ...prev])}
+            initialName={filtered.length === 0 ? search.trim() : ''}
           />
 
           <AddExerciseDialog

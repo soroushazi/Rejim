@@ -1,0 +1,183 @@
+ingredient,unit_label,grams_per_unit,is_default
+Chicken breast (raw),oz,28.35,False
+Chicken breast (raw),whole breast,174,True
+Chicken breast (cooked),oz,28.35,False
+Chicken breast (cooked),whole breast,140,True
+Chicken thigh (raw),oz,28.35,False
+Chicken thigh (raw),whole (thigh),110,True
+Chicken thigh (cooked),oz,28.35,False
+Chicken thigh (cooked),whole (thigh),86,True
+Turkey breast (raw),oz,28.35,True
+Turkey breast (cooked),oz,28.35,True
+Turkey breast (cooked),slice,28,False
+Ground turkey 93/7 (cooked),oz,28.35,True
+Lean ground beef 90/10 (cooked),oz,28.35,True
+Beef sirloin steak (cooked),oz,28.35,True
+Beef flank steak (cooked),oz,28.35,True
+Pork tenderloin (cooked),oz,28.35,True
+Pork chop (cooked),oz,28.35,False
+Pork chop (cooked),whole (chop),145,True
+Bacon (cooked),whole (strip),8,True
+Turkey bacon (cooked),whole (strip),14,True
+Salmon (raw),oz,28.35,False
+Salmon (raw),whole (fillet),170,True
+Salmon (cooked),oz,28.35,False
+Salmon (cooked),whole (fillet),127,True
+"Tuna, canned in water (drained)",oz,28.35,False
+"Tuna, canned in water (drained)",can (drained),142,True
+Tuna steak (raw),oz,28.35,True
+Tilapia (cooked),oz,28.35,False
+Tilapia (cooked),whole (fillet),87,True
+Cod (cooked),oz,28.35,False
+Cod (cooked),whole (fillet),90,True
+Shrimp (cooked),oz,28.35,True
+Shrimp (cooked),whole (large),9,False
+"Sardines, canned in oil (drained)",whole,12,False
+"Sardines, canned in oil (drained)",can (drained),92,True
+Whole egg (cooked),whole (large egg),50,True
+Egg white (cooked),whole (large egg white),33,True
+"Greek yogurt, plain, nonfat",cup,245,True
+"Greek yogurt, plain, nonfat",tbsp,15.3,False
+"Greek yogurt, plain, full-fat",cup,245,True
+"Greek yogurt, plain, full-fat",tbsp,15.3,False
+"Yogurt, plain, regular (whole milk)",cup,245,True
+"Cottage cheese, low-fat (1%)",cup,226,True
+"Cottage cheese, full-fat (4%)",cup,226,True
+"Milk, whole (3.25%)",cup,244,True
+"Milk, whole (3.25%)",fl oz,30.5,False
+"Milk, whole (3.25%)",tbsp,15.3,False
+"Milk, skim",cup,245,True
+"Milk, skim",fl oz,30.6,False
+"Milk, 2%",cup,244,True
+"Milk, 2%",fl oz,30.5,False
+"Mozzarella cheese, part-skim",oz,28.35,True
+"Mozzarella cheese, part-skim",slice,28,False
+Cheddar cheese,oz,28.35,True
+Cheddar cheese,slice,28,False
+Parmesan cheese,tbsp (grated),5,True
+Parmesan cheese,oz,28.35,False
+Cream cheese,tbsp,14.5,True
+Cream cheese,oz,28.35,False
+"Kefir, plain, low-fat",cup,243,True
+"Kefir, plain, low-fat",fl oz,30.4,False
+"Tofu, firm",oz,28.35,False
+"Tofu, firm",cup (cubed),124,True
+Tempeh,oz,28.35,True
+Edamame (cooked),cup,155,True
+Black beans (cooked),cup,172,True
+Chickpeas (cooked),cup,164,True
+Lentils (cooked),cup,198,True
+Kidney beans (cooked),cup,177,True
+Whey protein powder (generic),scoop,30,True
+"Plant protein powder, pea/rice blend",scoop,34,True
+Seitan,oz,28.35,True
+White rice (cooked),cup,158,True
+White rice (uncooked),cup,185,True
+Jasmine rice (cooked),cup,163,True
+Jasmine rice (uncooked),cup,190,True
+Brown rice (cooked),cup,195,True
+Brown rice (uncooked),cup,185,True
+Basmati rice (cooked),cup,163,True
+Quinoa (cooked),cup,185,True
+Quinoa (uncooked),cup,170,True
+"Oats, rolled (dry)",cup,81,True
+Oats (cooked),cup,234,True
+Steel-cut oats (dry),cup,156,True
+Whole wheat bread,slice,28,True
+White bread,slice,25,True
+Sourdough bread,slice,35,True
+Whole wheat pasta (cooked),cup,140,True
+Regular pasta (cooked),cup,140,True
+Sweet potato (raw),whole (medium),130,True
+Sweet potato (raw),cup (cubed),133,False
+Sweet potato (cooked),whole (medium),114,True
+Sweet potato (cooked),cup (cubed),200,False
+White potato (raw),whole (medium),173,True
+"White potato (cooked, boiled)",whole (medium),167,True
+"White potato (cooked, boiled)",cup,156,False
+Corn tortilla,whole,24,True
+Whole wheat tortilla,whole,45,True
+Couscous (cooked),cup,157,True
+"Rice cakes, plain",whole,9,True
+Banana,whole (medium),118,True
+Apple,whole (medium),182,True
+Blueberries,cup,148,True
+Strawberries,cup (halves),152,True
+Strawberries,whole,12,False
+Orange,whole (medium),131,True
+Grapes,cup,151,True
+Avocado,half,100,True
+Avocado,whole (edible),136,False
+Mango,cup (sliced),165,True
+Mango,whole (edible),207,False
+Pineapple,cup (chunks),165,True
+Watermelon,cup (diced),152,True
+Raisins,cup,145,True
+Raisins,tbsp,9,False
+Dates,whole (medjool),24,True
+Broccoli (cooked),cup (chopped),156,True
+Spinach (raw),cup,30,True
+Kale (raw),cup (chopped),67,True
+"Bell pepper, red (raw)",whole (medium),119,True
+"Bell pepper, red (raw)",cup (chopped),149,False
+Carrot (raw),whole (medium),61,True
+Carrot (raw),cup (chopped),128,False
+Cucumber (raw),cup (sliced),119,True
+Cucumber (raw),whole (medium),301,False
+Zucchini (raw),cup (sliced),124,True
+Zucchini (raw),whole (medium),196,False
+Asparagus (cooked),cup,180,True
+Asparagus (cooked),whole (spear),16,False
+Green beans (cooked),cup,125,True
+Cauliflower (raw),cup (chopped),107,True
+Tomato (raw),whole (medium),123,True
+"Mushroom, white/button (raw)",cup (sliced),70,True
+"Mushroom, white/button (raw)",whole,18,False
+Onion (raw),whole (medium),110,True
+Onion (raw),cup (chopped),160,False
+Almonds,oz,28.35,True
+Almonds,cup (whole),143,False
+Peanut butter,tbsp,16,True
+Olive oil,tbsp,13.5,True
+Olive oil,tsp,4.5,False
+Ground turkey 93/7 (raw),oz,28.35,True
+Lean ground beef 90/10 (raw),oz,28.35,True
+Beef sirloin steak (raw),oz,28.35,True
+Beef flank steak (raw),oz,28.35,True
+Pork tenderloin (raw),oz,28.35,True
+Pork chop (raw),oz,28.35,False
+Pork chop (raw),whole (chop),190,True
+Bacon (raw),whole (strip),28,True
+Turkey bacon (raw),whole (strip),21,True
+Tuna steak (cooked),oz,28.35,False
+Tuna steak (cooked),whole (fillet),140,True
+Tilapia (raw),oz,28.35,False
+Tilapia (raw),whole (fillet),100,True
+Cod (raw),oz,28.35,False
+Cod (raw),whole (fillet),100,True
+Shrimp (raw),oz,28.35,True
+Shrimp (raw),whole (large),11,False
+Whole egg (raw),whole (large egg),50,True
+Egg white (raw),whole (large egg white),33,True
+Basmati rice (uncooked),cup,185,True
+Steel-cut oats (cooked),cup,240,True
+Whole wheat pasta (uncooked/dry),cup,100,True
+Regular pasta (uncooked/dry),cup,100,True
+Couscous (uncooked/dry),cup,173,True
+Black beans (dry/uncooked),cup,194,True
+Chickpeas (dry/uncooked),cup,200,True
+Lentils (dry/uncooked),cup,192,True
+Kidney beans (dry/uncooked),cup,184,True
+Edamame (raw),cup,155,True
+Broccoli (raw),cup (chopped),91,True
+Spinach (cooked),cup,180,True
+Kale (cooked),cup,130,True
+"Bell pepper, red (cooked)",whole (medium),119,True
+Carrot (cooked),cup (sliced),156,True
+Asparagus (raw),whole (spear),16,True
+Asparagus (raw),cup,134,False
+Green beans (raw),cup,100,True
+Cauliflower (cooked),cup (chopped),124,True
+"Mushroom, white/button (cooked)",cup (sliced),156,True
+Zucchini (cooked),cup (sliced),180,True
+Onion (cooked),cup (chopped),210,True

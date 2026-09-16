@@ -8,8 +8,9 @@ import { useAuth } from '@/auth/AuthContext'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { nutrientsForWeight, scaleNutrients, sumNutrients } from '@/lib/nutrients'
-import { gramsForQuantity } from '@/lib/servingUnits'
+import { availableUnits, gramsForQuantity } from '@/lib/servingUnits'
 import { cn, round } from '@/lib/utils'
 import CustomMealItemPicker, { type DraftCustomItem } from './CustomMealItemPicker'
 
@@ -21,18 +22,24 @@ type Props = {
   onCleared: (referenceMealId: number) => void
 }
 
-/** Default weights for a plan option: the trainee's previously-saved actuals for any
- * item that matches, falling back to the plan's reference weight otherwise. */
-function weightsForOption(option: MealOptionDetail, loggedMeal: LoggedMeal | null): Record<number, string> {
+/** A plan item's logged amount, entered in whatever unit the trainee picks (not
+ * necessarily grams) - see the "From plan" section below. */
+type PlanItemQuantity = { unit: string; quantity: string }
+
+/** Default quantities for a plan option: the trainee's previously-saved actuals for
+ * any item that matches (always in grams, since that's what's persisted), falling
+ * back to the plan's reference weight otherwise - both shown in grams until the
+ * trainee switches to one of the item's own measures. */
+function weightsForOption(option: MealOptionDetail, loggedMeal: LoggedMeal | null): Record<number, PlanItemQuantity> {
   const saved = new Map<number, string>()
   if (loggedMeal?.source === 'plan') {
     for (const item of loggedMeal.items) {
       if (item.reference_meal_item) saved.set(item.reference_meal_item, item.actual_weight_grams)
     }
   }
-  const result: Record<number, string> = {}
+  const result: Record<number, PlanItemQuantity> = {}
   for (const item of option.items) {
-    result[item.id] = saved.get(item.id) ?? item.reference_weight_grams
+    result[item.id] = { unit: 'g', quantity: saved.get(item.id) ?? item.reference_weight_grams }
   }
   return result
 }
@@ -45,7 +52,7 @@ export default function LogMealSlot({ meal, date, loggedMeal, onSaved, onCleared
 
   const [mode, setMode] = useState<LoggedMealSource>('plan')
   const [selectedOptionId, setSelectedOptionId] = useState<number | undefined>(options[0]?.id)
-  const [weights, setWeights] = useState<Record<number, string>>({})
+  const [weights, setWeights] = useState<Record<number, PlanItemQuantity>>({})
   const [customItems, setCustomItems] = useState<DraftCustomItem[]>([])
   const [saving, setSaving] = useState(false)
   const [clearing, setClearing] = useState(false)
@@ -87,8 +94,9 @@ export default function LogMealSlot({ meal, date, loggedMeal, onSaved, onCleared
       return sumNutrients(
         selectedOption.items.map((item) => {
           const refGrams = Number(item.reference_weight_grams)
-          const grams = Number(weights[item.id])
-          if (!weights[item.id] || Number.isNaN(grams)) return item.reference_nutrients
+          const q = weights[item.id]
+          const grams = q ? gramsForQuantity({ measures: item.food_item_measures }, q.unit, q.quantity) : null
+          if (grams === null) return item.reference_nutrients
           return scaleNutrients(item.reference_nutrients, refGrams, grams)
         }),
       )
@@ -107,12 +115,16 @@ export default function LogMealSlot({ meal, date, loggedMeal, onSaved, onCleared
     try {
       if (mode === 'plan') {
         if (!selectedOption) return
-        const items = selectedOption.items.map((item) => ({
-          reference_meal_item: item.id,
-          actual_weight_grams: weights[item.id] ?? '',
-        }))
+        const items = selectedOption.items.map((item) => {
+          const q = weights[item.id]
+          const grams = q ? gramsForQuantity({ measures: item.food_item_measures }, q.unit, q.quantity) : null
+          return {
+            reference_meal_item: item.id,
+            actual_weight_grams: grams !== null ? String(grams) : '',
+          }
+        })
         if (items.some((i) => !i.actual_weight_grams.trim())) {
-          setError('Enter a weight for every ingredient.')
+          setError('Enter a valid amount for every ingredient.')
           return
         }
         const saved = await saveLoggedMeal({ reference_meal: meal.id, date, source: 'plan', items })
@@ -270,21 +282,41 @@ export default function LogMealSlot({ meal, date, loggedMeal, onSaved, onCleared
 
               {selectedOption && (
                 <div className="flex flex-col gap-2">
-                  {selectedOption.items.map((item) => (
-                    <div key={item.id} className="flex items-center gap-2">
-                      <span className="min-w-0 flex-1 truncate text-sm">{item.food_item_name}</span>
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        min="0"
-                        step="1"
-                        className="w-24"
-                        value={weights[item.id] ?? ''}
-                        onChange={(e) => setWeights((w) => ({ ...w, [item.id]: e.target.value }))}
-                      />
-                      <span className="w-3 text-xs text-muted-foreground">g</span>
-                    </div>
-                  ))}
+                  {selectedOption.items.map((item) => {
+                    const q = weights[item.id] ?? { unit: 'g', quantity: '' }
+                    const units = availableUnits({ measures: item.food_item_measures })
+                    return (
+                      <div key={item.id} className="flex items-center gap-2">
+                        <span className="min-w-0 flex-1 truncate text-sm">{item.food_item_name}</span>
+                        <Input
+                          type="number"
+                          inputMode="decimal"
+                          min="0"
+                          step="0.1"
+                          className="w-20"
+                          value={q.quantity}
+                          onChange={(e) =>
+                            setWeights((w) => ({ ...w, [item.id]: { ...q, quantity: e.target.value } }))
+                          }
+                        />
+                        <Select
+                          value={q.unit}
+                          onValueChange={(v) => setWeights((w) => ({ ...w, [item.id]: { ...q, unit: v } }))}
+                        >
+                          <SelectTrigger className="w-20">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {units.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </>

@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import { listFoodItems } from '../../api/foodItems'
-import type { FoodItem, FoodItemServingUnit } from '../../api/types'
+import type { FoodItem } from '../../api/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { gramsForQuantity, gramsPerUnit, SERVING_UNIT_NOUN, SERVING_UNIT_OPTIONS } from '@/lib/servingUnits'
+import { availableUnits, gramsForQuantity } from '@/lib/servingUnits'
 import AddFoodItemDialog from './AddFoodItemDialog'
 
 export type DraftComponent = {
@@ -15,11 +15,11 @@ export type DraftComponent = {
   weight_grams: string
   // Only set for a row added by search or by "Add a new ingredient" in this session -
   // enables the per-ingredient unit picker below, since it needs the item's own
-  // serving_unit/serving_size_grams to convert. Rows a caller preloads from an API that
-  // only returns id/name/weight (e.g. ReferenceMealEditor's existing meal items) won't
-  // have it, and fall back to a plain grams input.
+  // measures to convert. Rows a caller preloads from an API that only returns
+  // id/name/weight (e.g. ReferenceMealEditor's existing meal items) won't have it,
+  // and fall back to a plain grams input.
   food_item?: FoodItem
-  unit?: FoodItemServingUnit
+  unit?: string
   quantity?: string
 }
 
@@ -137,19 +137,17 @@ export default function IngredientPicker({ value, onChange, autoFocusSearch }: I
                 <>
                   <Select
                     value={component.unit ?? 'g'}
-                    onValueChange={(v) => updateMeasurement(component.ingredient, { unit: v as FoodItemServingUnit })}
+                    onValueChange={(v) => updateMeasurement(component.ingredient, { unit: v })}
                   >
                     <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {SERVING_UNIT_OPTIONS.filter((opt) => gramsPerUnit(component.food_item!, opt.value) !== null).map(
-                        (opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ),
-                      )}
+                      {availableUnits(component.food_item).map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <Input
@@ -157,7 +155,7 @@ export default function IngredientPicker({ value, onChange, autoFocusSearch }: I
                     inputMode="decimal"
                     min="0"
                     step="0.1"
-                    placeholder={`Amount (${SERVING_UNIT_NOUN[component.unit ?? 'g']})`}
+                    placeholder={`Amount (${component.unit ?? 'g'})`}
                     value={component.quantity ?? ''}
                     onChange={(e) => updateMeasurement(component.ingredient, { quantity: e.target.value })}
                     required

@@ -6,6 +6,7 @@ from .models import (
     FoodItem,
     FoodItemComponent,
     FoodItemEditRequest,
+    FoodItemMeasure,
     FoodLog,
     LoggedMeal,
     MacroFilter,
@@ -38,8 +39,15 @@ class FoodItemComponentSerializer(serializers.ModelSerializer):
         fields = ["id", "ingredient", "ingredient_name", "weight_grams"]
 
 
+class FoodItemMeasureSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FoodItemMeasure
+        fields = ["id", "label", "grams_per_unit", "is_default"]
+
+
 class FoodItemSerializer(serializers.ModelSerializer):
     components = FoodItemComponentSerializer(many=True, required=False)
+    measures = FoodItemMeasureSerializer(many=True, required=False)
     created_by_username = serializers.CharField(source="created_by.username", read_only=True, default=None)
 
     class Meta:
@@ -50,8 +58,7 @@ class FoodItemSerializer(serializers.ModelSerializer):
             "barcode",
             "source",
             "kind",
-            "serving_unit",
-            "serving_size_grams",
+            "measures",
             "calories_per_100g",
             "protein_g_per_100g",
             "carbs_g_per_100g",
@@ -93,10 +100,9 @@ class FoodItemSerializer(serializers.ModelSerializer):
         elif kind == FoodItem.Kind.COMPOSITE and components is not None and not components:
             raise serializers.ValidationError("A multi-ingredient item needs at least one component.")
 
-        serving_unit = attrs.get("serving_unit", getattr(self.instance, "serving_unit", FoodItem.ServingUnit.GRAM))
-        serving_size_grams = attrs.get("serving_size_grams", getattr(self.instance, "serving_size_grams", None))
-        if serving_unit != FoodItem.ServingUnit.GRAM and serving_size_grams is None:
-            raise serializers.ValidationError("serving_size_grams is required for a non-gram measurement unit.")
+        measures = attrs.get("measures")
+        if measures and sum(1 for m in measures if m.get("is_default")) > 1:
+            raise serializers.ValidationError("Only one measure can be the default.")
         return attrs
 
     def _visibility_and_approval(self, user, visibility):
@@ -118,6 +124,7 @@ class FoodItemSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         components_data = validated_data.pop("components", [])
+        measures_data = validated_data.pop("measures", [])
         macro_filters = validated_data.pop("macro_filters", None)
         dietary_tags = validated_data.pop("dietary_tags", None)
         user = self.context["request"].user
@@ -136,12 +143,15 @@ class FoodItemSerializer(serializers.ModelSerializer):
             food_item.dietary_tags.set(dietary_tags)
         for component in components_data:
             FoodItemComponent.objects.create(composite=food_item, **component)
+        for measure in measures_data:
+            FoodItemMeasure.objects.create(food_item=food_item, **measure)
         if food_item.kind == FoodItem.Kind.COMPOSITE:
             food_item.recompute_from_components()
         return food_item
 
     def update(self, instance, validated_data):
         components_data = validated_data.pop("components", None)
+        measures_data = validated_data.pop("measures", None)
         macro_filters = validated_data.pop("macro_filters", None)
         dietary_tags = validated_data.pop("dietary_tags", None)
         user = self.context["request"].user
@@ -160,6 +170,10 @@ class FoodItemSerializer(serializers.ModelSerializer):
             instance.components.all().delete()
             for component in components_data:
                 FoodItemComponent.objects.create(composite=instance, **component)
+        if measures_data is not None:
+            instance.measures.all().delete()
+            for measure in measures_data:
+                FoodItemMeasure.objects.create(food_item=instance, **measure)
         if instance.kind == FoodItem.Kind.COMPOSITE:
             instance.recompute_from_components()
         return instance
@@ -268,11 +282,21 @@ class ReferenceMealItemSerializer(serializers.ModelSerializer):
 
 class ReferenceMealItemDetailSerializer(serializers.ModelSerializer):
     food_item_name = serializers.CharField(source="food_item.name", read_only=True)
+    # So a trainee logging this item can switch units (e.g. "1 whole" instead of
+    # grams) even though the trainer authored the plan in grams - see LogMealSlot.
+    food_item_measures = FoodItemMeasureSerializer(source="food_item.measures", many=True, read_only=True)
     reference_nutrients = serializers.SerializerMethodField()
 
     class Meta:
         model = ReferenceMealItem
-        fields = ["id", "food_item", "food_item_name", "reference_weight_grams", "reference_nutrients"]
+        fields = [
+            "id",
+            "food_item",
+            "food_item_name",
+            "food_item_measures",
+            "reference_weight_grams",
+            "reference_nutrients",
+        ]
 
     def get_reference_nutrients(self, obj):
         return obj.reference_nutrients()

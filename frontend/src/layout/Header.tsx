@@ -10,7 +10,10 @@ export default function Header({ menuOpen, onToggleMenu }: HeaderProps) {
   return (
     <header
       className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-card px-4"
-      style={{ height: 'var(--header-height)', paddingTop: 'env(safe-area-inset-top)' }}
+      style={{
+        height: 'calc(var(--header-height) + env(safe-area-inset-top))',
+        paddingTop: 'env(safe-area-inset-top)',
+      }}
     >
       <span className="text-xl font-bold tracking-tight text-primary">Rejim</span>
       <Button

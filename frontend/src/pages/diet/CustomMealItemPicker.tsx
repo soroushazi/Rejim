@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import { listFoodItems } from '@/api/foodItems'
-import type { FoodItem, FoodItemServingUnit } from '@/api/types'
+import type { FoodItem } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { nutrientsForWeight } from '@/lib/nutrients'
-import { gramsForQuantity, gramsPerUnit, SERVING_UNIT_OPTIONS } from '@/lib/servingUnits'
+import { availableUnits, gramsForQuantity } from '@/lib/servingUnits'
 import { round } from '@/lib/utils'
 import AddFoodItemDialog from './AddFoodItemDialog'
 
 export type DraftCustomItem = {
   food_item: FoodItem
-  unit: FoodItemServingUnit
+  unit: string
   quantity: string
 }
 
@@ -86,7 +86,7 @@ export default function CustomMealItemPicker({ value, onChange }: Props) {
       {value.length > 0 && (
         <div className="flex flex-col gap-2">
           {value.map(({ food_item, unit, quantity }) => {
-            const availableUnits = SERVING_UNIT_OPTIONS.filter((opt) => gramsPerUnit(food_item, opt.value) !== null)
+            const units = availableUnits(food_item)
             const grams = gramsForQuantity(food_item, unit, quantity)
             const nutrients = grams !== null ? nutrientsForWeight(food_item, grams) : null
             return (
@@ -114,12 +114,12 @@ export default function CustomMealItemPicker({ value, onChange }: Props) {
                     value={quantity}
                     onChange={(e) => updateItem(food_item.id, { quantity: e.target.value })}
                   />
-                  <Select value={unit} onValueChange={(v) => updateItem(food_item.id, { unit: v as FoodItemServingUnit })}>
+                  <Select value={unit} onValueChange={(v) => updateItem(food_item.id, { unit: v })}>
                     <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {availableUnits.map((opt) => (
+                      {units.map((opt) => (
                         <SelectItem key={opt.value} value={opt.value}>
                           {opt.label}
                         </SelectItem>

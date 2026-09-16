@@ -116,7 +116,10 @@ export default function ProgressDashboard({ traineeId }: { traineeId?: number })
           <div
             ref={sectionTabsRef}
             className="sticky z-10 -mx-4 bg-background px-4"
-            style={{ top: 'var(--header-height)', scrollMarginTop: 'var(--header-height)' }}
+            style={{
+              top: 'calc(var(--header-height) + env(safe-area-inset-top))',
+              scrollMarginTop: 'calc(var(--header-height) + env(safe-area-inset-top))',
+            }}
           >
             <TabsList variant="line" className="h-auto w-full justify-between gap-0 bg-transparent p-0">
               {SECTIONS.map(({ value, label, Icon }) => (
@@ -137,7 +140,7 @@ export default function ProgressDashboard({ traineeId }: { traineeId?: number })
           {/* min-height guarantees enough room to scroll even the shortest
               section (e.g. Photos, or Nutrition with no diet plan set) far
               enough for the tab bar above to actually reach its pinned spot. */}
-          <div className="min-h-[calc(100dvh-var(--header-height))]">
+          <div className="min-h-[calc(100dvh-var(--header-height)-env(safe-area-inset-top))]">
             <TabsContent value="training" className="mt-3">
               <TrainingDashboard range={range} traineeId={traineeId} />
             </TabsContent>

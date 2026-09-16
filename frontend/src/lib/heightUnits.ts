@@ -1,8 +1,7 @@
 const CM_PER_INCH = 2.54
 
-/** Height's canonical storage is always height_cm (entry/display convenience
- * only, same precedent as FoodItem's serving_unit/serving_size_grams - see
- * CLAUDE.md). These are pure conversion helpers for the cm/ft+in entry toggle. */
+/** Height's canonical storage is always height_cm - these are pure conversion
+ * helpers for the cm/ft+in entry toggle, an entry/display convenience only. */
 export function cmFromFtIn(feet: number, inches: number): number {
   return (feet * 12 + inches) * CM_PER_INCH
 }

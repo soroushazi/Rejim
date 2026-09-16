@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { X } from 'lucide-react'
 import { useAuth } from '../../auth/AuthContext'
 import { createFoodItem, listDietaryTags, listMacroFilters, updateFoodItem } from '../../api/foodItems'
-import type { DietaryTag, FoodItem, FoodItemKind, FoodItemServingUnit, FoodItemVisibility, MacroFilter } from '../../api/types'
+import type { DietaryTag, FoodItem, FoodItemKind, FoodItemVisibility, MacroFilter } from '../../api/types'
 import IngredientPicker, { type DraftComponent } from './IngredientPicker'
-import { FIXED_GRAMS_PER_UNIT, SERVING_UNIT_NOUN, SERVING_UNIT_OPTIONS } from '@/lib/servingUnits'
+import { defaultMeasure } from '@/lib/servingUnits'
 import MultiSelectDropdown from '@/components/MultiSelectDropdown'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -11,7 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { round } from '@/lib/utils'
+import { cn, round } from '@/lib/utils'
 
 type AddFoodItemDialogProps = {
   open: boolean
@@ -22,6 +23,8 @@ type AddFoodItemDialogProps = {
   singleItemOnly?: boolean
   // Set to edit an existing food item in place instead of creating a new one.
   item?: FoodItem
+  // Seeds the Name field when opening to create (e.g. from a Food Bank search that had no results).
+  initialName?: string
 }
 
 const MACRO_FIELDS: { key: string; label: string }[] = [
@@ -46,11 +49,12 @@ const EMPTY_VALUES = Object.fromEntries(
   [...MACRO_FIELDS, ...MICRO_FIELDS].map(({ key }) => [key, '']),
 ) as Record<string, string>
 
-function servingCaption(unit: FoodItemServingUnit, sizeGrams: string) {
-  if (unit === 'g') return 'Per 100g'
-  const grams = sizeGrams.trim() ? ` (${sizeGrams}g)` : ''
-  return `Per ${SERVING_UNIT_NOUN[unit]}${grams}`
-}
+type DraftMeasure = { label: string; grams_per_unit: string; is_default: boolean }
+
+// 'g' = enter nutrition values per 100g (the canonical, always-available basis); a
+// number indexes into the draft `measures` list below, for entering values per one
+// of this item's own named units instead (e.g. "per tbsp" for a packaged label).
+type EntryBasis = 'g' | number
 
 export default function AddFoodItemDialog({
   open,
@@ -58,6 +62,7 @@ export default function AddFoodItemDialog({
   onCreated,
   singleItemOnly,
   item,
+  initialName,
 }: AddFoodItemDialogProps) {
   const isEditing = item !== undefined
   const { user } = useAuth()
@@ -66,8 +71,8 @@ export default function AddFoodItemDialog({
   const [name, setName] = useState('')
   const [kind, setKind] = useState<FoodItemKind>('single')
   const [visibility, setVisibility] = useState<FoodItemVisibility>(user?.is_trainer ? 'public' : 'private')
-  const [servingUnit, setServingUnit] = useState<FoodItemServingUnit>('g')
-  const [servingSizeGrams, setServingSizeGrams] = useState('')
+  const [measures, setMeasures] = useState<DraftMeasure[]>([])
+  const [entryBasis, setEntryBasis] = useState<EntryBasis>('g')
   const [values, setValues] = useState(EMPTY_VALUES)
   const [showMicros, setShowMicros] = useState(false)
   const [components, setComponents] = useState<DraftComponent[]>([])
@@ -77,11 +82,11 @@ export default function AddFoodItemDialog({
   const [error, setError] = useState<string | null>(null)
 
   function reset() {
-    setName('')
+    setName(initialName ?? '')
     setKind('single')
     setVisibility(user?.is_trainer ? 'public' : 'private')
-    setServingUnit('g')
-    setServingSizeGrams('')
+    setMeasures([])
+    setEntryBasis('g')
     setValues(EMPTY_VALUES)
     setShowMicros(false)
     setComponents([])
@@ -91,12 +96,13 @@ export default function AddFoodItemDialog({
   }
 
   function prefillFrom(existing: FoodItem) {
-    const basisGrams = existing.serving_unit === 'g' ? 100 : Number(existing.serving_size_grams ?? 100)
+    const measure = defaultMeasure(existing)
+    const basisGrams = measure ? Number(measure.grams_per_unit) : 100
     setName(existing.name)
     setKind(existing.kind)
     setVisibility(existing.visibility)
-    setServingUnit(existing.serving_unit)
-    setServingSizeGrams(existing.serving_size_grams ?? '')
+    setMeasures(existing.measures.map((m) => ({ label: m.label, grams_per_unit: m.grams_per_unit, is_default: m.is_default })))
+    setEntryBasis(measure ? existing.measures.findIndex((m) => m.is_default) : 'g')
     setValues(
       Object.fromEntries(
         [...MACRO_FIELDS, ...MICRO_FIELDS].map(({ key }) => {
@@ -125,17 +131,28 @@ export default function AddFoodItemDialog({
       .catch(() => {})
     if (item) prefillFrom(item)
     else reset()
-  }, [open, item])
+  }, [open, item, initialName])
 
   function handleOpenChange(next: boolean) {
     if (!next) reset()
     onOpenChange(next)
   }
 
-  function handleUnitChange(unit: FoodItemServingUnit) {
-    setServingUnit(unit)
-    const fixed = FIXED_GRAMS_PER_UNIT[unit]
-    setServingSizeGrams(fixed !== undefined ? String(fixed) : '')
+  function addMeasureRow() {
+    setMeasures((rows) => [...rows, { label: '', grams_per_unit: '', is_default: rows.length === 0 }])
+  }
+
+  function updateMeasureRow(index: number, patch: Partial<DraftMeasure>) {
+    setMeasures((rows) => rows.map((row, i) => (i === index ? { ...row, ...patch } : row)))
+  }
+
+  function setDefaultMeasureRow(index: number) {
+    setMeasures((rows) => rows.map((row, i) => ({ ...row, is_default: i === index })))
+  }
+
+  function removeMeasureRow(index: number) {
+    setMeasures((rows) => rows.filter((_, i) => i !== index))
+    setEntryBasis((basis) => (basis === index ? 'g' : typeof basis === 'number' && basis > index ? basis - 1 : basis))
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -152,8 +169,13 @@ export default function AddFoodItemDialog({
       setError('Name is required.')
       return
     }
-    if (servingUnit !== 'g' && (!servingSizeGrams.trim() || Number(servingSizeGrams) <= 0)) {
-      setError(`Enter how many grams equal 1 ${SERVING_UNIT_NOUN[servingUnit]}.`)
+    if (measures.some((m) => !m.label.trim() || !m.grams_per_unit.trim() || Number(m.grams_per_unit) <= 0)) {
+      setError('Enter a label and a positive gram amount for every measure, or remove it.')
+      return
+    }
+    const measureLabels = measures.map((m) => m.label.trim().toLowerCase())
+    if (new Set(measureLabels).size !== measureLabels.length) {
+      setError('Measure labels must be unique.')
       return
     }
     if (kind === 'single') {
@@ -173,14 +195,17 @@ export default function AddFoodItemDialog({
       }
     }
 
-    const basisGrams = servingUnit === 'g' ? 100 : Number(servingSizeGrams)
+    const basisGrams = entryBasis === 'g' ? 100 : Number(measures[entryBasis].grams_per_unit)
 
     const payload = {
       name: name.trim(),
       kind,
       visibility,
-      serving_unit: servingUnit,
-      serving_size_grams: servingUnit === 'g' ? null : servingSizeGrams,
+      measures: measures.map((m) => ({
+        label: m.label.trim(),
+        grams_per_unit: m.grams_per_unit,
+        is_default: m.is_default,
+      })),
       macro_filters: selectedMacroFilters.map(Number),
       dietary_tags: selectedDietaryTags.map(Number),
       ...(kind === 'single'
@@ -211,40 +236,66 @@ export default function AddFoodItemDialog({
     }
   }
 
-  // Single item only - right after Type, since the unit applies to the macro values
-  // entered right below. Multiple ingredients has no equivalent: each ingredient gets
-  // its own unit + amount inside IngredientPicker, so there's nothing left for an
-  // overall recipe-level unit to mean.
-  const measurementFields = (
-    <div className="grid grid-cols-2 gap-3">
-      <div className="flex min-w-0 flex-col gap-1.5">
-        <Label htmlFor="serving-unit">Measurement</Label>
-        <Select value={servingUnit} onValueChange={(v) => handleUnitChange(v as FoodItemServingUnit)}>
-          <SelectTrigger id="serving-unit" className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {SERVING_UNIT_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+  // Named, food-specific units this item can be logged in (e.g. "tbsp", "whole
+  // (thigh)"), on top of the always-available g/oz/lb. Available for both single and
+  // composite items, since it's about how a trainee logs it, not how the nutrition
+  // values were entered.
+  const measuresEditor = (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between">
+        <Label>Measures (optional)</Label>
+        <Button type="button" variant="link" className="h-auto px-0" onClick={addMeasureRow}>
+          Add measure
+        </Button>
       </div>
-      {servingUnit !== 'g' && (
-        <div className="flex min-w-0 flex-col gap-1.5">
-          <Label htmlFor="serving-size-grams">Grams per {SERVING_UNIT_NOUN[servingUnit]}</Label>
-          <Input
-            id="serving-size-grams"
-            type="number"
-            inputMode="decimal"
-            step="0.1"
-            min="0"
-            value={servingSizeGrams}
-            onChange={(e) => setServingSizeGrams(e.target.value)}
-            required
-          />
+      {measures.length === 0 ? (
+        <p className="text-xs text-muted-foreground">
+          Add named units this can be logged in, like "tbsp" or "whole" - besides grams/oz/lb.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {measures.map((measure, index) => (
+            <div key={index} className="flex items-center gap-2">
+              <Input
+                placeholder="Label (e.g. tbsp)"
+                value={measure.label}
+                onChange={(e) => updateMeasureRow(index, { label: e.target.value })}
+                className="min-w-0 flex-1"
+              />
+              <Input
+                type="number"
+                inputMode="decimal"
+                step="0.1"
+                min="0"
+                placeholder="Grams"
+                value={measure.grams_per_unit}
+                onChange={(e) => updateMeasureRow(index, { grams_per_unit: e.target.value })}
+                className="w-20"
+              />
+              <button
+                type="button"
+                onClick={() => setDefaultMeasureRow(index)}
+                title="Use as the nutrition entry basis below"
+                className={cn(
+                  'shrink-0 rounded-full border px-2 py-1 text-[11px] font-medium whitespace-nowrap',
+                  measure.is_default
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border text-muted-foreground',
+                )}
+              >
+                Default
+              </button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Remove measure"
+                onClick={() => removeMeasureRow(index)}
+              >
+                <X className="size-4" />
+              </Button>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -332,10 +383,36 @@ export default function AddFoodItemDialog({
             </div>
           )}
 
+          {measuresEditor}
+
           {kind === 'single' ? (
             <>
-              {measurementFields}
-              <p className="text-xs text-muted-foreground">{servingCaption(servingUnit, servingSizeGrams)}</p>
+              {measures.length > 0 && (
+                <div className="flex min-w-0 flex-col gap-1.5">
+                  <Label htmlFor="entry-basis">Enter values per</Label>
+                  <Select
+                    value={entryBasis === 'g' ? 'g' : String(entryBasis)}
+                    onValueChange={(v) => setEntryBasis(v === 'g' ? 'g' : Number(v))}
+                  >
+                    <SelectTrigger id="entry-basis" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="g">100g</SelectItem>
+                      {measures.map((m, index) => (
+                        <SelectItem key={index} value={String(index)} disabled={!m.label.trim()}>
+                          {m.label.trim() || `Measure ${index + 1}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                {entryBasis === 'g'
+                  ? 'Values below are per 100g.'
+                  : `Values below are per ${measures[entryBasis]?.label || 'unit'} (${measures[entryBasis]?.grams_per_unit || '?'}g).`}
+              </p>
               <div className="grid grid-cols-2 gap-3">
                 {MACRO_FIELDS.map(({ key, label }) => (
                   <div key={key} className="flex min-w-0 flex-col gap-1.5">

@@ -17,6 +17,8 @@ type AddExerciseDialogProps = {
   muscleGroups: MuscleGroup[]
   // Set to edit an existing exercise in place instead of creating a new one.
   exercise?: Exercise
+  // Seeds the Name field when opening to create (e.g. from an Exercise Bank search that had no results).
+  initialName?: string
 }
 
 const DIFFICULTY_OPTIONS: { value: ExerciseDifficulty; label: string }[] = [
@@ -31,6 +33,7 @@ export default function AddExerciseDialog({
   onCreated,
   muscleGroups,
   exercise,
+  initialName,
 }: AddExerciseDialogProps) {
   const isEditing = exercise !== undefined
   const [name, setName] = useState('')
@@ -44,7 +47,7 @@ export default function AddExerciseDialog({
   const [error, setError] = useState<string | null>(null)
 
   function reset() {
-    setName('')
+    setName(initialName ?? '')
     setDescription('')
     setEquipment('')
     setDifficulty('beginner')
@@ -68,7 +71,7 @@ export default function AddExerciseDialog({
       reset()
     }
     setError(null)
-  }, [open, exercise])
+  }, [open, exercise, initialName])
 
   function handleOpenChange(next: boolean) {
     if (!next) reset()

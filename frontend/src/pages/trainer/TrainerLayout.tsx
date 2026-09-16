@@ -9,7 +9,10 @@ const SUB_TABS = [
 export default function TrainerLayout() {
   return (
     <div className="-mx-4">
-      <div className="sticky z-10 bg-background px-4 pb-3 pt-3" style={{ top: 'var(--header-height)' }}>
+      <div
+        className="sticky z-10 bg-background px-4 pb-3 pt-3"
+        style={{ top: 'calc(var(--header-height) + env(safe-area-inset-top))' }}
+      >
         <div className="flex rounded-full bg-muted p-1 shadow-sm ring-1 ring-border/60">
           {SUB_TABS.map(({ to, label }) => (
             <NavLink

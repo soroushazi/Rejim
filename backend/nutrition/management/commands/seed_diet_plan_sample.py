@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.core.management.base import BaseCommand, CommandError
 
 from accounts.models import User
-from nutrition.models import DietPlan, FoodItem, MealOption, ReferenceMeal, ReferenceMealItem
+from nutrition.models import DietPlan, FoodItem, FoodItemMeasure, MealOption, ReferenceMeal, ReferenceMealItem
 
 # New reference items the sample plan needs that aren't already in
 # ingredient_nutrition_reference.csv. Values are derived from diet_sample.xlsx's
@@ -33,13 +33,11 @@ NEW_FOOD_ITEMS = {
     "Whole eggs": dict(
         calories_per_100g="144", protein_g_per_100g="12.6", carbs_g_per_100g="0.8",
         fat_g_per_100g="9.6", fiber_g_per_100g="0",
-        serving_unit=FoodItem.ServingUnit.EACH, serving_size_grams="50",
     ),
     # Sheet gives this per-serving with no gram weight; ~150g assumed for a side salad.
     "Mixed salad (Lettuce, Tomato, Cucumber, Lemon)": dict(
         calories_per_100g="26.67", protein_g_per_100g="1.33", carbs_g_per_100g="6",
         fat_g_per_100g="0.33", fiber_g_per_100g="1.33",
-        serving_unit=FoodItem.ServingUnit.SERVING, serving_size_grams="150",
     ),
     "Shrimp (Raw)": dict(
         calories_per_100g="99", protein_g_per_100g="24", carbs_g_per_100g="0",
@@ -57,6 +55,13 @@ NEW_FOOD_ITEMS = {
         calories_per_100g="130", protein_g_per_100g="22", carbs_g_per_100g="0",
         fat_g_per_100g="5", fiber_g_per_100g="0",
     ),
+}
+
+# A named measure for a couple of the items above (e.g. "1 egg = 50g"), used both as
+# the loggable unit and as AddFoodItemDialog's entry-basis convenience.
+NEW_FOOD_ITEM_MEASURES = {
+    "Whole eggs": ("each", "50"),
+    "Mixed salad (Lettuce, Tomato, Cucumber, Lemon)": ("serving", "150"),
 }
 
 # Ingredient names as they appear in diet_sample.xlsx -> the name already seeded from
@@ -206,6 +211,11 @@ class Command(BaseCommand):
                 name=sheet_name, defaults={**defaults, "source": FoodItem.Source.SEEDED}
             )
             lookup[sheet_name] = item
+            if sheet_name in NEW_FOOD_ITEM_MEASURES:
+                label, grams_per_unit = NEW_FOOD_ITEM_MEASURES[sheet_name]
+                FoodItemMeasure.objects.update_or_create(
+                    food_item=item, label=label, defaults={"grams_per_unit": grams_per_unit, "is_default": True}
+                )
         for sheet_name, existing_name in REUSED_FOOD_ITEMS.items():
             try:
                 lookup[sheet_name] = FoodItem.objects.get(name__iexact=existing_name)

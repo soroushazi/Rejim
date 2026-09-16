@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useAuth } from '../../auth/AuthContext'
 import { reviewFoodItem } from '../../api/foodItems'
 import type { DietaryTag, FoodItem, FoodItemEditRequest, MacroFilter } from '../../api/types'
-import { SERVING_UNIT_NOUN } from '@/lib/servingUnits'
+import { defaultMeasure } from '@/lib/servingUnits'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { round } from '@/lib/utils'
@@ -37,12 +37,10 @@ export default function FoodItemCard({
   const canEdit = !!(isTrainer || isOwner)
   const pendingRequests = editRequests.filter((r) => r.status === 'pending')
 
-  const servingGrams = item.serving_size_grams ? Number(item.serving_size_grams) : null
+  const measure = defaultMeasure(item)
+  const servingGrams = measure ? Number(measure.grams_per_unit) : null
   const factor = servingGrams ? servingGrams / 100 : 1
-  const usesCustomUnit = item.serving_unit !== 'g' && servingGrams !== null
-  const servingCaption = usesCustomUnit
-    ? `Per ${SERVING_UNIT_NOUN[item.serving_unit]} (${servingGrams}g)`
-    : 'Per 100g'
+  const servingCaption = measure ? `Per ${measure.label} (${servingGrams}g)` : 'Per 100g'
 
   function scaled(value: string) {
     return round(Number(value) * factor)

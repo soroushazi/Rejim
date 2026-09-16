@@ -1,5 +1,5 @@
 import type { DietaryTag, FoodItem, MacroFilter } from '../../api/types'
-import { SERVING_UNIT_NOUN } from '@/lib/servingUnits'
+import { defaultMeasure } from '@/lib/servingUnits'
 import { Badge } from '@/components/ui/badge'
 import { round } from '@/lib/utils'
 
@@ -29,12 +29,10 @@ export default function FoodItemNutritionFacts({
   const itemMacroFilters = macroFilters.filter((f) => item.macro_filters.includes(f.id))
   const itemDietaryTags = dietaryTags.filter((t) => item.dietary_tags.includes(t.id))
 
-  const servingGrams = item.serving_size_grams ? Number(item.serving_size_grams) : null
+  const measure = defaultMeasure(item)
+  const servingGrams = measure ? Number(measure.grams_per_unit) : null
   const factor = servingGrams ? servingGrams / 100 : 1
-  const usesCustomUnit = item.serving_unit !== 'g' && servingGrams !== null
-  const servingCaption = usesCustomUnit
-    ? `Per ${SERVING_UNIT_NOUN[item.serving_unit]} (${servingGrams}g)`
-    : 'Per 100g'
+  const servingCaption = measure ? `Per ${measure.label} (${servingGrams}g)` : 'Per 100g'
 
   function scaled(value: string) {
     return round(Number(value) * factor)
