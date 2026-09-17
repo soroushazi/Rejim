@@ -9,9 +9,12 @@ export default function AppLayout() {
   const [menuOpen, setMenuOpen] = useState(false)
 
   return (
-    // +1px forces the page to always be scrollable, so iOS Safari never gets stuck with a
-    // stale viewport for the fixed BottomNav on short, otherwise-unscrollable pages (e.g. Diet, Trainer).
-    <div className="flex min-h-[calc(100svh+1px)] flex-col">
+    // dvh tracks the *current* visual viewport live as Safari's toolbar shows/hides, so the
+    // shell never lags behind the fixed BottomNav (which always re-anchors to the real viewport)
+    // on short, otherwise-unscrollable pages (e.g. Diet, Trainer) after an in-app navigation.
+    // The +1px still forces the page to be scrollable, which some mobile browsers need to ever
+    // collapse their toolbar chrome in the first place.
+    <div className="flex min-h-[calc(100dvh+1px)] flex-col">
       <Header menuOpen={menuOpen} onToggleMenu={() => setMenuOpen((open) => !open)} />
       <NotificationBanner />
       <main
