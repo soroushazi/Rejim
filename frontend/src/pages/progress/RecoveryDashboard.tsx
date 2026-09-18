@@ -9,22 +9,18 @@ import { RATING_LABELS } from '@/lib/ratings'
 
 const W = 600
 const H = 220
-const PAD = { top: 14, right: 16, bottom: 22, left: 60 }
-const PLOT_W = W - PAD.left - PAD.right
-const PLOT_H = H - PAD.top - PAD.bottom
+
+// Left margin has to grow with the zoomed tick-label font size (RATING_LABELS
+// text like "Not good" is wide) or a bigger zoomed font clips off the left
+// edge of the viewBox instead of becoming more readable.
+function padFor(zoomed: boolean) {
+  return zoomed ? { top: 16, right: 20, bottom: 26, left: 92 } : { top: 14, right: 16, bottom: 22, left: 60 }
+}
 
 const SERIES: { key: 'sleep_quality' | 'readiness'; label: string; cssVar: string }[] = [
   { key: 'sleep_quality', label: 'Sleep quality', cssVar: '--chart-1' },
   { key: 'readiness', label: 'Readiness', cssVar: '--chart-2' },
 ]
-
-function x(i: number, n: number) {
-  return n <= 1 ? PAD.left + PLOT_W / 2 : PAD.left + (i / (n - 1)) * PLOT_W
-}
-
-function y(value: number) {
-  return PAD.top + PLOT_H - ((value - 1) / 4) * PLOT_H
-}
 
 function formatDateShort(date: string) {
   return new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
@@ -45,26 +41,10 @@ function RecoveryChart({ days }: { days: ProgressRecoveryDay[] }) {
     return <ChartEmptyState title="Recovery" message="No data in this range yet." />
   }
 
-  function pathFor(key: 'sleep_quality' | 'readiness') {
-    const segments: string[] = []
-    let penDown = false
-    days.forEach((d, i) => {
-      const value = d[key]
-      if (value === null) {
-        penDown = false
-        return
-      }
-      segments.push(`${penDown ? 'L' : 'M'}${x(i, n).toFixed(1)},${y(value).toFixed(1)}`)
-      penDown = true
-    })
-    return segments.join(' ')
-  }
-
   const labelStep = Math.max(1, Math.ceil(n / 5))
   const dateLabelIndices = new Set(days.map((_, i) => i).filter((i) => i === 0 || i === n - 1 || i % labelStep === 0))
 
   const selectedIndex = selectedDate !== null ? days.findIndex((d) => d.date === selectedDate) : -1
-  const hitSlot = n > 1 ? PLOT_W / (n - 1) : PLOT_W
 
   return (
     <ZoomableChart title="Recovery">
@@ -72,6 +52,32 @@ function RecoveryChart({ days }: { days: ProgressRecoveryDay[] }) {
         const tickFontSize = zoomed ? 14 : 9
         const thinStroke = zoomed ? 1.5 : 1
         const lineStroke = zoomed ? 3 : 2
+
+        const PAD = padFor(zoomed)
+        const PLOT_W = W - PAD.left - PAD.right
+        const PLOT_H = H - PAD.top - PAD.bottom
+        const hitSlot = n > 1 ? PLOT_W / (n - 1) : PLOT_W
+
+        function x(i: number) {
+          return n <= 1 ? PAD.left + PLOT_W / 2 : PAD.left + (i / (n - 1)) * PLOT_W
+        }
+        function y(value: number) {
+          return PAD.top + PLOT_H - ((value - 1) / 4) * PLOT_H
+        }
+        function pathFor(key: 'sleep_quality' | 'readiness') {
+          const segments: string[] = []
+          let penDown = false
+          days.forEach((d, i) => {
+            const value = d[key]
+            if (value === null) {
+              penDown = false
+              return
+            }
+            segments.push(`${penDown ? 'L' : 'M'}${x(i).toFixed(1)},${y(value).toFixed(1)}`)
+            penDown = true
+          })
+          return segments.join(' ')
+        }
 
         return (
           <div className={cn('flex flex-col gap-2', zoomed && 'h-full min-h-0')}>
@@ -103,7 +109,7 @@ function RecoveryChart({ days }: { days: ProgressRecoveryDay[] }) {
               ))}
               {days.map((d, i) =>
                 dateLabelIndices.has(i) ? (
-                  <text key={d.date} x={x(i, n)} y={H - 6} textAnchor="middle" className="fill-muted-foreground" fontSize={tickFontSize}>
+                  <text key={d.date} x={x(i)} y={H - 6} textAnchor="middle" className="fill-muted-foreground" fontSize={tickFontSize}>
                     {formatDateShort(d.date)}
                   </text>
                 ) : null,
@@ -115,8 +121,8 @@ function RecoveryChart({ days }: { days: ProgressRecoveryDay[] }) {
               {selectedIndex !== -1 && (
                 <g>
                   <line
-                    x1={x(selectedIndex, n)}
-                    x2={x(selectedIndex, n)}
+                    x1={x(selectedIndex)}
+                    x2={x(selectedIndex)}
                     y1={PAD.top}
                     y2={H - PAD.bottom}
                     stroke="var(--foreground)"
@@ -129,7 +135,7 @@ function RecoveryChart({ days }: { days: ProgressRecoveryDay[] }) {
                     return (
                       <circle
                         key={s.key}
-                        cx={x(selectedIndex, n)}
+                        cx={x(selectedIndex)}
                         cy={y(value)}
                         r={zoomed ? 5 : 3.5}
                         fill={`var(${s.cssVar})`}
@@ -144,7 +150,7 @@ function RecoveryChart({ days }: { days: ProgressRecoveryDay[] }) {
               {days.map((d, i) => (
                 <rect
                   key={`hit-${d.date}`}
-                  x={x(i, n) - hitSlot / 2}
+                  x={x(i) - hitSlot / 2}
                   y={PAD.top}
                   width={hitSlot}
                   height={PLOT_H}
@@ -161,7 +167,7 @@ function RecoveryChart({ days }: { days: ProgressRecoveryDay[] }) {
                   'absolute top-1 z-10 flex -translate-x-1/2 flex-col gap-1 rounded-lg border border-border bg-popover px-3 py-2 shadow-lg',
                   zoomed ? 'text-sm' : 'text-xs',
                 )}
-                style={{ left: `${Math.min(88, Math.max(12, (x(selectedIndex, n) / W) * 100))}%` }}
+                style={{ left: `${Math.min(88, Math.max(12, (x(selectedIndex) / W) * 100))}%` }}
               >
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-semibold">{formatDateFull(days[selectedIndex].date)}</span>

@@ -164,9 +164,10 @@ export default function ExerciseHistoryChart({
               ))}
             </div>
 
+            <div className={cn('relative', zoomed && 'min-h-0 flex-1')}>
             <svg
               viewBox={`0 0 ${W} ${H}`}
-              className={cn('w-full select-none', zoomed && 'min-h-0 flex-1')}
+              className={cn('w-full select-none', zoomed && 'h-full')}
               role="img"
               aria-label={showVolume ? 'Weight, average reps per set, and volume over time' : 'Weight and average reps per set over time'}
             >
@@ -296,33 +297,46 @@ export default function ExerciseHistoryChart({
             </svg>
 
             {selectedDay && (
-              <div className={cn('flex flex-col gap-1.5 rounded-lg border border-border bg-muted/30 p-2.5', zoomed ? 'text-base' : 'text-sm')}>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium">{formatDateFull(selectedDay.date)}</span>
+              <div
+                className={cn(
+                  'absolute top-1 z-10 flex -translate-x-1/2 flex-col gap-1 rounded-lg border border-border bg-popover px-3 py-2 shadow-lg',
+                  zoomed ? 'text-sm' : 'text-xs',
+                )}
+                style={{ left: `${Math.min(88, Math.max(12, (x(days.indexOf(selectedDay), n) / W) * 100))}%` }}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-semibold">{formatDateFull(selectedDay.date)}</span>
                   <button
                     type="button"
                     onClick={() => setSelectedDate(null)}
                     aria-label="Close"
                     className="text-muted-foreground hover:text-foreground"
                   >
-                    <X className="size-3.5" />
+                    <X className="size-3" />
                   </button>
                 </div>
-                <div className="flex flex-col gap-0.5 text-muted-foreground">
-                  <span>
-                    Weight: <span className="font-medium text-foreground">{selectedDay.maxWeight}{selectedDay.weightUnit}</span>
-                  </span>
-                  <span>
-                    Avg reps/set: <span className="font-medium text-foreground">{Math.round(selectedDay.avgReps * 10) / 10}</span>
-                  </span>
+                <div className="flex flex-col gap-0.5 whitespace-nowrap">
+                  <div className="flex items-center gap-1.5">
+                    <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: 'var(--chart-1)' }} aria-hidden="true" />
+                    <span className="text-muted-foreground">Weight:</span>
+                    <span className="font-medium">{selectedDay.maxWeight}{selectedDay.weightUnit}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: 'var(--chart-2)' }} aria-hidden="true" />
+                    <span className="text-muted-foreground">Avg reps/set:</span>
+                    <span className="font-medium">{Math.round(selectedDay.avgReps * 10) / 10}</span>
+                  </div>
                   {showVolume && (
-                    <span>
-                      Volume: <span className="font-medium text-foreground">{Math.round(selectedDay.volume)}{selectedDay.weightUnit}</span>
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: 'var(--chart-3)' }} aria-hidden="true" />
+                      <span className="text-muted-foreground">Volume:</span>
+                      <span className="font-medium">{Math.round(selectedDay.volume)}{selectedDay.weightUnit}</span>
+                    </div>
                   )}
                 </div>
               </div>
             )}
+            </div>
           </div>
         )
       }}

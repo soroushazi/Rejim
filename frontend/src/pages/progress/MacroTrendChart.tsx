@@ -1,3 +1,4 @@
+import { X } from 'lucide-react'
 import { useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { Nutrients } from '@/api/types'
 import ZoomableChart, { ChartEmptyState } from '@/components/charts/ZoomableChart'
@@ -14,18 +15,22 @@ type Props = {
   onHoverChange: (index: number | null) => void
 }
 
-const SERIES: { key: SeriesKey; label: string; short: string; cssVar: string }[] = [
-  { key: 'calories', label: 'Calories', short: 'Cal', cssVar: '--chart-1' },
-  { key: 'protein_g', label: 'Protein', short: 'P', cssVar: '--chart-2' },
-  { key: 'carbs_g', label: 'Carbs', short: 'C', cssVar: '--chart-3' },
-  { key: 'fat_g', label: 'Fat', short: 'F', cssVar: '--chart-4' },
+const SERIES: { key: SeriesKey; label: string; short: string; unit: string; cssVar: string }[] = [
+  { key: 'calories', label: 'Calories', short: 'Cal', unit: 'kcal', cssVar: '--chart-1' },
+  { key: 'protein_g', label: 'Protein', short: 'P', unit: 'g', cssVar: '--chart-2' },
+  { key: 'carbs_g', label: 'Carbs', short: 'C', unit: 'g', cssVar: '--chart-3' },
+  { key: 'fat_g', label: 'Fat', short: 'F', unit: 'g', cssVar: '--chart-4' },
 ]
 
 const W = 600
 const H = 240
-const PAD = { top: 14, right: 30, bottom: 22, left: 30 }
-const PLOT_W = W - PAD.left - PAD.right
-const PLOT_H = H - PAD.top - PAD.bottom
+
+// Right margin has to grow with the zoomed tick-label font size ("100%" plus
+// the "Target" label) or a bigger zoomed font clips off the viewBox edge
+// instead of becoming more readable.
+function padFor(zoomed: boolean) {
+  return zoomed ? { top: 16, right: 40, bottom: 26, left: 46 } : { top: 14, right: 30, bottom: 22, left: 30 }
+}
 
 function percentOf(actual: number | null, target: number | null): number | null {
   if (actual === null || !target) return null
@@ -41,17 +46,14 @@ function computeYAxis(maxValue: number) {
   return { niceMax, ticks }
 }
 
-function x(i: number, n: number) {
-  return n <= 1 ? PAD.left + PLOT_W / 2 : PAD.left + (i / (n - 1)) * PLOT_W
-}
-
-function y(value: number, niceMax: number) {
-  return PAD.top + PLOT_H - (value / niceMax) * PLOT_H
-}
-
 function formatDateShort(date: string) {
   const d = new Date(`${date}T00:00:00`)
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
+function formatDateFull(date: string) {
+  const d = new Date(`${date}T00:00:00`)
+  return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
 /** Progress tab's Nutrition dashboard macro chart - visually identical to
@@ -77,21 +79,6 @@ export default function MacroTrendChart({ days, target, hoverIndex, onHoverChang
   const maxValue = Math.max(100, ...series.flatMap((s) => (visible[s.key] ? s.points.map((p) => p.value ?? 0) : [])))
   const { niceMax, ticks } = computeYAxis(maxValue)
 
-  function pathFor(points: { i: number; value: number | null }[]) {
-    const segments: string[] = []
-    let penDown = false
-    for (const p of points) {
-      if (p.value === null) {
-        penDown = false
-        continue
-      }
-      const command = penDown ? 'L' : 'M'
-      segments.push(`${command}${x(p.i, n).toFixed(1)},${y(p.value, niceMax).toFixed(1)}`)
-      penDown = true
-    }
-    return segments.join(' ')
-  }
-
   function handlePointer(e: ReactPointerEvent<SVGRectElement>) {
     const rect = e.currentTarget.getBoundingClientRect()
     const ratio = (e.clientX - rect.left) / rect.width
@@ -116,6 +103,31 @@ export default function MacroTrendChart({ days, target, hoverIndex, onHoverChang
         const lineStroke = zoomed ? 3 : 2
         const hoverRadius = zoomed ? 6 : 4
 
+        const PAD = padFor(zoomed)
+        const PLOT_W = W - PAD.left - PAD.right
+        const PLOT_H = H - PAD.top - PAD.bottom
+
+        function x(i: number) {
+          return n <= 1 ? PAD.left + PLOT_W / 2 : PAD.left + (i / (n - 1)) * PLOT_W
+        }
+        function y(value: number) {
+          return PAD.top + PLOT_H - (value / niceMax) * PLOT_H
+        }
+        function pathFor(points: { i: number; value: number | null }[]) {
+          const segments: string[] = []
+          let penDown = false
+          for (const p of points) {
+            if (p.value === null) {
+              penDown = false
+              continue
+            }
+            const command = penDown ? 'L' : 'M'
+            segments.push(`${command}${x(p.i).toFixed(1)},${y(p.value).toFixed(1)}`)
+            penDown = true
+          }
+          return segments.join(' ')
+        }
+
         return (
           <div className={cn('flex flex-col gap-2', zoomed && 'h-full min-h-0')}>
             <div className={cn('flex flex-wrap gap-1.5', zoomed && 'justify-center')}>
@@ -136,9 +148,10 @@ export default function MacroTrendChart({ days, target, hoverIndex, onHoverChang
               ))}
             </div>
 
+            <div className={cn('relative', zoomed && 'min-h-0 flex-1')}>
             <svg
               viewBox={`0 0 ${W} ${H}`}
-              className={cn('w-full touch-none select-none', zoomed && 'min-h-0 flex-1')}
+              className={cn('w-full touch-none select-none', zoomed && 'h-full')}
               role="img"
               aria-label="Macro trend, as percent of daily target"
             >
@@ -147,18 +160,18 @@ export default function MacroTrendChart({ days, target, hoverIndex, onHoverChang
                   <line
                     x1={PAD.left}
                     x2={W - PAD.right}
-                    y1={y(t, niceMax)}
-                    y2={y(t, niceMax)}
+                    y1={y(t)}
+                    y2={y(t)}
                     stroke={t === 100 ? 'var(--status-good)' : 'var(--border)'}
                     strokeWidth={t === 100 ? targetStroke : thinStroke}
                     strokeDasharray={t === 100 ? '4 3' : undefined}
                     opacity={t === 100 ? 0.75 : 1}
                   />
-                  <text x={PAD.left - 6} y={y(t, niceMax)} textAnchor="end" dominantBaseline="middle" className="fill-muted-foreground" fontSize={tickFontSize}>
+                  <text x={PAD.left - 6} y={y(t)} textAnchor="end" dominantBaseline="middle" className="fill-muted-foreground" fontSize={tickFontSize}>
                     {t}%
                   </text>
                   {t === 100 && (
-                    <text x={W - PAD.right} y={y(t, niceMax) - 4} textAnchor="end" className="fill-muted-foreground" fontSize={tickFontSize} fontWeight={600}>
+                    <text x={W - PAD.right} y={y(t) - 4} textAnchor="end" className="fill-muted-foreground" fontSize={tickFontSize} fontWeight={600}>
                       Target
                     </text>
                   )}
@@ -167,7 +180,7 @@ export default function MacroTrendChart({ days, target, hoverIndex, onHoverChang
 
               {days.map((d, i) =>
                 dateLabelIndices.has(i) ? (
-                  <text key={d.date} x={x(i, n)} y={H - 6} textAnchor="middle" className="fill-muted-foreground" fontSize={tickFontSize}>
+                  <text key={d.date} x={x(i)} y={H - 6} textAnchor="middle" className="fill-muted-foreground" fontSize={tickFontSize}>
                     {formatDateShort(d.date)}
                   </text>
                 ) : null,
@@ -181,7 +194,7 @@ export default function MacroTrendChart({ days, target, hoverIndex, onHoverChang
                     <g key={s.key}>
                       <path d={pathFor(s.points)} fill="none" stroke={`var(${s.cssVar})`} strokeWidth={lineStroke} strokeLinecap="round" strokeLinejoin="round" />
                       {lastPoint && lastPoint.value !== null && (
-                        <text x={x(lastPoint.i, n) + 6} y={y(lastPoint.value, niceMax)} dominantBaseline="middle" className="fill-muted-foreground" fontSize={endLabelFontSize} fontWeight={600}>
+                        <text x={x(lastPoint.i) + 6} y={y(lastPoint.value)} dominantBaseline="middle" className="fill-muted-foreground" fontSize={endLabelFontSize} fontWeight={600}>
                           {s.short}
                         </text>
                       )}
@@ -191,13 +204,13 @@ export default function MacroTrendChart({ days, target, hoverIndex, onHoverChang
 
               {hoverIndex !== null && (
                 <g>
-                  <line x1={x(hoverIndex, n)} x2={x(hoverIndex, n)} y1={PAD.top} y2={H - PAD.bottom} stroke="var(--muted-foreground)" strokeWidth={thinStroke} />
+                  <line x1={x(hoverIndex)} x2={x(hoverIndex)} y1={PAD.top} y2={H - PAD.bottom} stroke="var(--muted-foreground)" strokeWidth={thinStroke} />
                   {series
                     .filter((s) => visible[s.key])
                     .map((s) => {
                       const value = s.points[hoverIndex]?.value
                       if (value === null || value === undefined) return null
-                      return <circle key={s.key} cx={x(hoverIndex, n)} cy={y(value, niceMax)} r={hoverRadius} fill={`var(${s.cssVar})`} stroke="var(--card)" strokeWidth={lineStroke} />
+                      return <circle key={s.key} cx={x(hoverIndex)} cy={y(value)} r={hoverRadius} fill={`var(${s.cssVar})`} stroke="var(--card)" strokeWidth={lineStroke} />
                     })}
                 </g>
               )}
@@ -213,6 +226,40 @@ export default function MacroTrendChart({ days, target, hoverIndex, onHoverChang
                 onPointerLeave={() => onHoverChange(null)}
               />
             </svg>
+
+            {hoverIndex !== null && (
+              <div
+                className={cn(
+                  'absolute top-1 z-10 flex -translate-x-1/2 flex-col gap-1 rounded-lg border border-border bg-popover px-3 py-2 shadow-lg',
+                  zoomed ? 'text-sm' : 'text-xs',
+                )}
+                style={{ left: `${Math.min(88, Math.max(12, (x(hoverIndex) / W) * 100))}%` }}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-semibold">{formatDateFull(days[hoverIndex].date)}</span>
+                  <button
+                    type="button"
+                    onClick={() => onHoverChange(null)}
+                    aria-label="Close"
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="size-3" />
+                  </button>
+                </div>
+                {SERIES.filter((s) => visible[s.key]).map((s) => {
+                  const value = days[hoverIndex].nutrients[s.key]
+                  if (value === null) return null
+                  return (
+                    <div key={s.key} className="flex items-center gap-1.5 whitespace-nowrap">
+                      <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: `var(${s.cssVar})` }} aria-hidden="true" />
+                      <span className="text-muted-foreground">{s.label}:</span>
+                      <span className="font-medium">{Math.round(value)} {s.unit}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+            </div>
           </div>
         )
       }}
