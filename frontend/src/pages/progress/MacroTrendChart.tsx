@@ -1,5 +1,6 @@
 import { useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { Nutrients } from '@/api/types'
+import ZoomableChart, { ChartEmptyState } from '@/components/charts/ZoomableChart'
 import { cn } from '@/lib/utils'
 
 export type SeriesKey = 'calories' | 'protein_g' | 'carbs_g' | 'fat_g'
@@ -102,11 +103,12 @@ export default function MacroTrendChart({ days, target, hoverIndex, onHoverChang
   const dateLabelIndices = new Set(days.map((_, i) => i).filter((i) => i === 0 || i === n - 1 || i % labelStep === 0))
 
   if (n === 0) {
-    return <p className="py-8 text-center text-sm text-muted-foreground">No logged days in this range yet.</p>
+    return <ChartEmptyState title="Calories & macros vs. target" message="No logged days in this range yet." />
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <ZoomableChart title="Calories & macros vs. target">
+      <div className="flex flex-col gap-2">
       <div className="flex flex-wrap gap-1.5">
         {SERIES.map((s) => (
           <button
@@ -196,6 +198,7 @@ export default function MacroTrendChart({ days, target, hoverIndex, onHoverChang
           onPointerLeave={() => onHoverChange(null)}
         />
       </svg>
-    </div>
+      </div>
+    </ZoomableChart>
   )
 }

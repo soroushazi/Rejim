@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { getProgressRecovery } from '@/api/progress'
 import type { ProgressRecoveryDay } from '@/api/types'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import ZoomableChart, { ChartEmptyState } from '@/components/charts/ZoomableChart'
+import { Card, CardContent } from '@/components/ui/card'
 import { RATING_LABELS } from '@/lib/ratings'
 
 const W = 600
@@ -30,7 +31,7 @@ function formatDateShort(date: string) {
 function RecoveryChart({ days }: { days: ProgressRecoveryDay[] }) {
   const n = days.length
   if (n === 0) {
-    return <p className="py-8 text-center text-sm text-muted-foreground">No data in this range yet.</p>
+    return <ChartEmptyState title="Recovery" message="No data in this range yet." />
   }
 
   function pathFor(key: 'sleep_quality' | 'readiness') {
@@ -52,7 +53,8 @@ function RecoveryChart({ days }: { days: ProgressRecoveryDay[] }) {
   const dateLabelIndices = new Set(days.map((_, i) => i).filter((i) => i === 0 || i === n - 1 || i % labelStep === 0))
 
   return (
-    <div className="flex flex-col gap-2">
+    <ZoomableChart title="Recovery">
+      <div className="flex flex-col gap-2">
       <div className="flex flex-wrap gap-1.5">
         {SERIES.map((s) => (
           <span key={s.key} className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs font-medium">
@@ -81,7 +83,8 @@ function RecoveryChart({ days }: { days: ProgressRecoveryDay[] }) {
           <path key={s.key} d={pathFor(s.key)} fill="none" stroke={`var(${s.cssVar})`} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
         ))}
       </svg>
-    </div>
+      </div>
+    </ZoomableChart>
   )
 }
 
@@ -115,10 +118,9 @@ export default function RecoveryDashboard({ range, traineeId }: Props) {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Recovery</CardTitle>
-      </CardHeader>
-      <CardContent>{loading ? <p className="text-sm text-muted-foreground">Loading…</p> : <RecoveryChart days={days} />}</CardContent>
+      <CardContent>
+        {loading ? <ChartEmptyState title="Recovery" message="Loading…" /> : <RecoveryChart days={days} />}
+      </CardContent>
     </Card>
   )
 }

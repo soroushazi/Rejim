@@ -73,9 +73,6 @@ export default function NutritionDashboard({ range, traineeId }: Props) {
       <ProgressSummaryCard heading={heading} nutrients={hovered ? hovered.consumed : periodAverage} target={data.target} />
 
       <Card>
-        <CardHeader>
-          <CardTitle>Calories &amp; macros vs. target</CardTitle>
-        </CardHeader>
         <CardContent>
           <MacroTrendChart
             days={days.map((d) => ({ date: d.date, nutrients: d.consumed }))}

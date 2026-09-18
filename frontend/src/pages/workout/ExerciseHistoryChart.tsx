@@ -1,6 +1,7 @@
 import { X } from 'lucide-react'
 import { useState } from 'react'
 import type { ExerciseHistorySet } from '@/api/types'
+import ZoomableChart, { ChartEmptyState } from '@/components/charts/ZoomableChart'
 import type { PrEvent } from '@/lib/personalRecord'
 import { cn } from '@/lib/utils'
 
@@ -97,7 +98,7 @@ export default function ExerciseHistoryChart({
 
   const n = days.length
   if (n === 0) {
-    return <p className="py-6 text-center text-sm text-muted-foreground">No working sets logged yet.</p>
+    return <ChartEmptyState title="Exercise history" message="No working sets logged yet." />
   }
 
   const weightAxis = computeAxis(Math.max(...days.map((d) => d.maxWeight), goalWeight ?? 0))
@@ -127,7 +128,8 @@ export default function ExerciseHistoryChart({
   ]
 
   return (
-    <div className="flex flex-col gap-2">
+    <ZoomableChart title="Exercise history">
+      <div className="flex flex-col gap-2">
       {currentPr && (
         <p className="text-sm">
           <span aria-hidden="true">🏆</span> <span className="font-semibold">PR:</span> {currentPr.weight}
@@ -310,6 +312,7 @@ export default function ExerciseHistoryChart({
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </ZoomableChart>
   )
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ProgressOverviewDay } from '@/api/types'
+import ZoomableChart, { ChartEmptyState } from '@/components/charts/ZoomableChart'
 import { cn } from '@/lib/utils'
 
 type SeriesKey = 'weight' | 'netCalories' | 'sleepHours' | 'steps' | 'water'
@@ -73,7 +74,7 @@ export default function OverviewChart({ days, weightGoalKg }: { days: ProgressOv
 
   const n = days.length
   if (n === 0) {
-    return <p className="py-8 text-center text-sm text-muted-foreground">No data in this range yet.</p>
+    return <ChartEmptyState title="Overview" message="No data in this range yet." />
   }
 
   const rawValues: Record<SeriesKey, (number | null)[]> = {
@@ -139,7 +140,8 @@ export default function OverviewChart({ days, weightGoalKg }: { days: ProgressOv
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <ZoomableChart title="Overview">
+      <div className="flex flex-col gap-2">
       <div className="flex flex-wrap gap-1.5">
         {(Object.keys(SERIES) as SeriesKey[]).map((key) => (
           <button
@@ -223,6 +225,7 @@ export default function OverviewChart({ days, weightGoalKg }: { days: ProgressOv
             ),
         )}
       </svg>
-    </div>
+      </div>
+    </ZoomableChart>
   )
 }

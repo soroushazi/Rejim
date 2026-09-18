@@ -154,3 +154,25 @@ body {
     @apply font-sans;
   }
 }
+
+/* Zoomed-chart full-screen overlay (see components/charts/ZoomableChart.tsx).
+   Sits inside a `fixed inset-0` backdrop and fills it as-is in landscape; on a
+   phone in portrait it's rotated 90deg about its own center so a wide chart
+   still gets the long axis, without the user having to physically rotate the
+   device. The close button lives outside this element (a sibling, pinned to
+   the real screen corner) precisely so it never rotates along with this. */
+.chart-zoom-overlay {
+  position: absolute;
+  inset: 0;
+}
+
+@media (orientation: portrait) {
+  .chart-zoom-overlay {
+    inset: auto;
+    top: 50%;
+    left: 50%;
+    width: 100dvh;
+    height: 100dvw;
+    transform: translate(-50%, -50%) rotate(90deg);
+  }
+}

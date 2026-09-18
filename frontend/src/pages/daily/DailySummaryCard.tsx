@@ -49,6 +49,8 @@ export default function DailySummaryCard({ date, refreshKey }: Props) {
   const plannedProtein = summary.planned?.protein_g ?? null
   const proteinStat = plannedProtein ? proteinStatus(consumedProtein, plannedProtein) : 'neutral'
 
+  const profileIncomplete = summary.calories_burned_breakdown.bmr === null
+
   return (
     <div className="flex flex-col gap-3">
       <div className="grid grid-cols-3 gap-2 text-center">
@@ -57,7 +59,12 @@ export default function DailySummaryCard({ date, refreshKey }: Props) {
           <span className={cn('text-lg font-semibold', STATUS_TEXT_CLASS[calStatus])}>{round(consumedCalories)}</span>
           {plannedCalories !== null && <span className="text-xs text-muted-foreground">of {round(plannedCalories)}</span>}
         </div>
-        <div className="flex flex-col gap-0.5 rounded-lg bg-muted/50 px-2 py-2.5">
+        <div
+          className={cn(
+            'flex flex-col gap-0.5 rounded-lg bg-muted/50 px-2 py-2.5',
+            profileIncomplete && 'ring-1 ring-inset ring-destructive/40',
+          )}
+        >
           <span className="flex items-center justify-center gap-0.5 text-xs text-muted-foreground">
             Calories out
             <button

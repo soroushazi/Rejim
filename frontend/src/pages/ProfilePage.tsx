@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { changePassword, updateProfile } from '@/api/accounts'
 import { ApiError } from '@/api/client'
 import { useAuth } from '@/auth/AuthContext'
@@ -176,6 +177,13 @@ export default function ProfilePage() {
   // trainee onboarding sections here either (see NavDrawer.tsx/BottomNav.tsx
   // for the same viewMode-driven trim).
   const isTrainee = viewMode === 'trainee'
+
+  const location = useLocation()
+  useEffect(() => {
+    const scrollTo = (location.state as { scrollTo?: string } | null)?.scrollTo
+    if (!scrollTo) return
+    document.getElementById(scrollTo)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [location])
 
   return (
     <div className="flex flex-col gap-3">

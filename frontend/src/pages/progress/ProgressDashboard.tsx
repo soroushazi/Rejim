@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from 'react'
 import { listGoals } from '@/api/goals'
 import { getProgressOverview } from '@/api/progress'
 import type { ProgressOverviewDay } from '@/api/types'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
+import { ChartEmptyState } from '@/components/charts/ZoomableChart'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import { toDateKey } from '@/lib/date'
@@ -99,12 +100,9 @@ export default function ProgressDashboard({ traineeId }: { traineeId?: number })
       />
 
       <Card>
-        <CardHeader>
-          <CardTitle>Overview</CardTitle>
-        </CardHeader>
         <CardContent>
           {overviewLoading ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
+            <ChartEmptyState title="Overview" message="Loading…" />
           ) : (
             <OverviewChart days={overviewDays} weightGoalKg={weightGoalKg} />
           )}

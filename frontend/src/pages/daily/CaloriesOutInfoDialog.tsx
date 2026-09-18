@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom'
 import type { CaloriesBurnedBreakdown } from '@/api/types'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { round } from '@/lib/utils'
@@ -19,6 +20,13 @@ export default function CaloriesOutInfoDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const navigate = useNavigate()
+
+  function goToProfile() {
+    onOpenChange(false)
+    navigate('/profile', { state: { scrollTo: 'body-form' } })
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85svh] overflow-y-auto sm:max-w-md">
@@ -35,7 +43,15 @@ export default function CaloriesOutInfoDialog({
               Resting metabolism (BMR)
               {breakdown.bmr === null && (
                 <span className="block text-xs text-muted-foreground">
-                  Add your height, age, and weight in Profile to include this.
+                  Add your height, age, and weight in{' '}
+                  <button
+                    type="button"
+                    className="font-medium text-primary underline underline-offset-2"
+                    onClick={goToProfile}
+                  >
+                    Profile
+                  </button>{' '}
+                  to include this.
                 </span>
               )}
             </span>

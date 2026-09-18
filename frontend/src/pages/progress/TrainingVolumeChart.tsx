@@ -1,4 +1,5 @@
 import type { ProgressTrainingVolumeWeek } from '@/api/types'
+import ZoomableChart, { ChartEmptyState } from '@/components/charts/ZoomableChart'
 
 const W = 600
 const H = 160
@@ -27,15 +28,16 @@ function formatWeek(date: string) {
   return new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
-function Bars({ weeks, valueOf, cssVar, formatValue }: {
+function Bars({ weeks, valueOf, cssVar, formatValue, title }: {
   weeks: ProgressTrainingVolumeWeek[]
   valueOf: (w: ProgressTrainingVolumeWeek) => number
   cssVar: string
   formatValue: (v: number) => string
+  title: string
 }) {
   const n = weeks.length
   if (n === 0) {
-    return <p className="py-6 text-center text-sm text-muted-foreground">No data in this range yet.</p>
+    return <ChartEmptyState title={title} message="No data in this range yet." />
   }
   const { niceMax, ticks } = computeAxis(Math.max(...weeks.map(valueOf)))
   const barWidth = Math.min(40, (PLOT_W / n) * 0.6)
@@ -46,6 +48,7 @@ function Bars({ weeks, valueOf, cssVar, formatValue }: {
   }
 
   return (
+    <ZoomableChart title={title}>
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full select-none" role="img" aria-label="Weekly totals">
       {ticks.map((t) => (
         <g key={t}>
@@ -77,25 +80,27 @@ function Bars({ weeks, valueOf, cssVar, formatValue }: {
         )
       })}
     </svg>
+    </ZoomableChart>
   )
 }
 
 export default function TrainingVolumeChart({ weeks }: { weeks: ProgressTrainingVolumeWeek[] }) {
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-1.5">
-        <p className="text-sm font-semibold">Training volume (kg, per week)</p>
-        <Bars
-          weeks={weeks}
-          valueOf={(w) => w.total_volume_kg}
-          cssVar="--chart-1"
-          formatValue={(v) => `${Math.round(v).toLocaleString()} kg`}
-        />
-      </div>
-      <div className="flex flex-col gap-1.5">
-        <p className="text-sm font-semibold">Sessions per week</p>
-        <Bars weeks={weeks} valueOf={(w) => w.session_count} cssVar="--chart-2" formatValue={(v) => `${v} session${v === 1 ? '' : 's'}`} />
-      </div>
+      <Bars
+        weeks={weeks}
+        valueOf={(w) => w.total_volume_kg}
+        cssVar="--chart-1"
+        formatValue={(v) => `${Math.round(v).toLocaleString()} kg`}
+        title="Training volume (kg, per week)"
+      />
+      <Bars
+        weeks={weeks}
+        valueOf={(w) => w.session_count}
+        cssVar="--chart-2"
+        formatValue={(v) => `${v} session${v === 1 ? '' : 's'}`}
+        title="Sessions per week"
+      />
     </div>
   )
 }

@@ -68,7 +68,7 @@ export default function BodyForm() {
   }
 
   return (
-    <Card>
+    <Card id="body-form">
       <CardHeader>
         <CardTitle>Body</CardTitle>
       </CardHeader>

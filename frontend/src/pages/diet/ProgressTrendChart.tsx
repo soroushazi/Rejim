@@ -1,5 +1,6 @@
 import { useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { Nutrients } from '@/api/types'
+import ZoomableChart, { ChartEmptyState } from '@/components/charts/ZoomableChart'
 import { cn } from '@/lib/utils'
 
 export type SeriesKey = 'calories' | 'protein_g' | 'carbs_g' | 'fat_g'
@@ -101,11 +102,12 @@ export default function ProgressTrendChart({ days, target, hoverIndex, onHoverCh
   )
 
   if (n === 0) {
-    return <p className="py-8 text-center text-sm text-muted-foreground">No logged days in this period yet.</p>
+    return <ChartEmptyState title="Nutrient trend" message="No logged days in this period yet." />
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <ZoomableChart title="Nutrient trend">
+      <div className="flex flex-col gap-2">
       <div className="flex flex-wrap gap-1.5">
         {SERIES.map((s) => (
           <button
@@ -244,6 +246,7 @@ export default function ProgressTrendChart({ days, target, hoverIndex, onHoverCh
           onPointerLeave={() => onHoverChange(null)}
         />
       </svg>
-    </div>
+      </div>
+    </ZoomableChart>
   )
 }
