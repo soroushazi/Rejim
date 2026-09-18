@@ -5,16 +5,16 @@ import { cn } from '@/lib/utils'
 
 /** Wraps a chart (any of the hand-rolled inline-SVG charts under pages/**)
  * with a zoom button on the far right of its own title row, plus tap-to-zoom
- * on the figure itself. Zooming opens the chart in a centered modal card (not
- * edge-to-edge - a full-bleed overlay reads as clumsy on a small screen); on
- * a phone (whose viewport is portrait-shaped regardless of a physical
- * "Portrait Orientation Lock" setting - that lock keeps the OS from ever
- * reporting landscape at all) the card is rotated into landscape via
- * `.chart-zoom-card`'s CSS (see index.css), so the wide chart still gets the
- * phone's long axis without the device needing to (or being able to)
- * physically rotate. The close button lives outside that rotated card,
- * pinned to the real screen corner, so it's reachable (and upright) no
- * matter which way the card is rotated.
+ * on the figure itself. Zooming opens the chart in a centered modal card that
+ * uses the figure's full height but not its full width (a full-bleed overlay
+ * reads as clumsy on a small screen); on a phone (whose viewport is
+ * portrait-shaped regardless of a physical "Portrait Orientation Lock"
+ * setting - that lock keeps the OS from ever reporting landscape at all) the
+ * card is rotated into landscape via `.chart-zoom-card`'s CSS (see
+ * index.css), so the wide chart still gets the phone's long axis without the
+ * device needing to (or being able to) physically rotate. The close button
+ * lives outside that rotated card, pinned to the real screen corner, so it's
+ * reachable (and upright) no matter which way the card is rotated.
  * Wrap a chart's own top-level return value with this (not its call site) so
  * the chart's internal state (series toggles, selected day, ...) belongs to
  * one component instance regardless of where its output gets portaled. */
@@ -39,7 +39,7 @@ export default function ZoomableChart({
   if (zoomed) {
     return createPortal(
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6 backdrop-blur-sm"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
         onClick={() => setZoomed(false)}
       >
         <button
