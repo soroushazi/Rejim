@@ -5,9 +5,9 @@ import { cn } from '@/lib/utils'
 
 /** Wraps a chart (any of the hand-rolled inline-SVG charts under pages/**)
  * with a zoom button on the far right of its own title row, plus tap-to-zoom
- * on the figure itself. Zooming opens the chart in a centered modal card that
- * uses the figure's full height but not its full width (a full-bleed overlay
- * reads as clumsy on a small screen); on a phone (whose viewport is
+ * on the figure itself. Zooming opens the chart in a centered modal card
+ * sized to the figure's full height but not its full width (a full-bleed
+ * overlay reads as clumsy on a small screen); on a phone (whose viewport is
  * portrait-shaped regardless of a physical "Portrait Orientation Lock"
  * setting - that lock keeps the OS from ever reporting landscape at all) the
  * card is rotated into landscape via `.chart-zoom-card`'s CSS (see
@@ -15,6 +15,16 @@ import { cn } from '@/lib/utils'
  * device needing to (or being able to) physically rotate. The close button
  * lives outside that rotated card, pinned to the real screen corner, so it's
  * reachable (and upright) no matter which way the card is rotated.
+ *
+ * `children` can be a render function receiving `zoomed` - use that (not the
+ * static-node form) whenever the chart should actually get *more readable*
+ * when zoomed, not just visually bigger: bump its own `fontSize`/stroke-width
+ * constants and stretch its `<svg>` to fill the taller card (`h-full` beside
+ * the usual `w-full`, inside a `flex-1 min-h-0` wrapper) rather than staying
+ * bound to its own fixed aspect-ratio width. The zoomed card drops the title
+ * entirely (the chart's own legend/toggle labels already say what's on it),
+ * so that space goes to the figure instead.
+ *
  * Wrap a chart's own top-level return value with this (not its call site) so
  * the chart's internal state (series toggles, selected day, ...) belongs to
  * one component instance regardless of where its output gets portaled. */
@@ -24,7 +34,7 @@ export default function ZoomableChart({
   className,
 }: {
   title?: string
-  children: ReactNode
+  children: ReactNode | ((zoomed: boolean) => ReactNode)
   className?: string
 }) {
   const [zoomed, setZoomed] = useState(false)
@@ -56,10 +66,9 @@ export default function ZoomableChart({
         </button>
         <div
           onClick={(e) => e.stopPropagation()}
-          className="chart-zoom-card flex flex-col justify-center gap-3 overflow-auto rounded-xl bg-popover p-4 text-popover-foreground shadow-lg ring-1 ring-foreground/10"
+          className="chart-zoom-card flex flex-col overflow-auto rounded-xl bg-popover p-2.5 text-popover-foreground shadow-lg ring-1 ring-foreground/10"
         >
-          {title && <span className="font-heading text-base font-medium">{title}</span>}
-          {children}
+          {typeof children === 'function' ? children(true) : children}
         </div>
       </div>,
       document.body,
@@ -80,7 +89,7 @@ export default function ZoomableChart({
         </button>
       </div>
       <div onClick={handleFigureClick} className="cursor-zoom-in">
-        {children}
+        {typeof children === 'function' ? children(false) : children}
       </div>
     </div>
   )

@@ -3,6 +3,7 @@ import { getProgressRecovery } from '@/api/progress'
 import type { ProgressRecoveryDay } from '@/api/types'
 import ZoomableChart, { ChartEmptyState } from '@/components/charts/ZoomableChart'
 import { Card, CardContent } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 import { RATING_LABELS } from '@/lib/ratings'
 
 const W = 600
@@ -54,36 +55,52 @@ function RecoveryChart({ days }: { days: ProgressRecoveryDay[] }) {
 
   return (
     <ZoomableChart title="Recovery">
-      <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap gap-1.5">
-        {SERIES.map((s) => (
-          <span key={s.key} className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs font-medium">
-            <span className="size-2 rounded-full" style={{ backgroundColor: `var(${s.cssVar})` }} aria-hidden="true" />
-            {s.label}
-          </span>
-        ))}
-      </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full select-none" role="img" aria-label="Sleep quality and readiness over time">
-        {[1, 2, 3, 4, 5].map((t) => (
-          <g key={t}>
-            <line x1={PAD.left} x2={W - PAD.right} y1={y(t)} y2={y(t)} stroke="var(--border)" strokeWidth={1} />
-            <text x={PAD.left - 6} y={y(t)} textAnchor="end" dominantBaseline="middle" className="fill-muted-foreground" fontSize={9}>
-              {RATING_LABELS[t]}
-            </text>
-          </g>
-        ))}
-        {days.map((d, i) =>
-          dateLabelIndices.has(i) ? (
-            <text key={d.date} x={x(i, n)} y={H - 6} textAnchor="middle" className="fill-muted-foreground" fontSize={9}>
-              {formatDateShort(d.date)}
-            </text>
-          ) : null,
-        )}
-        {SERIES.map((s) => (
-          <path key={s.key} d={pathFor(s.key)} fill="none" stroke={`var(${s.cssVar})`} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-        ))}
-      </svg>
-      </div>
+      {(zoomed) => {
+        const tickFontSize = zoomed ? 14 : 9
+        const thinStroke = zoomed ? 1.5 : 1
+        const lineStroke = zoomed ? 3 : 2
+
+        return (
+          <div className={cn('flex flex-col gap-2', zoomed && 'h-full min-h-0')}>
+            <div className="flex flex-wrap gap-1.5">
+              {SERIES.map((s) => (
+                <span
+                  key={s.key}
+                  className={cn('flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 font-medium', zoomed ? 'text-sm' : 'text-xs')}
+                >
+                  <span className="size-2 rounded-full" style={{ backgroundColor: `var(${s.cssVar})` }} aria-hidden="true" />
+                  {s.label}
+                </span>
+              ))}
+            </div>
+            <svg
+              viewBox={`0 0 ${W} ${H}`}
+              className={cn('w-full select-none', zoomed && 'min-h-0 flex-1')}
+              role="img"
+              aria-label="Sleep quality and readiness over time"
+            >
+              {[1, 2, 3, 4, 5].map((t) => (
+                <g key={t}>
+                  <line x1={PAD.left} x2={W - PAD.right} y1={y(t)} y2={y(t)} stroke="var(--border)" strokeWidth={thinStroke} />
+                  <text x={PAD.left - 6} y={y(t)} textAnchor="end" dominantBaseline="middle" className="fill-muted-foreground" fontSize={tickFontSize}>
+                    {RATING_LABELS[t]}
+                  </text>
+                </g>
+              ))}
+              {days.map((d, i) =>
+                dateLabelIndices.has(i) ? (
+                  <text key={d.date} x={x(i, n)} y={H - 6} textAnchor="middle" className="fill-muted-foreground" fontSize={tickFontSize}>
+                    {formatDateShort(d.date)}
+                  </text>
+                ) : null,
+              )}
+              {SERIES.map((s) => (
+                <path key={s.key} d={pathFor(s.key)} fill="none" stroke={`var(${s.cssVar})`} strokeWidth={lineStroke} strokeLinecap="round" strokeLinejoin="round" />
+              ))}
+            </svg>
+          </div>
+        )
+      }}
     </ZoomableChart>
   )
 }

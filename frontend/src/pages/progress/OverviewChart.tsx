@@ -141,91 +141,107 @@ export default function OverviewChart({ days, weightGoalKg }: { days: ProgressOv
 
   return (
     <ZoomableChart title="Overview">
-      <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap gap-1.5">
-        {(Object.keys(SERIES) as SeriesKey[]).map((key) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setVisible((v) => ({ ...v, [key]: !v[key] }))}
-            className={cn(
-              'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-opacity',
-              visible[key] ? 'border-border text-foreground' : 'border-border text-muted-foreground opacity-50',
-            )}
-          >
-            <span className="size-2 rounded-full" style={{ backgroundColor: `var(${SERIES[key].cssVar})` }} aria-hidden="true" />
-            {SERIES[key].label}
-          </button>
-        ))}
-      </div>
+      {(zoomed) => {
+        const tickFontSize = zoomed ? 13 : 8
+        const dateFontSize = zoomed ? 14 : 9
+        const goalFontSize = zoomed ? 12 : 8
+        const thickStroke = zoomed ? 3 : 2
+        const thinStroke = zoomed ? 1.5 : 1
 
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full select-none" role="img" aria-label="Weight, calories, sleep, steps and water over time">
-        {(Object.keys(SERIES) as SeriesKey[]).map(
-          (key) =>
-            visible[key] &&
-            axes[key].ticks.map((t) => (
-              <text
-                key={`${key}-${t}`}
-                x={axisX(key)}
-                y={y(key, t)}
-                textAnchor={LEFT_ORDER.includes(key) ? 'end' : 'start'}
-                dominantBaseline="middle"
-                fontSize={8}
-                fill={`var(${SERIES[key].cssVar})`}
-              >
-                {t}
-              </text>
-            )),
-        )}
+        return (
+          <div className={cn('flex flex-col gap-2', zoomed && 'h-full min-h-0')}>
+            <div className="flex flex-wrap gap-1.5">
+              {(Object.keys(SERIES) as SeriesKey[]).map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setVisible((v) => ({ ...v, [key]: !v[key] }))}
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-medium transition-opacity',
+                    zoomed ? 'text-sm' : 'text-xs',
+                    visible[key] ? 'border-border text-foreground' : 'border-border text-muted-foreground opacity-50',
+                  )}
+                >
+                  <span className="size-2 rounded-full" style={{ backgroundColor: `var(${SERIES[key].cssVar})` }} aria-hidden="true" />
+                  {SERIES[key].label}
+                </button>
+              ))}
+            </div>
 
-        <line x1={padLeft} x2={W - padRight} y1={H - PAD_BOTTOM} y2={H - PAD_BOTTOM} stroke="var(--border)" strokeWidth={1} />
+            <svg
+              viewBox={`0 0 ${W} ${H}`}
+              className={cn('w-full select-none', zoomed && 'min-h-0 flex-1')}
+              role="img"
+              aria-label="Weight, calories, sleep, steps and water over time"
+            >
+              {(Object.keys(SERIES) as SeriesKey[]).map(
+                (key) =>
+                  visible[key] &&
+                  axes[key].ticks.map((t) => (
+                    <text
+                      key={`${key}-${t}`}
+                      x={axisX(key)}
+                      y={y(key, t)}
+                      textAnchor={LEFT_ORDER.includes(key) ? 'end' : 'start'}
+                      dominantBaseline="middle"
+                      fontSize={tickFontSize}
+                      fill={`var(${SERIES[key].cssVar})`}
+                    >
+                      {t}
+                    </text>
+                  )),
+              )}
 
-        {days.map((d, i) =>
-          dateLabelIndices.has(i) ? (
-            <text key={d.date} x={x(i)} y={H - 6} textAnchor="middle" className="fill-muted-foreground" fontSize={9}>
-              {formatDateShort(d.date)}
-            </text>
-          ) : null,
-        )}
+              <line x1={padLeft} x2={W - padRight} y1={H - PAD_BOTTOM} y2={H - PAD_BOTTOM} stroke="var(--border)" strokeWidth={thinStroke} />
 
-        {visible.weight && (
-          <g>
-            <path d={pathFor('weight', rawValues.weight)} fill="none" stroke="var(--chart-1)" strokeWidth={1} strokeLinecap="round" strokeLinejoin="round" opacity={0.35} />
-            <path d={pathFor('weight', weightMA)} fill="none" stroke="var(--chart-1)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-          </g>
-        )}
-        {visible.weight && weightGoalKg !== undefined && (
-          <g>
-            <line
-              x1={padLeft}
-              x2={W - padRight}
-              y1={y('weight', weightGoalKg)}
-              y2={y('weight', weightGoalKg)}
-              stroke="var(--status-good)"
-              strokeWidth={1}
-              strokeDasharray="4 3"
-            />
-            <text x={W - padRight - 4} y={y('weight', weightGoalKg) - 4} textAnchor="end" fontSize={8} fill="var(--status-good)">
-              Goal
-            </text>
-          </g>
-        )}
-        {(['netCalories', 'sleepHours', 'steps', 'water'] as SeriesKey[]).map(
-          (key) =>
-            visible[key] && (
-              <path
-                key={key}
-                d={pathFor(key, rawValues[key])}
-                fill="none"
-                stroke={`var(${SERIES[key].cssVar})`}
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            ),
-        )}
-      </svg>
-      </div>
+              {days.map((d, i) =>
+                dateLabelIndices.has(i) ? (
+                  <text key={d.date} x={x(i)} y={H - 6} textAnchor="middle" className="fill-muted-foreground" fontSize={dateFontSize}>
+                    {formatDateShort(d.date)}
+                  </text>
+                ) : null,
+              )}
+
+              {visible.weight && (
+                <g>
+                  <path d={pathFor('weight', rawValues.weight)} fill="none" stroke="var(--chart-1)" strokeWidth={thinStroke} strokeLinecap="round" strokeLinejoin="round" opacity={0.35} />
+                  <path d={pathFor('weight', weightMA)} fill="none" stroke="var(--chart-1)" strokeWidth={thickStroke} strokeLinecap="round" strokeLinejoin="round" />
+                </g>
+              )}
+              {visible.weight && weightGoalKg !== undefined && (
+                <g>
+                  <line
+                    x1={padLeft}
+                    x2={W - padRight}
+                    y1={y('weight', weightGoalKg)}
+                    y2={y('weight', weightGoalKg)}
+                    stroke="var(--status-good)"
+                    strokeWidth={thinStroke}
+                    strokeDasharray="4 3"
+                  />
+                  <text x={W - padRight - 4} y={y('weight', weightGoalKg) - 4} textAnchor="end" fontSize={goalFontSize} fill="var(--status-good)">
+                    Goal
+                  </text>
+                </g>
+              )}
+              {(['netCalories', 'sleepHours', 'steps', 'water'] as SeriesKey[]).map(
+                (key) =>
+                  visible[key] && (
+                    <path
+                      key={key}
+                      d={pathFor(key, rawValues[key])}
+                      fill="none"
+                      stroke={`var(${SERIES[key].cssVar})`}
+                      strokeWidth={thickStroke}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  ),
+              )}
+            </svg>
+          </div>
+        )
+      }}
     </ZoomableChart>
   )
 }

@@ -108,97 +108,114 @@ export default function MacroTrendChart({ days, target, hoverIndex, onHoverChang
 
   return (
     <ZoomableChart title="Calories & macros vs. target">
-      <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap gap-1.5">
-        {SERIES.map((s) => (
-          <button
-            key={s.key}
-            type="button"
-            onClick={() => setVisible((v) => ({ ...v, [s.key]: !v[s.key] }))}
-            className={cn(
-              'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-opacity',
-              visible[s.key] ? 'border-border text-foreground' : 'border-border text-muted-foreground opacity-50',
-            )}
-          >
-            <span className="size-2 rounded-full" style={{ backgroundColor: `var(${s.cssVar})` }} aria-hidden="true" />
-            {s.label}
-          </button>
-        ))}
-      </div>
+      {(zoomed) => {
+        const tickFontSize = zoomed ? 14 : 9
+        const endLabelFontSize = zoomed ? 13 : 9
+        const thinStroke = zoomed ? 1.5 : 1
+        const targetStroke = zoomed ? 2 : 1.5
+        const lineStroke = zoomed ? 3 : 2
+        const hoverRadius = zoomed ? 6 : 4
 
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full touch-none select-none" role="img" aria-label="Macro trend, as percent of daily target">
-        {ticks.map((t) => (
-          <g key={t}>
-            <line
-              x1={PAD.left}
-              x2={W - PAD.right}
-              y1={y(t, niceMax)}
-              y2={y(t, niceMax)}
-              stroke={t === 100 ? 'var(--status-good)' : 'var(--border)'}
-              strokeWidth={t === 100 ? 1.5 : 1}
-              strokeDasharray={t === 100 ? '4 3' : undefined}
-              opacity={t === 100 ? 0.75 : 1}
-            />
-            <text x={PAD.left - 6} y={y(t, niceMax)} textAnchor="end" dominantBaseline="middle" className="fill-muted-foreground" fontSize={9}>
-              {t}%
-            </text>
-            {t === 100 && (
-              <text x={W - PAD.right} y={y(t, niceMax) - 4} textAnchor="end" className="fill-muted-foreground" fontSize={9} fontWeight={600}>
-                Target
-              </text>
-            )}
-          </g>
-        ))}
+        return (
+          <div className={cn('flex flex-col gap-2', zoomed && 'h-full min-h-0')}>
+            <div className="flex flex-wrap gap-1.5">
+              {SERIES.map((s) => (
+                <button
+                  key={s.key}
+                  type="button"
+                  onClick={() => setVisible((v) => ({ ...v, [s.key]: !v[s.key] }))}
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-medium transition-opacity',
+                    zoomed ? 'text-sm' : 'text-xs',
+                    visible[s.key] ? 'border-border text-foreground' : 'border-border text-muted-foreground opacity-50',
+                  )}
+                >
+                  <span className="size-2 rounded-full" style={{ backgroundColor: `var(${s.cssVar})` }} aria-hidden="true" />
+                  {s.label}
+                </button>
+              ))}
+            </div>
 
-        {days.map((d, i) =>
-          dateLabelIndices.has(i) ? (
-            <text key={d.date} x={x(i, n)} y={H - 6} textAnchor="middle" className="fill-muted-foreground" fontSize={9}>
-              {formatDateShort(d.date)}
-            </text>
-          ) : null,
-        )}
-
-        {series
-          .filter((s) => visible[s.key])
-          .map((s) => {
-            const lastPoint = [...s.points].reverse().find((p) => p.value !== null)
-            return (
-              <g key={s.key}>
-                <path d={pathFor(s.points)} fill="none" stroke={`var(${s.cssVar})`} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                {lastPoint && lastPoint.value !== null && (
-                  <text x={x(lastPoint.i, n) + 6} y={y(lastPoint.value, niceMax)} dominantBaseline="middle" className="fill-muted-foreground" fontSize={9} fontWeight={600}>
-                    {s.short}
+            <svg
+              viewBox={`0 0 ${W} ${H}`}
+              className={cn('w-full touch-none select-none', zoomed && 'min-h-0 flex-1')}
+              role="img"
+              aria-label="Macro trend, as percent of daily target"
+            >
+              {ticks.map((t) => (
+                <g key={t}>
+                  <line
+                    x1={PAD.left}
+                    x2={W - PAD.right}
+                    y1={y(t, niceMax)}
+                    y2={y(t, niceMax)}
+                    stroke={t === 100 ? 'var(--status-good)' : 'var(--border)'}
+                    strokeWidth={t === 100 ? targetStroke : thinStroke}
+                    strokeDasharray={t === 100 ? '4 3' : undefined}
+                    opacity={t === 100 ? 0.75 : 1}
+                  />
+                  <text x={PAD.left - 6} y={y(t, niceMax)} textAnchor="end" dominantBaseline="middle" className="fill-muted-foreground" fontSize={tickFontSize}>
+                    {t}%
                   </text>
-                )}
-              </g>
-            )
-          })}
+                  {t === 100 && (
+                    <text x={W - PAD.right} y={y(t, niceMax) - 4} textAnchor="end" className="fill-muted-foreground" fontSize={tickFontSize} fontWeight={600}>
+                      Target
+                    </text>
+                  )}
+                </g>
+              ))}
 
-        {hoverIndex !== null && (
-          <g>
-            <line x1={x(hoverIndex, n)} x2={x(hoverIndex, n)} y1={PAD.top} y2={H - PAD.bottom} stroke="var(--muted-foreground)" strokeWidth={1} />
-            {series
-              .filter((s) => visible[s.key])
-              .map((s) => {
-                const value = s.points[hoverIndex]?.value
-                if (value === null || value === undefined) return null
-                return <circle key={s.key} cx={x(hoverIndex, n)} cy={y(value, niceMax)} r={4} fill={`var(${s.cssVar})`} stroke="var(--card)" strokeWidth={2} />
-              })}
-          </g>
-        )}
+              {days.map((d, i) =>
+                dateLabelIndices.has(i) ? (
+                  <text key={d.date} x={x(i, n)} y={H - 6} textAnchor="middle" className="fill-muted-foreground" fontSize={tickFontSize}>
+                    {formatDateShort(d.date)}
+                  </text>
+                ) : null,
+              )}
 
-        <rect
-          x={PAD.left}
-          y={PAD.top}
-          width={PLOT_W}
-          height={PLOT_H}
-          fill="transparent"
-          onPointerMove={handlePointer}
-          onPointerDown={handlePointer}
-          onPointerLeave={() => onHoverChange(null)}
-        />
-      </svg>
-      </div>
+              {series
+                .filter((s) => visible[s.key])
+                .map((s) => {
+                  const lastPoint = [...s.points].reverse().find((p) => p.value !== null)
+                  return (
+                    <g key={s.key}>
+                      <path d={pathFor(s.points)} fill="none" stroke={`var(${s.cssVar})`} strokeWidth={lineStroke} strokeLinecap="round" strokeLinejoin="round" />
+                      {lastPoint && lastPoint.value !== null && (
+                        <text x={x(lastPoint.i, n) + 6} y={y(lastPoint.value, niceMax)} dominantBaseline="middle" className="fill-muted-foreground" fontSize={endLabelFontSize} fontWeight={600}>
+                          {s.short}
+                        </text>
+                      )}
+                    </g>
+                  )
+                })}
+
+              {hoverIndex !== null && (
+                <g>
+                  <line x1={x(hoverIndex, n)} x2={x(hoverIndex, n)} y1={PAD.top} y2={H - PAD.bottom} stroke="var(--muted-foreground)" strokeWidth={thinStroke} />
+                  {series
+                    .filter((s) => visible[s.key])
+                    .map((s) => {
+                      const value = s.points[hoverIndex]?.value
+                      if (value === null || value === undefined) return null
+                      return <circle key={s.key} cx={x(hoverIndex, n)} cy={y(value, niceMax)} r={hoverRadius} fill={`var(${s.cssVar})`} stroke="var(--card)" strokeWidth={lineStroke} />
+                    })}
+                </g>
+              )}
+
+              <rect
+                x={PAD.left}
+                y={PAD.top}
+                width={PLOT_W}
+                height={PLOT_H}
+                fill="transparent"
+                onPointerMove={handlePointer}
+                onPointerDown={handlePointer}
+                onPointerLeave={() => onHoverChange(null)}
+              />
+            </svg>
+          </div>
+        )
+      }}
     </ZoomableChart>
   )
 }

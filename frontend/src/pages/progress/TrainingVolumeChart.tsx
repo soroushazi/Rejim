@@ -1,5 +1,6 @@
 import type { ProgressTrainingVolumeWeek } from '@/api/types'
 import ZoomableChart, { ChartEmptyState } from '@/components/charts/ZoomableChart'
+import { cn } from '@/lib/utils'
 
 const W = 600
 const H = 160
@@ -49,37 +50,48 @@ function Bars({ weeks, valueOf, cssVar, formatValue, title }: {
 
   return (
     <ZoomableChart title={title}>
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full select-none" role="img" aria-label="Weekly totals">
-      {ticks.map((t) => (
-        <g key={t}>
-          <line x1={PAD.left} x2={W - PAD.right} y1={y(t)} y2={y(t)} stroke="var(--border)" strokeWidth={1} />
-          <text x={PAD.left - 6} y={y(t)} textAnchor="end" dominantBaseline="middle" className="fill-muted-foreground" fontSize={9}>
-            {t}
-          </text>
-        </g>
-      ))}
-      {weeks.map((w, i) => {
-        const value = valueOf(w)
-        const cx = PAD.left + slot * i + slot / 2
+      {(zoomed) => {
+        const tickFontSize = zoomed ? 14 : 9
+
         return (
-          <g key={w.week_start}>
-            <rect
-              x={cx - barWidth / 2}
-              y={y(value)}
-              width={barWidth}
-              height={Math.max(0, y(0) - y(value))}
-              fill={`var(${cssVar})`}
-              rx={2}
-            >
-              <title>{`Week of ${formatWeek(w.week_start)}: ${formatValue(value)}`}</title>
-            </rect>
-            <text x={cx} y={H - 6} textAnchor="middle" className="fill-muted-foreground" fontSize={9}>
-              {formatWeek(w.week_start)}
-            </text>
-          </g>
+          <svg
+            viewBox={`0 0 ${W} ${H}`}
+            className={cn('w-full select-none', zoomed && 'h-full min-h-0 flex-1')}
+            role="img"
+            aria-label="Weekly totals"
+          >
+            {ticks.map((t) => (
+              <g key={t}>
+                <line x1={PAD.left} x2={W - PAD.right} y1={y(t)} y2={y(t)} stroke="var(--border)" strokeWidth={zoomed ? 1.5 : 1} />
+                <text x={PAD.left - 6} y={y(t)} textAnchor="end" dominantBaseline="middle" className="fill-muted-foreground" fontSize={tickFontSize}>
+                  {t}
+                </text>
+              </g>
+            ))}
+            {weeks.map((w, i) => {
+              const value = valueOf(w)
+              const cx = PAD.left + slot * i + slot / 2
+              return (
+                <g key={w.week_start}>
+                  <rect
+                    x={cx - barWidth / 2}
+                    y={y(value)}
+                    width={barWidth}
+                    height={Math.max(0, y(0) - y(value))}
+                    fill={`var(${cssVar})`}
+                    rx={2}
+                  >
+                    <title>{`Week of ${formatWeek(w.week_start)}: ${formatValue(value)}`}</title>
+                  </rect>
+                  <text x={cx} y={H - 6} textAnchor="middle" className="fill-muted-foreground" fontSize={tickFontSize}>
+                    {formatWeek(w.week_start)}
+                  </text>
+                </g>
+              )
+            })}
+          </svg>
         )
-      })}
-    </svg>
+      }}
     </ZoomableChart>
   )
 }

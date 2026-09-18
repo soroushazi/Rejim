@@ -129,190 +129,203 @@ export default function ExerciseHistoryChart({
 
   return (
     <ZoomableChart title="Exercise history">
-      <div className="flex flex-col gap-2">
-      {currentPr && (
-        <p className="text-sm">
-          <span aria-hidden="true">🏆</span> <span className="font-semibold">PR:</span> {currentPr.weight}
-          {currentPr.unit} × {currentPr.reps} reps
-        </p>
-      )}
-      <div className="flex flex-wrap gap-1.5">
-        {seriesToggles.map((s) => (
-          <button
-            key={s.key}
-            type="button"
-            onClick={() => setVisible((v) => ({ ...v, [s.key]: !v[s.key] }))}
-            className={cn(
-              'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-opacity',
-              visible[s.key] ? 'border-border text-foreground' : 'border-border text-muted-foreground opacity-50',
+      {(zoomed) => {
+        const tickFontSize = zoomed ? 14 : 9
+        const endLabelFontSize = zoomed ? 14 : 9
+        const goalFontSize = zoomed ? 12 : 8
+        const thinStroke = zoomed ? 1.5 : 1
+        const lineStroke = zoomed ? 3 : 2
+        const pointRadius = zoomed ? 4 : 2.5
+        const prMarkerSize = zoomed ? 12 : 8
+
+        return (
+          <div className={cn('flex flex-col gap-2', zoomed && 'h-full min-h-0')}>
+            {currentPr && (
+              <p className={cn(zoomed ? 'text-base' : 'text-sm')}>
+                <span aria-hidden="true">🏆</span> <span className="font-semibold">PR:</span> {currentPr.weight}
+                {currentPr.unit} × {currentPr.reps} reps
+              </p>
             )}
-          >
-            <span className="size-2 rounded-full" style={{ backgroundColor: `var(${s.cssVar})` }} aria-hidden="true" />
-            {s.label}
-          </button>
-        ))}
-      </div>
+            <div className="flex flex-wrap gap-1.5">
+              {seriesToggles.map((s) => (
+                <button
+                  key={s.key}
+                  type="button"
+                  onClick={() => setVisible((v) => ({ ...v, [s.key]: !v[s.key] }))}
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-medium transition-opacity',
+                    zoomed ? 'text-sm' : 'text-xs',
+                    visible[s.key] ? 'border-border text-foreground' : 'border-border text-muted-foreground opacity-50',
+                  )}
+                >
+                  <span className="size-2 rounded-full" style={{ backgroundColor: `var(${s.cssVar})` }} aria-hidden="true" />
+                  {s.label}
+                </button>
+              ))}
+            </div>
 
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        className="w-full select-none"
-        role="img"
-        aria-label={showVolume ? 'Weight, average reps per set, and volume over time' : 'Weight and average reps per set over time'}
-      >
-        {visible.weight &&
-          weightAxis.ticks.map((t) => (
-            <text key={`wl-${t}`} x={PAD.left - 6} y={y(t, weightAxis.niceMax)} textAnchor="end" dominantBaseline="middle" fontSize={9} fill="var(--chart-1)">
-              {t}
-            </text>
-          ))}
-        {visible.reps &&
-          repsAxis.ticks.map((t) => (
-            <text key={`rl-${t}`} x={W - PAD.right + 6} y={y(t, repsAxis.niceMax)} textAnchor="start" dominantBaseline="middle" fontSize={9} fill="var(--chart-2)">
-              {t}
-            </text>
-          ))}
-
-        <line x1={PAD.left} x2={W - PAD.right} y1={PAD.top} y2={PAD.top} stroke="var(--border)" strokeWidth={1} />
-        <line x1={PAD.left} x2={W - PAD.right} y1={H - PAD.bottom} y2={H - PAD.bottom} stroke="var(--border)" strokeWidth={1} />
-
-        {days.map((d, i) =>
-          dateLabelIndices.has(i) ? (
-            <text key={d.date} x={x(i, n)} y={H - 6} textAnchor="middle" className="fill-muted-foreground" fontSize={9}>
-              {formatDateShort(d.date)}
-            </text>
-          ) : null,
-        )}
-
-        {selectedDay && (
-          <line
-            x1={x(days.indexOf(selectedDay), n)}
-            x2={x(days.indexOf(selectedDay), n)}
-            y1={PAD.top}
-            y2={H - PAD.bottom}
-            stroke="var(--foreground)"
-            strokeOpacity={0.15}
-            strokeWidth={1}
-          />
-        )}
-        {visible.weight && (
-          <g>
-            <path d={weightPath()} fill="none" stroke="var(--chart-1)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-            {days.map((d, i) => (
-              <circle key={d.date} cx={x(i, n)} cy={y(d.maxWeight, weightAxis.niceMax)} r={2.5} fill="var(--chart-1)" />
-            ))}
-            <text x={x(n - 1, n) + 6} y={y(last.maxWeight, weightAxis.niceMax)} dominantBaseline="middle" fontSize={9} fontWeight={600} fill="var(--chart-1)">
-              {last.maxWeight}
-            </text>
-          </g>
-        )}
-        {visible.weight && goalWeight !== undefined && (
-          <g>
-            <line
-              x1={PAD.left}
-              x2={W - PAD.right}
-              y1={y(goalWeight, weightAxis.niceMax)}
-              y2={y(goalWeight, weightAxis.niceMax)}
-              stroke="var(--status-good)"
-              strokeWidth={1}
-              strokeDasharray="4 3"
-            />
-            <text x={PAD.left + 4} y={y(goalWeight, weightAxis.niceMax) - 4} textAnchor="start" fontSize={8} fill="var(--status-good)">
-              Goal
-            </text>
-          </g>
-        )}
-        {visible.reps && (
-          <g>
-            <path d={repsPath()} fill="none" stroke="var(--chart-2)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-            <text x={x(n - 1, n) + 6} y={y(last.avgReps, repsAxis.niceMax) - 10} dominantBaseline="middle" fontSize={9} fontWeight={600} fill="var(--chart-2)">
-              {Math.round(last.avgReps * 10) / 10}
-            </text>
-          </g>
-        )}
-        {showVolume && visible.volume && (
-          <g>
-            <path d={volumePath()} fill="none" stroke="var(--chart-3)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-            <text x={x(n - 1, n) + 6} y={y(last.volume, volumeAxis.niceMax) + 10} dominantBaseline="middle" fontSize={9} fontWeight={600} fill="var(--chart-3)">
-              {Math.round(last.volume)}
-            </text>
-          </g>
-        )}
-        {visible.weight &&
-          prEvents &&
-          // One marker per day (not per event) - the marker sits on that day's
-          // single weight-line point, so two same-day PRs (e.g. new-max-reps at
-          // two different weights) would otherwise draw two identical, fully
-          // overlapping markers.
-          [...new Map(prEvents.map((ev) => [ev.date, ev])).values()].map((ev) => {
-            const dayIndex = days.findIndex((d) => d.date === ev.date)
-            if (dayIndex === -1) return null
-            const cx = x(dayIndex, n)
-            const cy = y(days[dayIndex].maxWeight, weightAxis.niceMax)
-            const dayEvents = prEvents.filter((e) => e.date === ev.date)
-            return (
-              <rect
-                key={ev.date}
-                x={cx - 4}
-                y={cy - 4}
-                width={8}
-                height={8}
-                transform={`rotate(45 ${cx} ${cy})`}
-                fill="var(--status-good)"
-                stroke="var(--card)"
-                strokeWidth={1.5}
-              >
-                <title>
-                  {dayEvents.map((e) => (e.kind === 'weight' ? 'New max weight' : 'New max reps')).join(', ')} - {formatDateShort(ev.date)}
-                </title>
-              </rect>
-            )
-          })}
-
-        {days.map((d, i) => (
-          <rect
-            key={`hit-${d.date}`}
-            x={x(i, n) - bandWidth / 2}
-            y={PAD.top}
-            width={bandWidth}
-            height={PLOT_H}
-            fill="transparent"
-            className="cursor-pointer"
-            onClick={() => setSelectedDate((cur) => (cur === d.date ? null : d.date))}
-          >
-            <title>{formatDateFull(d.date)}</title>
-          </rect>
-        ))}
-      </svg>
-
-      {selectedDay && (
-        <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-muted/30 p-2.5 text-sm">
-          <div className="flex items-center justify-between gap-2">
-            <span className="font-medium">{formatDateFull(selectedDay.date)}</span>
-            <button
-              type="button"
-              onClick={() => setSelectedDate(null)}
-              aria-label="Close"
-              className="text-muted-foreground hover:text-foreground"
+            <svg
+              viewBox={`0 0 ${W} ${H}`}
+              className={cn('w-full select-none', zoomed && 'min-h-0 flex-1')}
+              role="img"
+              aria-label={showVolume ? 'Weight, average reps per set, and volume over time' : 'Weight and average reps per set over time'}
             >
-              <X className="size-3.5" />
-            </button>
-          </div>
-          <div className="flex flex-col gap-0.5 text-muted-foreground">
-            <span>
-              Weight: <span className="font-medium text-foreground">{selectedDay.maxWeight}{selectedDay.weightUnit}</span>
-            </span>
-            <span>
-              Avg reps/set: <span className="font-medium text-foreground">{Math.round(selectedDay.avgReps * 10) / 10}</span>
-            </span>
-            {showVolume && (
-              <span>
-                Volume: <span className="font-medium text-foreground">{Math.round(selectedDay.volume)}{selectedDay.weightUnit}</span>
-              </span>
+              {visible.weight &&
+                weightAxis.ticks.map((t) => (
+                  <text key={`wl-${t}`} x={PAD.left - 6} y={y(t, weightAxis.niceMax)} textAnchor="end" dominantBaseline="middle" fontSize={tickFontSize} fill="var(--chart-1)">
+                    {t}
+                  </text>
+                ))}
+              {visible.reps &&
+                repsAxis.ticks.map((t) => (
+                  <text key={`rl-${t}`} x={W - PAD.right + 6} y={y(t, repsAxis.niceMax)} textAnchor="start" dominantBaseline="middle" fontSize={tickFontSize} fill="var(--chart-2)">
+                    {t}
+                  </text>
+                ))}
+
+              <line x1={PAD.left} x2={W - PAD.right} y1={PAD.top} y2={PAD.top} stroke="var(--border)" strokeWidth={thinStroke} />
+              <line x1={PAD.left} x2={W - PAD.right} y1={H - PAD.bottom} y2={H - PAD.bottom} stroke="var(--border)" strokeWidth={thinStroke} />
+
+              {days.map((d, i) =>
+                dateLabelIndices.has(i) ? (
+                  <text key={d.date} x={x(i, n)} y={H - 6} textAnchor="middle" className="fill-muted-foreground" fontSize={tickFontSize}>
+                    {formatDateShort(d.date)}
+                  </text>
+                ) : null,
+              )}
+
+              {selectedDay && (
+                <line
+                  x1={x(days.indexOf(selectedDay), n)}
+                  x2={x(days.indexOf(selectedDay), n)}
+                  y1={PAD.top}
+                  y2={H - PAD.bottom}
+                  stroke="var(--foreground)"
+                  strokeOpacity={0.15}
+                  strokeWidth={thinStroke}
+                />
+              )}
+              {visible.weight && (
+                <g>
+                  <path d={weightPath()} fill="none" stroke="var(--chart-1)" strokeWidth={lineStroke} strokeLinecap="round" strokeLinejoin="round" />
+                  {days.map((d, i) => (
+                    <circle key={d.date} cx={x(i, n)} cy={y(d.maxWeight, weightAxis.niceMax)} r={pointRadius} fill="var(--chart-1)" />
+                  ))}
+                  <text x={x(n - 1, n) + 6} y={y(last.maxWeight, weightAxis.niceMax)} dominantBaseline="middle" fontSize={endLabelFontSize} fontWeight={600} fill="var(--chart-1)">
+                    {last.maxWeight}
+                  </text>
+                </g>
+              )}
+              {visible.weight && goalWeight !== undefined && (
+                <g>
+                  <line
+                    x1={PAD.left}
+                    x2={W - PAD.right}
+                    y1={y(goalWeight, weightAxis.niceMax)}
+                    y2={y(goalWeight, weightAxis.niceMax)}
+                    stroke="var(--status-good)"
+                    strokeWidth={thinStroke}
+                    strokeDasharray="4 3"
+                  />
+                  <text x={PAD.left + 4} y={y(goalWeight, weightAxis.niceMax) - 4} textAnchor="start" fontSize={goalFontSize} fill="var(--status-good)">
+                    Goal
+                  </text>
+                </g>
+              )}
+              {visible.reps && (
+                <g>
+                  <path d={repsPath()} fill="none" stroke="var(--chart-2)" strokeWidth={lineStroke} strokeLinecap="round" strokeLinejoin="round" />
+                  <text x={x(n - 1, n) + 6} y={y(last.avgReps, repsAxis.niceMax) - 10} dominantBaseline="middle" fontSize={endLabelFontSize} fontWeight={600} fill="var(--chart-2)">
+                    {Math.round(last.avgReps * 10) / 10}
+                  </text>
+                </g>
+              )}
+              {showVolume && visible.volume && (
+                <g>
+                  <path d={volumePath()} fill="none" stroke="var(--chart-3)" strokeWidth={lineStroke} strokeLinecap="round" strokeLinejoin="round" />
+                  <text x={x(n - 1, n) + 6} y={y(last.volume, volumeAxis.niceMax) + 10} dominantBaseline="middle" fontSize={endLabelFontSize} fontWeight={600} fill="var(--chart-3)">
+                    {Math.round(last.volume)}
+                  </text>
+                </g>
+              )}
+              {visible.weight &&
+                prEvents &&
+                // One marker per day (not per event) - the marker sits on that day's
+                // single weight-line point, so two same-day PRs (e.g. new-max-reps at
+                // two different weights) would otherwise draw two identical, fully
+                // overlapping markers.
+                [...new Map(prEvents.map((ev) => [ev.date, ev])).values()].map((ev) => {
+                  const dayIndex = days.findIndex((d) => d.date === ev.date)
+                  if (dayIndex === -1) return null
+                  const cx = x(dayIndex, n)
+                  const cy = y(days[dayIndex].maxWeight, weightAxis.niceMax)
+                  const dayEvents = prEvents.filter((e) => e.date === ev.date)
+                  return (
+                    <rect
+                      key={ev.date}
+                      x={cx - prMarkerSize / 2}
+                      y={cy - prMarkerSize / 2}
+                      width={prMarkerSize}
+                      height={prMarkerSize}
+                      transform={`rotate(45 ${cx} ${cy})`}
+                      fill="var(--status-good)"
+                      stroke="var(--card)"
+                      strokeWidth={thinStroke * 1.5}
+                    >
+                      <title>
+                        {dayEvents.map((e) => (e.kind === 'weight' ? 'New max weight' : 'New max reps')).join(', ')} - {formatDateShort(ev.date)}
+                      </title>
+                    </rect>
+                  )
+                })}
+
+              {days.map((d, i) => (
+                <rect
+                  key={`hit-${d.date}`}
+                  x={x(i, n) - bandWidth / 2}
+                  y={PAD.top}
+                  width={bandWidth}
+                  height={PLOT_H}
+                  fill="transparent"
+                  className="cursor-pointer"
+                  onClick={() => setSelectedDate((cur) => (cur === d.date ? null : d.date))}
+                >
+                  <title>{formatDateFull(d.date)}</title>
+                </rect>
+              ))}
+            </svg>
+
+            {selectedDay && (
+              <div className={cn('flex flex-col gap-1.5 rounded-lg border border-border bg-muted/30 p-2.5', zoomed ? 'text-base' : 'text-sm')}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium">{formatDateFull(selectedDay.date)}</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDate(null)}
+                    aria-label="Close"
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+                <div className="flex flex-col gap-0.5 text-muted-foreground">
+                  <span>
+                    Weight: <span className="font-medium text-foreground">{selectedDay.maxWeight}{selectedDay.weightUnit}</span>
+                  </span>
+                  <span>
+                    Avg reps/set: <span className="font-medium text-foreground">{Math.round(selectedDay.avgReps * 10) / 10}</span>
+                  </span>
+                  {showVolume && (
+                    <span>
+                      Volume: <span className="font-medium text-foreground">{Math.round(selectedDay.volume)}{selectedDay.weightUnit}</span>
+                    </span>
+                  )}
+                </div>
+              </div>
             )}
           </div>
-        </div>
-      )}
-      </div>
+        )
+      }}
     </ZoomableChart>
   )
 }
