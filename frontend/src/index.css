@@ -160,7 +160,7 @@ body {
    top/left/translate math - rotating a flex item in place still leaves it
    centered. `flex-shrink: 0` keeps the flex parent from quietly shrinking
    these explicit dimensions back down to fit its own box.
-   Full height, ~90% width, in whichever axis is "height"/"width" once the
+   Full height, ~85% width, in whichever axis is "height"/"width" once the
    chart is actually viewed as landscape: on a phone (whose viewport is
    portrait-shaped regardless of a "Portrait Orientation Lock" setting, since
    that lock just keeps the OS from ever reporting landscape at all) the card
@@ -175,13 +175,13 @@ body {
    this. */
 .chart-zoom-card {
   flex-shrink: 0;
-  width: min(90vw, 1100px);
+  width: min(85vw, 1100px);
   height: 100dvh;
 }
 
 @media (orientation: portrait) {
   .chart-zoom-card {
-    width: 90dvh;
+    width: 85dvh;
     height: 100dvw;
     transform: rotate(90deg);
   }
