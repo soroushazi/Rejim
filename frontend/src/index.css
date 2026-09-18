@@ -160,25 +160,28 @@ body {
    top/left/translate math - rotating a flex item in place still leaves it
    centered. `flex-shrink: 0` keeps the flex parent from quietly shrinking
    these explicit dimensions back down to fit its own box.
-   Uses the full height but not the full width, in whichever axis is "height"
-   once the chart is actually viewed as landscape: on a phone (whose viewport
-   is portrait-shaped regardless of a "Portrait Orientation Lock" setting,
-   since that lock just keeps the OS from ever reporting landscape at all)
-   the card is rotated 90deg, so its CSS width/height there are pre-rotation -
-   they describe the *landscape* width/height directly, since the CSS
-   rotation and the user's own physical rotation of the device cancel out.
+   Full height, ~90% width, in whichever axis is "height"/"width" once the
+   chart is actually viewed as landscape: on a phone (whose viewport is
+   portrait-shaped regardless of a "Portrait Orientation Lock" setting, since
+   that lock just keeps the OS from ever reporting landscape at all) the card
+   is rotated 90deg, so its CSS width/height there are pre-rotation - they
+   describe the *landscape* width/height directly, since the CSS rotation and
+   the user's own physical rotation of the device cancel out. Deliberately
+   short of 100% on the width axis (unlike height) so the card always sits
+   comfortably inside the screen with room to spare, instead of riding the
+   exact edge where rounding could tip it into overflow.
    The close button lives outside this element (a sibling in the backdrop,
    pinned to the real screen corner) precisely so it never rotates along with
    this. */
 .chart-zoom-card {
   flex-shrink: 0;
-  width: min(96vw, 1100px);
+  width: min(90vw, 1100px);
   height: 100dvh;
 }
 
 @media (orientation: portrait) {
   .chart-zoom-card {
-    width: calc(100dvh - 0.75rem);
+    width: 90dvh;
     height: 100dvw;
     transform: rotate(90deg);
   }

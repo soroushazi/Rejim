@@ -146,7 +146,7 @@ export default function ExerciseHistoryChart({
                 {currentPr.unit} × {currentPr.reps} reps
               </p>
             )}
-            <div className="flex flex-wrap gap-1.5">
+            <div className={cn('flex flex-wrap gap-1.5', zoomed && 'justify-center')}>
               {seriesToggles.map((s) => (
                 <button
                   key={s.key}

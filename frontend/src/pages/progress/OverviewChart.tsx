@@ -150,7 +150,7 @@ export default function OverviewChart({ days, weightGoalKg }: { days: ProgressOv
 
         return (
           <div className={cn('flex flex-col gap-2', zoomed && 'h-full min-h-0')}>
-            <div className="flex flex-wrap gap-1.5">
+            <div className={cn('flex flex-wrap gap-1.5', zoomed && 'justify-center')}>
               {(Object.keys(SERIES) as SeriesKey[]).map((key) => (
                 <button
                   key={key}
