@@ -7,6 +7,7 @@ from .models import User
 class UserSerializer(serializers.ModelSerializer):
     bmi = serializers.SerializerMethodField()
     bmi_category = serializers.SerializerMethodField()
+    current_weight_kg = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -21,8 +22,10 @@ class UserSerializer(serializers.ModelSerializer):
             "trainer",
             "height_cm",
             "age",
+            "sex",
             "starting_weight",
             "starting_weight_unit",
+            "current_weight_kg",
             "meal_preferences",
             "meal_preferences_notes",
             "workout_days_per_week",
@@ -47,6 +50,11 @@ class UserSerializer(serializers.ModelSerializer):
 
         _, category = compute_bmi(obj)
         return category
+
+    def get_current_weight_kg(self, obj):
+        from .services import resolve_current_weight_kg
+
+        return resolve_current_weight_kg(obj)
 
 
 class SignupSerializer(serializers.ModelSerializer):

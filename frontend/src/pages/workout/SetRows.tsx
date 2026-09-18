@@ -1,4 +1,5 @@
-import { Check, Trophy, X } from 'lucide-react'
+import { Check, Info, Trophy, X } from 'lucide-react'
+import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -7,6 +8,7 @@ import type { PersonalRecordKind } from '@/lib/personalRecord'
 import { RPE_OPTIONS, rpeLabel } from '@/lib/rpe'
 import { cn } from '@/lib/utils'
 import { weightDirectionFeedback, type WeightSuggestion } from '@/lib/weightSuggestion'
+import RpeInfoDialog from './RpeInfoDialog'
 
 export type DraftSet = {
   weight: string
@@ -51,6 +53,7 @@ export function SetEditorRow({
   const canConfirm = set.weight.trim() !== '' && set.reps_done.trim() !== ''
   const feedback =
     suggestion && set.weight.trim() !== '' ? weightDirectionFeedback(suggestion, Number(set.weight)) : null
+  const [rpeInfoOpen, setRpeInfoOpen] = useState(false)
 
   return (
     <div className="flex flex-col gap-1.5 rounded-md border border-border p-2">
@@ -80,21 +83,31 @@ export function SetEditorRow({
           onChange={(e) => onChange({ reps_done: e.target.value })}
           className="h-8 w-full"
         />
-        <Select
-          value={set.rpe}
-          onValueChange={(v) => onChange({ rpe: v })}
-        >
-          <SelectTrigger size="sm" className="h-8 w-full" aria-label="RPE">
-            <SelectValue placeholder="RPE" />
-          </SelectTrigger>
-          <SelectContent>
-            {RPE_OPTIONS.map((o) => (
-              <SelectItem key={o.value} value={String(o.value)}>
-                {o.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-1">
+          <Select
+            value={set.rpe}
+            onValueChange={(v) => onChange({ rpe: v })}
+          >
+            <SelectTrigger size="sm" className="h-8 w-full" aria-label="RPE">
+              <SelectValue placeholder="RPE" />
+            </SelectTrigger>
+            <SelectContent>
+              {RPE_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={String(o.value)}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <button
+            type="button"
+            className="shrink-0 text-muted-foreground hover:text-foreground"
+            onClick={() => setRpeInfoOpen(true)}
+            aria-label="What is RPE?"
+          >
+            <Info className="size-4" />
+          </button>
+        </div>
       </div>
       {!hideActions && (
         <div className="flex gap-1.5">
@@ -123,6 +136,7 @@ export function SetEditorRow({
           {feedback.note}
         </p>
       )}
+      <RpeInfoDialog open={rpeInfoOpen} onOpenChange={setRpeInfoOpen} />
     </div>
   )
 }

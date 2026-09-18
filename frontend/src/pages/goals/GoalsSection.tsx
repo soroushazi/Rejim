@@ -13,12 +13,15 @@ type Props = {
    * trainer is viewing/editing one specific trainee's goals. */
   traineeId?: number
   canEdit: boolean
+  /** The relevant trainee's current weight in kg, if known - passed through
+   * to GoalForm so a new weight goal can auto-detect lose/gain/maintain. */
+  currentWeightKg: number | null
 }
 
 /** The list+dialog body shared by GoalsPage (wraps this with the trainee-
  * picker) and TraineeDetailPage's Goals section (passes the already-known
  * traineeId, no picker needed). */
-export default function GoalsSection({ traineeId, canEdit }: Props) {
+export default function GoalsSection({ traineeId, canEdit, currentWeightKg }: Props) {
   const [goals, setGoals] = useState<Goal[]>([])
   const [exercises, setExercises] = useState<Exercise[]>([])
   const [loading, setLoading] = useState(true)
@@ -103,7 +106,14 @@ export default function GoalsSection({ traineeId, canEdit }: Props) {
       )}
 
       {canEdit && (
-        <GoalForm open={formOpen} onOpenChange={setFormOpen} exercises={exercises} initial={editing} onSave={handleSave} />
+        <GoalForm
+          open={formOpen}
+          onOpenChange={setFormOpen}
+          exercises={exercises}
+          initial={editing}
+          currentWeightKg={currentWeightKg}
+          onSave={handleSave}
+        />
       )}
 
       <ConfirmDialog

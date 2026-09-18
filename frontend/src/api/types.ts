@@ -1,5 +1,6 @@
 export type GymLocation = 'home' | 'commercial' | 'outdoor' | 'none'
 export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced'
+export type Sex = 'male' | 'female' | 'unspecified'
 
 export type User = {
   id: number
@@ -12,8 +13,12 @@ export type User = {
   trainer: number | null
   height_cm: string | null
   age: number | null
+  sex: Sex
   starting_weight: string | null
   starting_weight_unit: WeightUnit
+  /** Latest DailyMetric weight if logged, else starting_weight - see
+   * accounts/services.py::resolve_current_weight_kg. Null if neither exists. */
+  current_weight_kg: number | null
   meal_preferences: number[]
   meal_preferences_notes: string
   workout_days_per_week: number | null
@@ -435,16 +440,32 @@ export type NewActivityLogEntry = {
 }
 
 /** Read-side rollup from GET /tracker/daily-summary/?date= - calories/macros
- * consumed (Diet logs), calories burned (ActivityLog only - WorkoutSession
- * carries no calorie field in Stage 1), net balance, and the diet plan's
- * target for a planned-vs-actual comparison (null if no plan exists yet). */
+ * consumed (Diet logs), calories burned (an estimated TDEE from the
+ * trainee's body stats, plus logged workouts and ActivityLog entries - see
+ * tracker/services.py::estimate_calories_out), net balance, and the diet
+ * plan's target for a planned-vs-actual comparison (null if no plan exists
+ * yet). */
 export type DailySummary = {
   date: string
   trainee: number
   consumed: Nutrients
   planned: Nutrients | null
   calories_burned: number
+  calories_burned_breakdown: CaloriesBurnedBreakdown
   net_calories: number
+}
+
+export type CaloriesBurnedBreakdown = {
+  /** Basal metabolic rate (Mifflin-St Jeor), or null if the trainee's
+   * profile lacks height/age/a resolvable weight. */
+  bmr: number | null
+  /** Multiplier applied to bmr, picked from that day's step count. */
+  activity_multiplier: number
+  /** bmr x activity_multiplier, or null when bmr is null. */
+  tdee: number | null
+  workout_calories: number
+  activity_calories: number
+  total: number
 }
 
 export type QAThreadStatus = 'open' | 'answered' | 'archived'

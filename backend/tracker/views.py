@@ -1,6 +1,6 @@
 from datetime import date, timedelta
 
-from django.db.models import Q, Sum
+from django.db.models import Q
 from rest_framework import viewsets
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
@@ -15,6 +15,7 @@ from workouts.models import WorkoutSession
 
 from .models import ActivityLog, DailyMetric
 from .serializers import ActivityLogSerializer, DailyMetricSerializer
+from .services import estimate_calories_out
 
 
 def _resolve_trainee(request):
@@ -109,10 +110,11 @@ class DashboardView(APIView):
 
 class DailySummaryView(APIView):
     """Read-side rollup for one date: calories/macros consumed (Diet tab food
-    logs), calories burned (ActivityLog entries - WorkoutSession carries no
-    calorie field in Stage 1, see CLAUDE.md), net balance, and the trainee's
-    diet plan target for a planned-vs-actual comparison. Computed on request,
-    never stored, since the underlying logs can be edited after the fact."""
+    logs), calories burned (an estimated TDEE from the trainee's body stats,
+    plus logged workouts and ActivityLog entries - see tracker/services.py),
+    net balance, and the trainee's diet plan target for a planned-vs-actual
+    comparison. Computed on request, never stored, since the underlying logs
+    can be edited after the fact."""
 
     permission_classes = [IsAuthenticated]
 
@@ -125,12 +127,8 @@ class DailySummaryView(APIView):
         )
         consumed = sum_nutrients([log.actual_nutrients() for log in food_logs])
 
-        calories_burned = (
-            ActivityLog.objects.filter(trainee=trainee, date=target_date).aggregate(total=Sum("calories_burned"))[
-                "total"
-            ]
-            or 0
-        )
+        calories_out = estimate_calories_out(trainee, target_date)
+        calories_burned = calories_out["total"]
         net_calories = (consumed["calories"] or 0) - calories_burned
 
         diet_plan = trainee.diet_plans.first()
@@ -143,6 +141,7 @@ class DailySummaryView(APIView):
                 "consumed": consumed,
                 "planned": planned,
                 "calories_burned": calories_burned,
+                "calories_burned_breakdown": calories_out,
                 "net_calories": net_calories,
             }
         )

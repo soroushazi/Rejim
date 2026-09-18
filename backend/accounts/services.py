@@ -42,3 +42,26 @@ def compute_bmi(user):
     else:
         category = "obese"
     return bmi, category
+
+
+def compute_bmr(user):
+    """Basal metabolic rate in kcal/day via Mifflin-St Jeor, or None if
+    height, age, or a resolvable weight is missing. `Sex.UNSPECIFIED` uses the
+    average of the male/female sex terms (+5 / -161) rather than guessing."""
+    if user.height_cm is None or user.age is None:
+        return None
+    weight_kg = resolve_current_weight_kg(user)
+    if weight_kg is None:
+        return None
+
+    from .models import User
+
+    if user.sex == User.Sex.MALE:
+        sex_term = Decimal("5")
+    elif user.sex == User.Sex.FEMALE:
+        sex_term = Decimal("-161")
+    else:
+        sex_term = Decimal("-78")
+
+    bmr = Decimal("10") * weight_kg + Decimal("6.25") * Decimal(str(user.height_cm)) - Decimal("5") * user.age + sex_term
+    return round(bmr)

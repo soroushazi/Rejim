@@ -1,8 +1,10 @@
+import { Info } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { getDailySummary } from '@/api/dailySummary'
 import type { DailySummary } from '@/api/types'
 import { caloriesStatus, proteinStatus, STATUS_TEXT_CLASS } from '@/lib/dietStatus'
 import { cn, round } from '@/lib/utils'
+import CaloriesOutInfoDialog from './CaloriesOutInfoDialog'
 
 type Props = {
   date: string
@@ -15,6 +17,7 @@ export default function DailySummaryCard({ date, refreshKey }: Props) {
   const [summary, setSummary] = useState<DailySummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [infoOpen, setInfoOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -55,7 +58,17 @@ export default function DailySummaryCard({ date, refreshKey }: Props) {
           {plannedCalories !== null && <span className="text-xs text-muted-foreground">of {round(plannedCalories)}</span>}
         </div>
         <div className="flex flex-col gap-0.5 rounded-lg bg-muted/50 px-2 py-2.5">
-          <span className="text-xs text-muted-foreground">Calories out</span>
+          <span className="flex items-center justify-center gap-0.5 text-xs text-muted-foreground">
+            Calories out
+            <button
+              type="button"
+              className="text-muted-foreground hover:text-foreground"
+              onClick={() => setInfoOpen(true)}
+              aria-label="How is calories out estimated?"
+            >
+              <Info className="size-3.5" />
+            </button>
+          </span>
           <span className="text-lg font-semibold">{round(summary.calories_burned)}</span>
         </div>
         <div className="flex flex-col gap-0.5 rounded-lg bg-muted/50 px-2 py-2.5">
@@ -75,6 +88,7 @@ export default function DailySummaryCard({ date, refreshKey }: Props) {
           F {round(summary.consumed.fat_g ?? 0)}g{summary.planned ? ` / ${round(summary.planned.fat_g ?? 0)}g` : ''}
         </span>
       </div>
+      <CaloriesOutInfoDialog breakdown={summary.calories_burned_breakdown} open={infoOpen} onOpenChange={setInfoOpen} />
     </div>
   )
 }

@@ -20,6 +20,7 @@ export type ProfileUpdate = Partial<
     | 'last_name'
     | 'height_cm'
     | 'age'
+    | 'sex'
     | 'starting_weight'
     | 'starting_weight_unit'
     | 'meal_preferences'

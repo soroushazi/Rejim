@@ -19,6 +19,11 @@ class User(AbstractUser):
         INTERMEDIATE = "intermediate", "Intermediate"
         ADVANCED = "advanced", "Advanced"
 
+    class Sex(models.TextChoices):
+        MALE = "male", "Male"
+        FEMALE = "female", "Female"
+        UNSPECIFIED = "unspecified", "Prefer not to say"
+
     # Independent capability flags - both can be true on the same account
     # (a trainer who is also logging their own training). Replaces the old
     # single `role` field, which could never represent that combination.
@@ -40,6 +45,10 @@ class User(AbstractUser):
     age = models.PositiveSmallIntegerField(null=True, blank=True)
     starting_weight = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
     starting_weight_unit = models.CharField(max_length=2, choices=WeightUnit.choices, default=WeightUnit.KG)
+    # Only used server-side for the Mifflin-St Jeor BMR estimate behind the
+    # Daily Tracker's "calories out" (see tracker/services.py). "Prefer not to
+    # say" falls back to the gender-neutral average of the male/female terms.
+    sex = models.CharField(max_length=11, choices=Sex.choices, default=Sex.UNSPECIFIED)
 
     # Onboarding preferences - captured for future Diet/Workout plan-authoring
     # UI to consume once it's built; not surfaced to trainers yet (see

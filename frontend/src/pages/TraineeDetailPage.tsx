@@ -47,7 +47,7 @@ export default function TraineeDetailPage() {
           <CardTitle>Goals</CardTitle>
         </CardHeader>
         <CardContent>
-          <GoalsSection traineeId={traineeId} canEdit />
+          <GoalsSection traineeId={traineeId} canEdit currentWeightKg={trainee.current_weight_kg} />
         </CardContent>
       </Card>
 

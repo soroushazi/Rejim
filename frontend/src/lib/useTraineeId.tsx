@@ -10,7 +10,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
  * `undefined` while a trainee is viewing their own data, since every
  * trainee-scoped endpoint treats a missing trainee id as "self" for a
  * trainee caller. */
-export function useTraineeId(): { traineeId: number | undefined; picker: React.ReactNode; ready: boolean } {
+export function useTraineeId(): {
+  traineeId: number | undefined
+  /** The selected trainee's full User record (e.g. for current_weight_kg),
+   * or null while viewing as a trainee/none selected yet. */
+  trainee: User | null
+  picker: React.ReactNode
+  ready: boolean
+} {
   const { viewMode } = useAuth()
   const [trainees, setTrainees] = useState<User[] | null>(null)
   const [selected, setSelected] = useState<number | undefined>(undefined)
@@ -26,13 +33,18 @@ export function useTraineeId(): { traineeId: number | undefined; picker: React.R
   }, [viewMode])
 
   if (viewMode !== 'trainer') {
-    return { traineeId: undefined, picker: null, ready: true }
+    return { traineeId: undefined, trainee: null, picker: null, ready: true }
   }
   if (trainees === null) {
-    return { traineeId: undefined, picker: null, ready: false }
+    return { traineeId: undefined, trainee: null, picker: null, ready: false }
   }
   if (trainees.length === 0) {
-    return { traineeId: undefined, picker: <p className="text-sm text-muted-foreground">You have no trainees yet.</p>, ready: false }
+    return {
+      traineeId: undefined,
+      trainee: null,
+      picker: <p className="text-sm text-muted-foreground">You have no trainees yet.</p>,
+      ready: false,
+    }
   }
 
   const picker =
@@ -51,5 +63,6 @@ export function useTraineeId(): { traineeId: number | undefined; picker: React.R
       </Select>
     ) : null
 
-  return { traineeId: selected, picker, ready: selected !== undefined }
+  const trainee = trainees.find((t) => t.id === selected) ?? null
+  return { traineeId: selected, trainee, picker, ready: selected !== undefined }
 }

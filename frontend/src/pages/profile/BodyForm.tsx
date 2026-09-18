@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { updateProfile } from '@/api/accounts'
-import type { WeightUnit } from '@/api/types'
+import type { Sex, WeightUnit } from '@/api/types'
 import { useAuth } from '@/auth/AuthContext'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -25,6 +25,7 @@ export default function BodyForm() {
   const [feet, setFeet] = useState(() => (user?.height_cm ? String(ftInFromCm(Number(user.height_cm)).feet) : ''))
   const [inches, setInches] = useState(() => (user?.height_cm ? String(ftInFromCm(Number(user.height_cm)).inches) : ''))
   const [age, setAge] = useState(user?.age !== null && user?.age !== undefined ? String(user.age) : '')
+  const [sex, setSex] = useState<Sex>(user?.sex ?? 'unspecified')
   const [startingWeight, setStartingWeight] = useState(user?.starting_weight ?? '')
   const [startingWeightUnit, setStartingWeightUnit] = useState<WeightUnit>(user?.starting_weight_unit ?? 'kg')
   const [saving, setSaving] = useState(false)
@@ -55,6 +56,7 @@ export default function BodyForm() {
       await updateProfile({
         height_cm: heightCm.trim() ? heightCm.trim() : null,
         age: age.trim() ? Number(age) : null,
+        sex,
         starting_weight: startingWeight.trim() ? startingWeight.trim() : null,
         starting_weight_unit: startingWeightUnit,
       })
@@ -150,6 +152,31 @@ export default function BodyForm() {
             />
           </div>
           <div className="flex flex-col gap-1">
+            <Label>Sex</Label>
+            <ToggleGroup
+              type="single"
+              value={sex}
+              onValueChange={(v) => {
+                if (!v) return
+                setSex(v as Sex)
+                setSaved(false)
+              }}
+              variant="outline"
+              className="w-full"
+            >
+              <ToggleGroupItem value="male" className="flex-1">
+                Male
+              </ToggleGroupItem>
+              <ToggleGroupItem value="female" className="flex-1">
+                Female
+              </ToggleGroupItem>
+              <ToggleGroupItem value="unspecified" className="flex-1" aria-label="Prefer not to say">
+                N/A
+              </ToggleGroupItem>
+            </ToggleGroup>
+            <p className="text-xs text-muted-foreground">Used only to estimate your daily calories burned.</p>
+          </div>
+          <div className="col-span-2 flex flex-col gap-1">
             <Label htmlFor="body-starting-weight">Starting weight</Label>
             <div className="flex gap-1.5">
               <Input
