@@ -155,24 +155,27 @@ body {
   }
 }
 
-/* Zoomed-chart full-screen overlay (see components/charts/ZoomableChart.tsx).
-   Sits inside a `fixed inset-0` backdrop and fills it as-is in landscape; on a
-   phone in portrait it's rotated 90deg about its own center so a wide chart
-   still gets the long axis, without the user having to physically rotate the
-   device. The close button lives outside this element (a sibling, pinned to
-   the real screen corner) precisely so it never rotates along with this. */
-.chart-zoom-overlay {
-  position: absolute;
-  inset: 0;
+/* Zoomed-chart modal card (see components/charts/ZoomableChart.tsx). Its
+   backdrop centers it with flexbox, so the card itself never needs manual
+   top/left/translate math - rotating a flex item in place still leaves it
+   centered. Sized as a comfortable centered modal (not edge-to-edge) whether
+   or not it ends up rotated. On a phone whose viewport is portrait-shaped -
+   true regardless of a "Portrait Orientation Lock" setting, since that lock
+   just keeps the OS (and therefore the browser viewport) from ever reporting
+   landscape at all - the card is rotated 90deg so a wide chart still gets the
+   long axis, without the user having to physically (or even be able to)
+   rotate the device. The close button lives outside this element (a sibling
+   in the backdrop, pinned to the real screen corner) precisely so it never
+   rotates along with this. */
+.chart-zoom-card {
+  width: min(92vw, 960px);
+  height: min(85vh, 620px);
 }
 
 @media (orientation: portrait) {
-  .chart-zoom-overlay {
-    inset: auto;
-    top: 50%;
-    left: 50%;
-    width: 100dvh;
-    height: 100dvw;
-    transform: translate(-50%, -50%) rotate(90deg);
+  .chart-zoom-card {
+    width: calc(100dvh - 3rem);
+    height: calc(100dvw - 3rem);
+    transform: rotate(90deg);
   }
 }

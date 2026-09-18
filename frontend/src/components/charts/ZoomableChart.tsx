@@ -4,13 +4,17 @@ import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 
 /** Wraps a chart (any of the hand-rolled inline-SVG charts under pages/**)
- * with a zoom button right in front of its own title, plus tap-to-zoom on the
- * figure itself. Zooming opens the same chart full-screen; on a phone held in
- * portrait (the common case for this PWA) the chart itself is rotated into
- * landscape via `.chart-zoom-overlay`'s CSS (see index.css) so the wide chart
- * gets the phone's long axis without physically rotating it - the close
- * button stays outside that rotated box, pinned to the real screen corner, so
- * it's reachable (and upright) no matter which way the content is rotated.
+ * with a zoom button on the far right of its own title row, plus tap-to-zoom
+ * on the figure itself. Zooming opens the chart in a centered modal card (not
+ * edge-to-edge - a full-bleed overlay reads as clumsy on a small screen); on
+ * a phone (whose viewport is portrait-shaped regardless of a physical
+ * "Portrait Orientation Lock" setting - that lock keeps the OS from ever
+ * reporting landscape at all) the card is rotated into landscape via
+ * `.chart-zoom-card`'s CSS (see index.css), so the wide chart still gets the
+ * phone's long axis without the device needing to (or being able to)
+ * physically rotate. The close button lives outside that rotated card,
+ * pinned to the real screen corner, so it's reachable (and upright) no
+ * matter which way the card is rotated.
  * Wrap a chart's own top-level return value with this (not its call site) so
  * the chart's internal state (series toggles, selected day, ...) belongs to
  * one component instance regardless of where its output gets portaled. */
@@ -34,7 +38,10 @@ export default function ZoomableChart({
 
   if (zoomed) {
     return createPortal(
-      <div className="fixed inset-0 z-50 bg-background">
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6 backdrop-blur-sm"
+        onClick={() => setZoomed(false)}
+      >
         <button
           type="button"
           onClick={() => setZoomed(false)}
@@ -47,7 +54,10 @@ export default function ZoomableChart({
         >
           <X className="size-4" />
         </button>
-        <div className="chart-zoom-overlay flex flex-col justify-center gap-3 overflow-auto p-4">
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="chart-zoom-card flex flex-col justify-center gap-3 overflow-auto rounded-xl bg-popover p-4 text-popover-foreground shadow-lg ring-1 ring-foreground/10"
+        >
           {title && <span className="font-heading text-base font-medium">{title}</span>}
           {children}
         </div>
@@ -58,16 +68,16 @@ export default function ZoomableChart({
 
   return (
     <div className={cn('flex flex-col gap-2', className)}>
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-2">
+        {title && <span className="font-heading text-base font-medium">{title}</span>}
         <button
           type="button"
           onClick={() => setZoomed(true)}
           aria-label="Zoom in on this chart"
-          className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
+          className="ml-auto flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
         >
           <Maximize2 className="size-3.5" />
         </button>
-        {title && <span className="font-heading text-base font-medium">{title}</span>}
       </div>
       <div onClick={handleFigureClick} className="cursor-zoom-in">
         {children}
