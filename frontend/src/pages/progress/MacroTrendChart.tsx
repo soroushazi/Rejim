@@ -1,5 +1,5 @@
 import { X } from 'lucide-react'
-import { useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useState } from 'react'
 import type { Nutrients } from '@/api/types'
 import ZoomableChart, { ChartEmptyState } from '@/components/charts/ZoomableChart'
 import { cn } from '@/lib/utils'
@@ -79,13 +79,6 @@ export default function MacroTrendChart({ days, target, hoverIndex, onHoverChang
   const maxValue = Math.max(100, ...series.flatMap((s) => (visible[s.key] ? s.points.map((p) => p.value ?? 0) : [])))
   const { niceMax, ticks } = computeYAxis(maxValue)
 
-  function handlePointer(e: ReactPointerEvent<SVGRectElement>) {
-    const rect = e.currentTarget.getBoundingClientRect()
-    const ratio = (e.clientX - rect.left) / rect.width
-    const index = Math.round(ratio * (n - 1))
-    onHoverChange(Math.min(n - 1, Math.max(0, index)))
-  }
-
   const labelStep = Math.max(1, Math.ceil(n / 5))
   const dateLabelIndices = new Set(days.map((_, i) => i).filter((i) => i === 0 || i === n - 1 || i % labelStep === 0))
 
@@ -106,6 +99,7 @@ export default function MacroTrendChart({ days, target, hoverIndex, onHoverChang
         const PAD = padFor(zoomed)
         const PLOT_W = W - PAD.left - PAD.right
         const PLOT_H = H - PAD.top - PAD.bottom
+        const hitSlot = n > 1 ? PLOT_W / (n - 1) : PLOT_W
 
         function x(i: number) {
           return n <= 1 ? PAD.left + PLOT_W / 2 : PAD.left + (i / (n - 1)) * PLOT_W
@@ -215,16 +209,18 @@ export default function MacroTrendChart({ days, target, hoverIndex, onHoverChang
                 </g>
               )}
 
-              <rect
-                x={PAD.left}
-                y={PAD.top}
-                width={PLOT_W}
-                height={PLOT_H}
-                fill="transparent"
-                onPointerMove={handlePointer}
-                onPointerDown={handlePointer}
-                onPointerLeave={() => onHoverChange(null)}
-              />
+              {days.map((d, i) => (
+                <rect
+                  key={`hit-${d.date}`}
+                  x={x(i) - hitSlot / 2}
+                  y={PAD.top}
+                  width={hitSlot}
+                  height={PLOT_H}
+                  fill="transparent"
+                  className="cursor-pointer"
+                  onClick={() => onHoverChange(hoverIndex === i ? null : i)}
+                />
+              ))}
             </svg>
 
             {hoverIndex !== null && (
