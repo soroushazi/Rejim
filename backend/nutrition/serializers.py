@@ -28,7 +28,7 @@ class MacroFilterSerializer(serializers.ModelSerializer):
 class DietaryTagSerializer(serializers.ModelSerializer):
     class Meta:
         model = DietaryTag
-        fields = ["id", "name"]
+        fields = ["id", "name", "description"]
 
 
 class FoodItemComponentSerializer(serializers.ModelSerializer):
@@ -407,15 +407,31 @@ class FoodLogSerializer(serializers.ModelSerializer):
 
 class LoggedMealItemSerializer(serializers.ModelSerializer):
     """One ingredient row within a LoggedMeal - backed by FoodLog (same row type
-    used for ad hoc logging), scoped here via FoodLog.logged_meal."""
+    used for ad hoc logging), scoped here via FoodLog.logged_meal. A LoggedMeal's
+    items may freely mix all three sources (e.g. eggs from the plan, an apple
+    swapped in from the Food Bank) - see LoggedMealSerializer._upsert, which
+    derives the parent meal's overall `source` from this mix rather than
+    requiring the client to pre-classify it."""
 
     food_item_name = serializers.SerializerMethodField()
     actual_nutrients = serializers.SerializerMethodField()
 
     class Meta:
         model = FoodLog
-        fields = ["id", "reference_meal_item", "food_item", "food_item_name", "actual_weight_grams", "actual_nutrients"]
-        extra_kwargs = {"reference_meal_item": {"required": False}, "food_item": {"required": False}}
+        fields = [
+            "id",
+            "reference_meal_item",
+            "food_item",
+            "quick_log_item",
+            "food_item_name",
+            "actual_weight_grams",
+            "actual_nutrients",
+        ]
+        extra_kwargs = {
+            "reference_meal_item": {"required": False},
+            "food_item": {"required": False},
+            "quick_log_item": {"required": False},
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -425,12 +441,25 @@ class LoggedMealItemSerializer(serializers.ModelSerializer):
                 option__meal__diet_plan__trainee=request.user
             )
             self.fields["food_item"].queryset = FoodItem.visible_to(request.user)
+            self.fields["quick_log_item"].queryset = QuickLogItem.objects.filter(trainee=request.user)
+
+    def validate(self, attrs):
+        linked = [attrs.get("reference_meal_item"), attrs.get("food_item"), attrs.get("quick_log_item")]
+        if sum(bool(x) for x in linked) != 1:
+            raise serializers.ValidationError(
+                "Exactly one of reference_meal_item, food_item, or quick_log_item must be set."
+            )
+        if attrs.get("quick_log_item") is None and attrs.get("actual_weight_grams") is None:
+            raise serializers.ValidationError("actual_weight_grams is required unless logging a quick-log item.")
+        return attrs
 
     def get_food_item_name(self, obj):
         if obj.food_item_id:
             return obj.food_item.name
         if obj.reference_meal_item_id:
             return obj.reference_meal_item.food_item.name
+        if obj.quick_log_item_id:
+            return obj.quick_log_item.name
         return ""
 
     def get_actual_nutrients(self, obj):
@@ -456,7 +485,10 @@ class LoggedMealSerializer(serializers.ModelSerializer):
             "items",
             "total_nutrients",
         ]
-        read_only_fields = ["trainee"]
+        # source is derived from the items' own sources (see _upsert), not
+        # client-supplied - a meal mixing plan and off-plan items no longer
+        # needs the client to pre-decide a single label for the whole thing.
+        read_only_fields = ["trainee", "source"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -478,21 +510,11 @@ class LoggedMealSerializer(serializers.ModelSerializer):
         if not items:
             raise serializers.ValidationError("At least one item is required.")
 
-        source = attrs.get("source", getattr(self.instance, "source", None))
         reference_meal = attrs.get("reference_meal", getattr(self.instance, "reference_meal", None))
-
-        if source == LoggedMeal.Source.PLAN:
-            if any(item.get("food_item") for item in items):
-                raise serializers.ValidationError("Plan-sourced items must reference a plan item, not a food item.")
-            if any(not item.get("reference_meal_item") for item in items):
-                raise serializers.ValidationError("Every plan-sourced item needs a reference_meal_item.")
-            if any(item["reference_meal_item"].option.meal_id != reference_meal.id for item in items):
-                raise serializers.ValidationError("Every item must belong to the meal being logged.")
-        else:
-            if any(item.get("reference_meal_item") for item in items):
-                raise serializers.ValidationError("Custom items must not reference a plan item.")
-            if any(not item.get("food_item") for item in items):
-                raise serializers.ValidationError("Every custom item needs a food_item.")
+        for item in items:
+            rmi = item.get("reference_meal_item")
+            if rmi and rmi.option.meal_id != reference_meal.id:
+                raise serializers.ValidationError("Every plan item must belong to the meal being logged.")
         return attrs
 
     def create(self, validated_data):
@@ -501,23 +523,42 @@ class LoggedMealSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         return self._upsert(validated_data)
 
+    @staticmethod
+    def _item_source(item):
+        if item.get("reference_meal_item"):
+            return FoodLog.Source.PLAN
+        if item.get("quick_log_item"):
+            return FoodLog.Source.QUICK
+        return FoodLog.Source.FOOD_ITEM
+
     def _upsert(self, validated_data):
         items_data = validated_data.pop("items")
+        validated_data.pop("source", None)
         user = self.context["request"].user
+
+        item_sources = {self._item_source(item) for item in items_data}
+        if item_sources == {FoodLog.Source.PLAN}:
+            meal_source = LoggedMeal.Source.PLAN
+        elif FoodLog.Source.PLAN in item_sources:
+            meal_source = LoggedMeal.Source.MIXED
+        else:
+            meal_source = LoggedMeal.Source.CUSTOM
+
         logged_meal, _ = LoggedMeal.objects.update_or_create(
             trainee=user,
             reference_meal=validated_data["reference_meal"],
             date=validated_data["date"],
-            defaults={"source": validated_data["source"]},
+            defaults={"source": meal_source},
         )
         logged_meal.items.all().delete()
         for item in items_data:
             FoodLog.objects.create(
                 trainee=user,
                 logged_meal=logged_meal,
-                source=FoodLog.Source.PLAN if item.get("reference_meal_item") else FoodLog.Source.FOOD_ITEM,
+                source=self._item_source(item),
                 reference_meal_item=item.get("reference_meal_item"),
                 food_item=item.get("food_item"),
-                actual_weight_grams=item["actual_weight_grams"],
+                quick_log_item=item.get("quick_log_item"),
+                actual_weight_grams=item.get("actual_weight_grams"),
             )
         return logged_meal

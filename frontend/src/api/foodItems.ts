@@ -83,3 +83,13 @@ export function listMacroFilters(): Promise<MacroFilter[]> {
 export function listDietaryTags(): Promise<DietaryTag[]> {
   return apiFetch<DietaryTag[]>('/nutrition/dietary-tags/')
 }
+
+/** Open to any authenticated user (trainer or trainee) - see
+ * nutrition.views.DietaryTagViewSet. Lets someone add a diet type that isn't
+ * in the seeded vocabulary yet, e.g. from the onboarding Preferences step. */
+export function createDietaryTag(data: { name: string; description?: string }): Promise<DietaryTag> {
+  return apiFetch<DietaryTag>('/nutrition/dietary-tags/', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}

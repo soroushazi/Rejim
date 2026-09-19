@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getProgressTrainingVolume } from '@/api/progress'
-import type { ProgressTrainingVolumeWeek, WorkoutSessionLog } from '@/api/types'
+import type { ProgressTrainingVolumeWeek, User, WorkoutSessionLog } from '@/api/types'
 import { listWorkoutSessions } from '@/api/workoutSessions'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import SessionHistoryCard from '../workout/SessionHistoryCard'
@@ -10,9 +10,11 @@ import TrainingVolumeChart from './TrainingVolumeChart'
 type Props = {
   range: { start: string; end: string }
   traineeId?: number
+  /** The trainee being viewed, when in trainer view mode - see usePreferredWeightUnit. */
+  trainee?: User | null
 }
 
-export default function TrainingDashboard({ range, traineeId }: Props) {
+export default function TrainingDashboard({ range, traineeId, trainee }: Props) {
   const [weeks, setWeeks] = useState<ProgressTrainingVolumeWeek[]>([])
   const [loading, setLoading] = useState(true)
   const [sessions, setSessions] = useState<WorkoutSessionLog[]>([])
@@ -63,7 +65,11 @@ export default function TrainingDashboard({ range, traineeId }: Props) {
           <CardTitle>Volume &amp; frequency</CardTitle>
         </CardHeader>
         <CardContent>
-          {loading ? <p className="text-sm text-muted-foreground">Loading…</p> : <TrainingVolumeChart weeks={weeks} />}
+          {loading ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : (
+            <TrainingVolumeChart weeks={weeks} trainee={trainee} />
+          )}
         </CardContent>
       </Card>
     </div>

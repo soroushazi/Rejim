@@ -43,10 +43,6 @@ export default function LogDayCard({ date, isToday, meals, target }: Props) {
     }
   }, [expanded, date, loggedMeals])
 
-  function handleSaved(updated: LoggedMeal) {
-    setLoggedMeals((prev) => [...(prev ?? []).filter((m) => m.reference_meal !== updated.reference_meal), updated])
-  }
-
   function handleCleared(referenceMealId: number) {
     setLoggedMeals((prev) => (prev ?? []).filter((m) => m.reference_meal !== referenceMealId))
   }
@@ -99,7 +95,6 @@ export default function LogDayCard({ date, isToday, meals, target }: Props) {
                   meal={meal}
                   date={date}
                   loggedMeal={loggedMeals?.find((m) => m.reference_meal === meal.id) ?? null}
-                  onSaved={handleSaved}
                   onCleared={handleCleared}
                 />
               ))}

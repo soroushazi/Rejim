@@ -2,7 +2,7 @@ import { Camera, Dumbbell, Flame, Moon, Utensils } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { listGoals } from '@/api/goals'
 import { getProgressOverview } from '@/api/progress'
-import type { ProgressOverviewDay } from '@/api/types'
+import type { ProgressOverviewDay, User } from '@/api/types'
 import { Card, CardContent } from '@/components/ui/card'
 import { ChartEmptyState } from '@/components/charts/ZoomableChart'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -27,9 +27,12 @@ const SECTIONS = [
 
 /** The dashboard body extracted from ProgressPage so TraineeDetailPage's
  * Progress tab can render it directly with an already-known traineeId, with
- * no trainee-picker involved - ProgressPage wraps this with useTraineeId(). */
-export default function ProgressDashboard({ traineeId }: { traineeId?: number }) {
-  const [preset, setPreset] = useState<RangePreset>('month')
+ * no trainee-picker involved - ProgressPage wraps this with useTraineeId().
+ * `trainee` (the full User record) is only needed to resolve which unit a
+ * trainer viewing this trainee's weights should see them in - see
+ * usePreferredWeightUnit. */
+export default function ProgressDashboard({ traineeId, trainee }: { traineeId?: number; trainee?: User | null }) {
+  const [preset, setPreset] = useState<RangePreset>('7d')
   const [customStart, setCustomStart] = useState(() => resolvePreset('7d', '', '').start)
   const [customEnd, setCustomEnd] = useState(() => toDateKey(new Date()))
   const [overviewDays, setOverviewDays] = useState<ProgressOverviewDay[]>([])
@@ -104,7 +107,7 @@ export default function ProgressDashboard({ traineeId }: { traineeId?: number })
           {overviewLoading ? (
             <ChartEmptyState title="Overview" message="Loading…" />
           ) : (
-            <OverviewChart days={overviewDays} weightGoalKg={weightGoalKg} />
+            <OverviewChart days={overviewDays} weightGoalKg={weightGoalKg} trainee={trainee} />
           )}
         </CardContent>
       </Card>
@@ -140,7 +143,7 @@ export default function ProgressDashboard({ traineeId }: { traineeId?: number })
               enough for the tab bar above to actually reach its pinned spot. */}
           <div className="min-h-[calc(100dvh-var(--header-height)-env(safe-area-inset-top))]">
             <TabsContent value="training" className="mt-3">
-              <TrainingDashboard range={range} traineeId={traineeId} />
+              <TrainingDashboard range={range} traineeId={traineeId} trainee={trainee} />
             </TabsContent>
             <TabsContent value="nutrition" className="mt-3">
               <NutritionDashboard range={range} traineeId={traineeId} />

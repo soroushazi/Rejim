@@ -26,11 +26,15 @@ class MacroFilter(models.Model):
 
 
 class DietaryTag(models.Model):
-    """Fixed dietary-restriction taxonomy (vegan, keto, gluten-free, ...).
-    Seeded by seed_food_filters_and_tags; shared reference data like MuscleGroup,
-    editable by any trainer."""
+    """Dietary-restriction taxonomy (vegan, keto, gluten-free, ...). Seeded
+    with a starting vocabulary by seed_food_filters_and_tags, but - unlike
+    MacroFilter - open-ended: shared reference data editable by any
+    authenticated user (trainer or trainee), since a trainee choosing an
+    unlisted diet in onboarding's Preferences step needs to be able to add it
+    themselves rather than being blocked pending a trainer."""
 
     name = models.CharField(max_length=50, unique=True)
+    description = models.CharField(max_length=200, blank=True, default="")
 
     class Meta:
         ordering = ["name"]
@@ -316,6 +320,7 @@ class LoggedMeal(models.Model):
     class Source(models.TextChoices):
         PLAN = "plan", "From plan"
         CUSTOM = "custom", "Custom (off plan)"
+        MIXED = "mixed", "Mixed (plan + off plan)"
 
     trainee = models.ForeignKey(
         settings.AUTH_USER_MODEL,

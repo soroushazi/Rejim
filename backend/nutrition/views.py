@@ -48,9 +48,11 @@ class MacroFilterViewSet(viewsets.ModelViewSet):
 
 
 class DietaryTagViewSet(viewsets.ModelViewSet):
+    """Open write access (default IsAuthenticated, same as MuscleGroup) - see
+    DietaryTag's docstring for why this differs from MacroFilter above."""
+
     queryset = DietaryTag.objects.all()
     serializer_class = DietaryTagSerializer
-    permission_classes = [IsTrainerWriteTraineeReadOnly]
 
 
 class FoodItemViewSet(viewsets.ModelViewSet):

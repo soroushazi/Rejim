@@ -1,8 +1,10 @@
 import { X } from 'lucide-react'
 import { useState } from 'react'
-import type { ProgressOverviewDay } from '@/api/types'
+import type { ProgressOverviewDay, User, WeightUnit } from '@/api/types'
 import ZoomableChart, { ChartEmptyState } from '@/components/charts/ZoomableChart'
 import { cn } from '@/lib/utils'
+import { fromKg } from '@/lib/weightUnits'
+import { usePreferredWeightUnit } from '@/lib/usePreferredWeightUnit'
 
 type SeriesKey = 'weight' | 'netCalories' | 'sleepHours' | 'steps' | 'water'
 
@@ -20,12 +22,18 @@ const PAD_BOTTOM = 22
 const LEFT_ORDER: SeriesKey[] = ['weight', 'sleepHours', 'water']
 const RIGHT_ORDER: SeriesKey[] = ['netCalories', 'steps']
 
+// weight's unit depends on the viewer's preference (kg/lb), resolved at
+// render time - see seriesUnit below.
 const SERIES: Record<SeriesKey, { label: string; unit: string; cssVar: string }> = {
-  weight: { label: 'Weight', unit: 'kg', cssVar: '--chart-1' },
+  weight: { label: 'Weight', unit: '', cssVar: '--chart-1' },
   netCalories: { label: 'Net calories', unit: 'kcal', cssVar: '--chart-2' },
   sleepHours: { label: 'Sleep', unit: 'hr', cssVar: '--chart-3' },
   steps: { label: 'Steps', unit: '', cssVar: '--chart-4' },
   water: { label: 'Water', unit: 'ml', cssVar: '--chart-5' },
+}
+
+function seriesUnit(key: SeriesKey, weightUnit: WeightUnit) {
+  return key === 'weight' ? weightUnit : SERIES[key].unit
 }
 
 function niceStep(rawStep: number) {
@@ -56,8 +64,8 @@ function formatDateFull(date: string) {
   return new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
-function formatSeriesValue(key: SeriesKey, value: number) {
-  const unit = SERIES[key].unit
+function formatSeriesValue(key: SeriesKey, value: number, weightUnit: WeightUnit) {
+  const unit = seriesUnit(key, weightUnit)
   const rounded = Math.round(value * 10) / 10
   return unit ? `${rounded} ${unit}` : `${rounded}`
 }
@@ -74,7 +82,16 @@ function movingAverage(values: (number | null)[], windowSize: number): (number |
   })
 }
 
-export default function OverviewChart({ days, weightGoalKg }: { days: ProgressOverviewDay[]; weightGoalKg?: number }) {
+export default function OverviewChart({
+  days,
+  weightGoalKg,
+  trainee,
+}: {
+  days: ProgressOverviewDay[]
+  weightGoalKg?: number
+  /** The trainee being viewed, when in trainer view mode - see usePreferredWeightUnit. */
+  trainee?: User | null
+}) {
   const [visible, setVisible] = useState<Record<SeriesKey, boolean>>({
     weight: true,
     netCalories: true,
@@ -86,6 +103,7 @@ export default function OverviewChart({ days, weightGoalKg }: { days: ProgressOv
   // underlying data changes (different range) instead of pointing at a
   // now-unrelated day - same idiom as ExerciseHistoryChart's selectedDate.
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const weightUnit = usePreferredWeightUnit(trainee)
 
   const n = days.length
   if (n === 0) {
@@ -93,13 +111,14 @@ export default function OverviewChart({ days, weightGoalKg }: { days: ProgressOv
   }
 
   const rawValues: Record<SeriesKey, (number | null)[]> = {
-    weight: days.map((d) => d.weight_kg),
+    weight: days.map((d) => (d.weight_kg !== null ? fromKg(d.weight_kg, weightUnit) : null)),
     netCalories: days.map((d) => d.net_calories),
     sleepHours: days.map((d) => d.sleep_hours),
     steps: days.map((d) => d.steps),
     water: days.map((d) => d.water_intake_ml),
   }
   const weightMA = movingAverage(rawValues.weight, 7)
+  const weightGoal = weightGoalKg !== undefined ? fromKg(weightGoalKg, weightUnit) : undefined
 
   const leftVisible = LEFT_ORDER.filter((k) => visible[k])
   const rightVisible = RIGHT_ORDER.filter((k) => visible[k])
@@ -117,7 +136,7 @@ export default function OverviewChart({ days, weightGoalKg }: { days: ProgressOv
       const values = rawValues[key].filter((v): v is number => v !== null)
       // Fold the weight goal into the axis's own input so the dashed target
       // line never clips off-chart, same idiom as the strength chart's goal line.
-      if (key === 'weight' && weightGoalKg !== undefined) values.push(weightGoalKg)
+      if (key === 'weight' && weightGoal !== undefined) values.push(weightGoal)
       acc[key] = computeAxis(values)
       return acc
     },
@@ -181,7 +200,7 @@ export default function OverviewChart({ days, weightGoalKg }: { days: ProgressOv
                   )}
                 >
                   <span className="size-2 rounded-full" style={{ backgroundColor: `var(${SERIES[key].cssVar})` }} aria-hidden="true" />
-                  {SERIES[key].label}
+                  {key === 'weight' ? `${SERIES[key].label} (${weightUnit})` : SERIES[key].label}
                 </button>
               ))}
             </div>
@@ -227,18 +246,18 @@ export default function OverviewChart({ days, weightGoalKg }: { days: ProgressOv
                   <path d={pathFor('weight', weightMA)} fill="none" stroke="var(--chart-1)" strokeWidth={thickStroke} strokeLinecap="round" strokeLinejoin="round" />
                 </g>
               )}
-              {visible.weight && weightGoalKg !== undefined && (
+              {visible.weight && weightGoal !== undefined && (
                 <g>
                   <line
                     x1={padLeft}
                     x2={W - padRight}
-                    y1={y('weight', weightGoalKg)}
-                    y2={y('weight', weightGoalKg)}
+                    y1={y('weight', weightGoal)}
+                    y2={y('weight', weightGoal)}
                     stroke="var(--status-good)"
                     strokeWidth={thinStroke}
                     strokeDasharray="4 3"
                   />
-                  <text x={W - padRight - 4} y={y('weight', weightGoalKg) - 4} textAnchor="end" fontSize={goalFontSize} fill="var(--status-good)">
+                  <text x={W - padRight - 4} y={y('weight', weightGoal) - 4} textAnchor="end" fontSize={goalFontSize} fill="var(--status-good)">
                     Goal
                   </text>
                 </g>
@@ -329,7 +348,7 @@ export default function OverviewChart({ days, weightGoalKg }: { days: ProgressOv
                     <div key={key} className="flex items-center gap-1.5 whitespace-nowrap">
                       <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: `var(${SERIES[key].cssVar})` }} aria-hidden="true" />
                       <span className="text-muted-foreground">{SERIES[key].label}:</span>
-                      <span className="font-medium">{formatSeriesValue(key, value)}</span>
+                      <span className="font-medium">{formatSeriesValue(key, value, weightUnit)}</span>
                     </div>
                   )
                 })}

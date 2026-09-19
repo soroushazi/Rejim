@@ -20,19 +20,20 @@ MACRO_FILTERS = [
     "Dairy",
 ]
 
-DIETARY_TAGS = [
-    "Vegan",
-    "Vegetarian",
-    "Pescatarian",
-    "Gluten-Free",
-    "Dairy-Free",
-    "Keto",
-    "Low-Carb",
-    "High-Protein",
-    "Paleo",
-    "Nut-Free",
-    "Soy-Free",
-]
+DIETARY_TAGS = {
+    "Vegan": "No animal products at all - meat, dairy, eggs, or honey.",
+    "Vegetarian": "No meat or fish, but dairy and eggs are fine.",
+    "Pescatarian": "Vegetarian, plus fish and seafood.",
+    "Gluten-Free": "No wheat, barley, rye, or other gluten-containing grains.",
+    "Dairy-Free": "No milk, cheese, yogurt, or other dairy.",
+    "Keto": "Very low-carb, high-fat - typically under ~50g of carbs a day.",
+    "Low-Carb": "Reduced carbs, less strict than keto.",
+    "High-Protein": "Prioritizes protein-dense foods.",
+    "Paleo": "Whole foods only - no grains, dairy, or processed sugar.",
+    "Nut-Free": "No tree nuts or peanuts.",
+    "Soy-Free": "No soy or soy-derived ingredients.",
+    "Carnivore": "Animal products only - meat, fish, and eggs, no plant foods.",
+}
 
 # Keyword groups used to classify existing FoodItems by name. Deliberately
 # specific (e.g. "sirloin"/"flank" rather than bare "steak") to avoid
@@ -152,7 +153,17 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         macro_filters = {name: MacroFilter.objects.get_or_create(name=name)[0] for name in MACRO_FILTERS}
-        dietary_tags = {name: DietaryTag.objects.get_or_create(name=name)[0] for name in DIETARY_TAGS}
+
+        dietary_tags = {}
+        for name, description in DIETARY_TAGS.items():
+            tag, _ = DietaryTag.objects.get_or_create(name=name, defaults={"description": description})
+            if not tag.description:
+                # Backfills a description onto a tag seeded before this field
+                # existed - never overwrites one a user wrote for a tag they
+                # added themselves via the API.
+                tag.description = description
+                tag.save(update_fields=["description"])
+            dietary_tags[name] = tag
 
         classified = 0
         for item in FoodItem.objects.all():

@@ -8,6 +8,7 @@ class UserSerializer(serializers.ModelSerializer):
     bmi = serializers.SerializerMethodField()
     bmi_category = serializers.SerializerMethodField()
     current_weight_kg = serializers.SerializerMethodField()
+    default_weight_unit = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -26,6 +27,7 @@ class UserSerializer(serializers.ModelSerializer):
             "starting_weight",
             "starting_weight_unit",
             "current_weight_kg",
+            "default_weight_unit",
             "meal_preferences",
             "meal_preferences_notes",
             "workout_days_per_week",
@@ -55,6 +57,12 @@ class UserSerializer(serializers.ModelSerializer):
         from .services import resolve_current_weight_kg
 
         return resolve_current_weight_kg(obj)
+
+    def get_default_weight_unit(self, obj):
+        from usersettings.models import UserPreference
+
+        pref = getattr(obj, "preference", None)
+        return pref.default_weight_unit if pref else UserPreference.WeightUnit.KG
 
 
 class SignupSerializer(serializers.ModelSerializer):

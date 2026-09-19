@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { updateProfile } from '@/api/accounts'
-import { listDietaryTags } from '@/api/foodItems'
+import { ApiError } from '@/api/client'
+import { createDietaryTag, listDietaryTags } from '@/api/foodItems'
 import type { DietaryTag, ExperienceLevel, GymLocation } from '@/api/types'
 import { useAuth } from '@/auth/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -48,11 +50,39 @@ export default function PreferencesForm() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
+  const [newTagDraft, setNewTagDraft] = useState<{ name: string; description: string } | null>(null)
+  const [creatingTag, setCreatingTag] = useState(false)
+  const [newTagError, setNewTagError] = useState<string | null>(null)
+
   useEffect(() => {
     listDietaryTags()
       .then(setDietaryTags)
       .catch(() => setDietaryTags([]))
   }, [])
+
+  async function handleCreateTag() {
+    if (!newTagDraft || !newTagDraft.name.trim()) return
+    setCreatingTag(true)
+    setNewTagError(null)
+    try {
+      const created = await createDietaryTag({
+        name: newTagDraft.name.trim(),
+        description: newTagDraft.description.trim(),
+      })
+      setDietaryTags((prev) => [...prev, created])
+      setMealPreferences((prev) => [...prev, String(created.id)])
+      setSaved(false)
+      setNewTagDraft(null)
+    } catch (err) {
+      setNewTagError(
+        err instanceof ApiError && err.status === 400
+          ? 'That tag already exists - search for it above instead.'
+          : 'Could not add this tag.',
+      )
+    } finally {
+      setCreatingTag(false)
+    }
+  }
 
   async function handleSave() {
     setSaving(true)
@@ -90,6 +120,7 @@ export default function PreferencesForm() {
               setSaved(false)
             }}
             searchable
+            onCreateNew={(query) => setNewTagDraft({ name: query, description: '' })}
           />
           <Textarea
             placeholder="Anything else your trainer should know (allergies, dislikes, etc.)"
@@ -207,6 +238,48 @@ export default function PreferencesForm() {
           {saved && <span className="text-sm text-muted-foreground">Saved</span>}
         </div>
       </CardContent>
+
+      <Dialog open={newTagDraft !== null} onOpenChange={(open) => !open && setNewTagDraft(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Add a dietary tag</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="new-tag-name" className="text-xs font-normal text-muted-foreground">
+                Name
+              </Label>
+              <Input
+                id="new-tag-name"
+                value={newTagDraft?.name ?? ''}
+                onChange={(e) => setNewTagDraft((prev) => (prev ? { ...prev, name: e.target.value } : prev))}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="new-tag-description" className="text-xs font-normal text-muted-foreground">
+                Description (optional)
+              </Label>
+              <Textarea
+                id="new-tag-description"
+                placeholder="What does this diet mean, for anyone else who sees it?"
+                value={newTagDraft?.description ?? ''}
+                onChange={(e) => setNewTagDraft((prev) => (prev ? { ...prev, description: e.target.value } : prev))}
+              />
+            </div>
+            {newTagError && <p className="text-sm text-destructive">{newTagError}</p>}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              size="sm"
+              disabled={creatingTag || !newTagDraft?.name.trim()}
+              onClick={handleCreateTag}
+            >
+              {creatingTag ? 'Adding…' : 'Add tag'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }

@@ -1,16 +1,17 @@
 import { useRef, useState } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 
-type Option = { id: number; name: string }
+type Option = { id: number; name: string; description?: string }
 
 type MultiSelectDropdownProps = {
   label: string
@@ -20,6 +21,11 @@ type MultiSelectDropdownProps = {
   className?: string
   /** Adds a search box at the top of the dropdown to filter long option lists. */
   searchable?: boolean
+  /** When set, a search with no matches offers `Add "<query>"` instead of
+   * the plain "No matches." message - the caller owns what happens next
+   * (typically opening a small dialog to also capture a description before
+   * creating the option). Only takes effect with `searchable`. */
+  onCreateNew?: (query: string) => void
 }
 
 export default function MultiSelectDropdown({
@@ -29,6 +35,7 @@ export default function MultiSelectDropdown({
   onChange,
   className,
   searchable,
+  onCreateNew,
 }: MultiSelectDropdownProps) {
   const [query, setQuery] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
@@ -74,7 +81,14 @@ export default function MultiSelectDropdown({
           </div>
         )}
         {searchable && filtered.length === 0 && (
-          <p className="px-2 py-1.5 text-xs text-muted-foreground">No matches.</p>
+          query.trim() && onCreateNew ? (
+            <DropdownMenuItem onSelect={() => onCreateNew(query.trim())}>
+              <Plus className="size-3.5" />
+              Add "{query.trim()}"
+            </DropdownMenuItem>
+          ) : (
+            <p className="px-2 py-1.5 text-xs text-muted-foreground">No matches.</p>
+          )
         )}
         {filtered.map((opt) => (
           <DropdownMenuCheckboxItem
@@ -83,7 +97,12 @@ export default function MultiSelectDropdown({
             onSelect={(e) => e.preventDefault()}
             onCheckedChange={() => toggle(String(opt.id))}
           >
-            {opt.name}
+            <div className="flex flex-col">
+              <span>{opt.name}</span>
+              {opt.description && (
+                <span className="text-xs font-normal text-muted-foreground">{opt.description}</span>
+              )}
+            </div>
           </DropdownMenuCheckboxItem>
         ))}
       </DropdownMenuContent>

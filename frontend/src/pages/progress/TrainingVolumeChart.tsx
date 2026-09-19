@@ -1,8 +1,10 @@
 import { X } from 'lucide-react'
 import { useState } from 'react'
-import type { ProgressTrainingVolumeWeek } from '@/api/types'
+import type { ProgressTrainingVolumeWeek, User } from '@/api/types'
 import ZoomableChart, { ChartEmptyState } from '@/components/charts/ZoomableChart'
 import { cn } from '@/lib/utils'
+import { fromKg } from '@/lib/weightUnits'
+import { usePreferredWeightUnit } from '@/lib/usePreferredWeightUnit'
 
 const W = 600
 const H = 160
@@ -155,15 +157,23 @@ function Bars({ weeks, valueOf, cssVar, formatValue, title }: {
   )
 }
 
-export default function TrainingVolumeChart({ weeks }: { weeks: ProgressTrainingVolumeWeek[] }) {
+export default function TrainingVolumeChart({
+  weeks,
+  trainee,
+}: {
+  weeks: ProgressTrainingVolumeWeek[]
+  /** The trainee being viewed, when in trainer view mode - see usePreferredWeightUnit. */
+  trainee?: User | null
+}) {
+  const weightUnit = usePreferredWeightUnit(trainee)
   return (
     <div className="flex flex-col gap-5">
       <Bars
         weeks={weeks}
-        valueOf={(w) => w.total_volume_kg}
+        valueOf={(w) => fromKg(w.total_volume_kg, weightUnit)}
         cssVar="--chart-1"
-        formatValue={(v) => `${Math.round(v).toLocaleString()} kg`}
-        title="Training volume (kg, per week)"
+        formatValue={(v) => `${Math.round(v).toLocaleString()} ${weightUnit}`}
+        title={`Training volume (${weightUnit}, per week)`}
       />
       <Bars
         weeks={weeks}

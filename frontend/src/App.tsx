@@ -19,6 +19,7 @@ import NotesPage from './pages/trainer/NotesPage'
 import QAPage from './pages/trainer/QAPage'
 import DietLayout from './pages/diet/DietLayout'
 import LogPage from './pages/diet/LogPage'
+import LogMealPage from './pages/diet/LogMealPage'
 import DietProgressPage from './pages/diet/DietProgressPage'
 import ReferencePlanPage from './pages/diet/ReferencePlanPage'
 import FoodBankPage from './pages/diet/FoodBankPage'
@@ -96,6 +97,17 @@ export default function App() {
               <h1 className="text-lg font-semibold">Exercise Bank</h1>
               <ExerciseBankPage />
             </div>
+          }
+        />
+        {/* Escapes DietLayout's Log/Progress/Plan/Food Bank pill tab bar - a true
+            full-screen page with its own back button, like /food-bank and
+            /exercise-bank already do (see the comment above those routes). */}
+        <Route
+          path="/diet/log/:date/:mealId"
+          element={
+            <TraineeModeOnly>
+              <LogMealPage />
+            </TraineeModeOnly>
           }
         />
         <Route
