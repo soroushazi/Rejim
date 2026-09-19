@@ -272,9 +272,9 @@ class Command(BaseCommand):
                         calories_per_100g, {nutrient_field_list}
                     )
                     SELECT
-                        e.description,
-                        COALESCE(NULLIF(e.brand_name, ''), e.brand_owner, ''),
-                        e.resolved_barcode,
+                        COALESCE(LEFT(e.description, 255), 'USDA food ' || e.fdc_id::text),
+                        LEFT(COALESCE(NULLIF(e.brand_name, ''), e.brand_owner, ''), 255),
+                        CASE WHEN LENGTH(e.resolved_barcode) <= 64 THEN e.resolved_barcode END,
                         e.fdc_id, 'usda', 'single', 'public', 'approved',
                         e.calories_per_100g, {", ".join(f"e.{f}" for f in NUTRIENT_NUMBER_TO_FIELD.values())}
                     FROM eligible e
