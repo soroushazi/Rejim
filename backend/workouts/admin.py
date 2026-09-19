@@ -41,8 +41,8 @@ class MuscleGroupAdmin(admin.ModelAdmin):
 
 @admin.register(Exercise)
 class ExerciseAdmin(admin.ModelAdmin):
-    list_display = ("name", "difficulty_level", "equipment")
-    list_filter = ("difficulty_level", "primary_muscle_groups")
+    list_display = ("name", "difficulty_level", "is_unilateral", "equipment")
+    list_filter = ("difficulty_level", "is_unilateral", "primary_muscle_groups")
     search_fields = ("name",)
     filter_horizontal = ("primary_muscle_groups", "secondary_muscle_groups", "alternatives")
 

@@ -74,6 +74,12 @@ BEGINNER = {
     "Elliptical Trainer", "Stair Climber",
 }
 
+# One side at a time - see Exercise.is_unilateral. Also hand-picked, for the
+# same reason as ADVANCED/BEGINNER above.
+UNILATERAL = {
+    "Single-Arm Dumbbell Row", "Bulgarian Split Squat", "Step-Up", "Turkish Get-Up", "Walking Lunge",
+}
+
 ALTERNATIVES_PER_EXERCISE = 4
 
 
@@ -110,6 +116,7 @@ class Command(BaseCommand):
                 defaults={
                     "equipment": (equipment or "").strip(),
                     "difficulty_level": difficulty,
+                    "is_unilateral": name in UNILATERAL,
                 },
             )
             primary = [MuscleGroup.objects.get_or_create(name=n)[0] for n in clean_muscle_list(major)]

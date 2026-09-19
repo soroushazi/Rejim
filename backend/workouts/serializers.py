@@ -30,6 +30,7 @@ class ExerciseSerializer(serializers.ModelSerializer):
             "primary_muscle_groups",
             "secondary_muscle_groups",
             "difficulty_level",
+            "is_unilateral",
             "image",
             "video_url",
             "alternatives",
@@ -160,12 +161,37 @@ class PlanExerciseSerializer(serializers.ModelSerializer):
 class LoggedSetNestedSerializer(serializers.ModelSerializer):
     """Write-side shape of one set, nested under LoggedExerciseNestedSerializer
     inside WorkoutSessionSerializer - see LoggedSetSerializer below for the
-    flat, standalone shape used by exercise history."""
+    flat, standalone shape used by exercise history.
+
+    weight/reps_done and the _left/_right pairs are all optional here since
+    exactly one shape applies depending on the logged exercise's laterality -
+    WorkoutSessionSerializer.validate checks the right one was actually sent,
+    and _upsert only ever persists that one, discarding the other shape's
+    fields even if a stale/wrong one was included."""
 
     class Meta:
         model = LoggedSet
-        fields = ["id", "set_number", "weight", "weight_unit", "reps_done", "rest_seconds", "is_warmup", "rpe"]
+        fields = [
+            "id",
+            "set_number",
+            "weight",
+            "weight_unit",
+            "reps_done",
+            "weight_left",
+            "weight_right",
+            "reps_done_left",
+            "reps_done_right",
+            "rest_seconds",
+            "is_warmup",
+            "rpe",
+            "rpe_left",
+            "rpe_right",
+        ]
         read_only_fields = ["id"]
+        extra_kwargs = {
+            "weight": {"required": False, "allow_null": True},
+            "reps_done": {"required": False, "allow_null": True},
+        }
 
 
 class LoggedExerciseNestedSerializer(serializers.ModelSerializer):
@@ -236,6 +262,19 @@ class WorkoutSessionSerializer(serializers.ModelSerializer):
             partner = logged_exercise.get("superset_partner")
             if partner and partner.id not in plan_exercise_ids:
                 raise serializers.ValidationError("A superset partner must also be logged in this same session.")
+
+            effective_exercise = logged_exercise.get("substituted_exercise") or logged_exercise["plan_exercise"].exercise
+            for set_data in logged_exercise["sets"]:
+                if effective_exercise.is_unilateral:
+                    if any(
+                        set_data.get(f) is None
+                        for f in ("weight_left", "weight_right", "reps_done_left", "reps_done_right")
+                    ):
+                        raise serializers.ValidationError(
+                            "Every set of a per-side exercise needs a weight and reps for both sides."
+                        )
+                elif set_data.get("weight") is None or set_data.get("reps_done") is None:
+                    raise serializers.ValidationError("Every set needs a weight and reps.")
         return attrs
 
     def create(self, validated_data):
@@ -259,15 +298,46 @@ class WorkoutSessionSerializer(serializers.ModelSerializer):
         session.logged_exercises.all().delete()
         for order, logged_exercise_data in enumerate(logged_exercises_data):
             sets_data = logged_exercise_data.pop("sets")
+            substituted_exercise = logged_exercise_data.get("substituted_exercise")
+            plan_exercise = logged_exercise_data["plan_exercise"]
+            effective_exercise = substituted_exercise or plan_exercise.exercise
             logged_exercise = LoggedExercise.objects.create(
                 session=session,
-                plan_exercise=logged_exercise_data["plan_exercise"],
-                substituted_exercise=logged_exercise_data.get("substituted_exercise"),
+                plan_exercise=plan_exercise,
+                substituted_exercise=substituted_exercise,
                 superset_partner=logged_exercise_data.get("superset_partner"),
                 order=order,
             )
             for set_data in sets_data:
-                LoggedSet.objects.create(logged_exercise=logged_exercise, **set_data)
+                # Only ever persists the shape that matches the exercise -
+                # discards the other shape's fields even if the client sent
+                # them (e.g. a stale left/right pair from before an
+                # off-program substitution swapped in a bilateral exercise).
+                common = {
+                    "set_number": set_data["set_number"],
+                    "weight_unit": set_data["weight_unit"],
+                    "rest_seconds": set_data.get("rest_seconds"),
+                    "is_warmup": set_data.get("is_warmup", False),
+                }
+                if effective_exercise.is_unilateral:
+                    LoggedSet.objects.create(
+                        logged_exercise=logged_exercise,
+                        **common,
+                        weight_left=set_data["weight_left"],
+                        weight_right=set_data["weight_right"],
+                        reps_done_left=set_data["reps_done_left"],
+                        reps_done_right=set_data["reps_done_right"],
+                        rpe_left=set_data.get("rpe_left"),
+                        rpe_right=set_data.get("rpe_right"),
+                    )
+                else:
+                    LoggedSet.objects.create(
+                        logged_exercise=logged_exercise,
+                        **common,
+                        weight=set_data["weight"],
+                        reps_done=set_data["reps_done"],
+                        rpe=set_data.get("rpe"),
+                    )
         return session
 
 
@@ -307,9 +377,15 @@ class LoggedSetSerializer(serializers.ModelSerializer):
             "weight",
             "weight_unit",
             "reps_done",
+            "weight_left",
+            "weight_right",
+            "reps_done_left",
+            "reps_done_right",
             "rest_seconds",
             "is_warmup",
             "rpe",
+            "rpe_left",
+            "rpe_right",
             "session_date",
             "exercise",
         ]

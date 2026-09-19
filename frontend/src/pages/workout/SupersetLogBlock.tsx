@@ -45,7 +45,8 @@ function useHistory(exerciseId: number) {
 /** One side's warm-up section - independent per exercise, since which side
  * (if either) needs warming up varies by pairing. */
 function WarmupColumn({ entry }: { entry: ExerciseLogEntry }) {
-  const { planExercise, warmupSets, onWarmupSetsChange } = entry
+  const { planExercise, exercise, warmupSets, onWarmupSetsChange } = entry
+  const isUnilateral = exercise?.is_unilateral ?? false
   const hasActive = warmupSets.some((s) => !s.confirmed)
 
   function update(index: number, patch: Partial<DraftSet>) {
@@ -65,6 +66,7 @@ function WarmupColumn({ entry }: { entry: ExerciseLogEntry }) {
             label={`Warm-up ${i + 1}`}
             set={set}
             isPr={null}
+            isUnilateral={isUnilateral}
             onEdit={() => update(i, { confirmed: false })}
             onRemove={() => remove(i)}
           />
@@ -73,6 +75,7 @@ function WarmupColumn({ entry }: { entry: ExerciseLogEntry }) {
             key={i}
             label={`Warm-up ${i + 1}`}
             set={set}
+            isUnilateral={isUnilateral}
             onChange={(patch) => update(i, patch)}
             onConfirm={() => update(i, { confirmed: true })}
             onRemove={() => remove(i)}
@@ -130,13 +133,21 @@ export default function SupersetLogBlock({
   onToggleExpanded,
 }: Props) {
   const [a, b] = entries
+  const isUnilateralA = a.exercise?.is_unilateral ?? false
+  const isUnilateralB = b.exercise?.is_unilateral ?? false
   const historyA = useHistory(a.planExercise.exercise)
   const historyB = useHistory(b.planExercise.exercise)
   const [detailsFor, setDetailsFor] = useState<0 | 1 | null>(null)
   const [historyFor, setHistoryFor] = useState<0 | 1 | null>(null)
 
-  const suggestionA = suggestWeight(historyA, a.planExercise.target_reps_min, a.planExercise.target_reps_max)
-  const suggestionB = suggestWeight(historyB, b.planExercise.target_reps_min, b.planExercise.target_reps_max)
+  // Weight suggestions/PR detection don't cover per-side data yet, so both
+  // are skipped for whichever side is unilateral (see ExerciseLogBlock).
+  const suggestionA = isUnilateralA
+    ? ({ status: 'first' } as const)
+    : suggestWeight(historyA, a.planExercise.target_reps_min, a.planExercise.target_reps_max)
+  const suggestionB = isUnilateralB
+    ? ({ status: 'first' } as const)
+    : suggestWeight(historyB, b.planExercise.target_reps_min, b.planExercise.target_reps_max)
 
   const roundCount = Math.max(a.workingSets.length, b.workingSets.length, 1)
   const targetRounds = Math.max(a.planExercise.target_sets, b.planExercise.target_sets)
@@ -277,9 +288,24 @@ export default function SupersetLogBlock({
             {Array.from({ length: roundCount }, (_, i) => i).map((i) => {
               const [setA, setB] = roundsAt(i)
               const bothConfirmed = setA.confirmed && setB.confirmed
+              function sideSummary(set: DraftSet, isUnilateral: boolean) {
+                return isUnilateral ? (
+                  <>
+                    L {set.weight_left}×{set.reps_done_left} · R {set.weight_right}×{set.reps_done_right}
+                  </>
+                ) : (
+                  <>
+                    {set.weight}×{set.reps_done}
+                  </>
+                )
+              }
               if (bothConfirmed) {
-                const prA = checkPersonalRecord(historyA, Number(setA.weight), Number(setA.reps_done), setA.is_warmup)
-                const prB = checkPersonalRecord(historyB, Number(setB.weight), Number(setB.reps_done), setB.is_warmup)
+                const prA = isUnilateralA
+                  ? null
+                  : checkPersonalRecord(historyA, Number(setA.weight), Number(setA.reps_done), setA.is_warmup)
+                const prB = isUnilateralB
+                  ? null
+                  : checkPersonalRecord(historyB, Number(setB.weight), Number(setB.reps_done), setB.is_warmup)
                 return (
                   <div key={i} className="flex items-center gap-2 rounded-md bg-muted px-2.5 py-1.5 text-sm">
                     <button
@@ -288,9 +314,9 @@ export default function SupersetLogBlock({
                       className="min-w-0 flex-1 text-left"
                     >
                       <span className="text-muted-foreground">Round {i + 1}</span>{' '}
-                      {a.planExercise.exercise_name} {setA.weight}×{setA.reps_done}
+                      {a.planExercise.exercise_name} {sideSummary(setA, isUnilateralA)}
                       {' → '}
-                      {b.planExercise.exercise_name} {setB.weight}×{setB.reps_done}
+                      {b.planExercise.exercise_name} {sideSummary(setB, isUnilateralB)}
                     </button>
                     {(prA || prB) && (
                       <Badge className="gap-1 font-normal">
@@ -310,7 +336,13 @@ export default function SupersetLogBlock({
                   </div>
                 )
               }
-              const canConfirm = setA.weight.trim() !== '' && setA.reps_done.trim() !== '' && setB.weight.trim() !== '' && setB.reps_done.trim() !== ''
+              const canConfirmSide = (set: DraftSet, isUnilateral: boolean) =>
+                isUnilateral
+                  ? [set.weight_left, set.weight_right, set.reps_done_left, set.reps_done_right].every(
+                      (v) => v.trim() !== '',
+                    )
+                  : set.weight.trim() !== '' && set.reps_done.trim() !== ''
+              const canConfirm = canConfirmSide(setA, isUnilateralA) && canConfirmSide(setB, isUnilateralB)
               return (
                 <div key={i} className="flex flex-col gap-1.5 rounded-md border border-border p-2">
                   <span className="text-xs font-medium text-muted-foreground">Round {i + 1}</span>
@@ -318,6 +350,7 @@ export default function SupersetLogBlock({
                     label={a.planExercise.exercise_name}
                     set={setA}
                     suggestion={suggestionA}
+                    isUnilateral={isUnilateralA}
                     onChange={(patch) => writeRound(i, patch, null)}
                     onConfirm={() => {}}
                     onRemove={() => {}}
@@ -327,6 +360,7 @@ export default function SupersetLogBlock({
                     label={b.planExercise.exercise_name}
                     set={setB}
                     suggestion={suggestionB}
+                    isUnilateral={isUnilateralB}
                     onChange={(patch) => writeRound(i, null, patch)}
                     onConfirm={() => {}}
                     onRemove={() => {}}

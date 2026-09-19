@@ -79,8 +79,15 @@ export default function ExerciseHistoryChart({
   // instead of pointing at a now-unrelated day.
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
 
-  const working = history.filter((s) => !s.is_warmup)
-  const byDate = new Map<string, ExerciseHistorySet[]>()
+  // A per-side (Exercise.is_unilateral) exercise's history has a null
+  // weight/reps_done - this chart doesn't plot per-side data yet, so those
+  // rows are excluded (ExerciseHistoryContent skips rendering this chart
+  // altogether once every row for an exercise is shaped this way).
+  const working = history.filter(
+    (s): s is ExerciseHistorySet & { weight: string; reps_done: number } =>
+      !s.is_warmup && s.weight !== null && s.reps_done !== null,
+  )
+  const byDate = new Map<string, typeof working>()
   for (const s of working) {
     const arr = byDate.get(s.session_date) ?? []
     arr.push(s)

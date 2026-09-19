@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import MuscleDiagram from './MuscleDiagram'
@@ -40,6 +41,7 @@ export default function AddExerciseDialog({
   const [description, setDescription] = useState('')
   const [equipment, setEquipment] = useState('')
   const [difficulty, setDifficulty] = useState<ExerciseDifficulty>('beginner')
+  const [isUnilateral, setIsUnilateral] = useState(false)
   const [primaryMuscles, setPrimaryMuscles] = useState<string[]>([])
   const [secondaryMuscles, setSecondaryMuscles] = useState<string[]>([])
   const [videoUrl, setVideoUrl] = useState('')
@@ -51,6 +53,7 @@ export default function AddExerciseDialog({
     setDescription('')
     setEquipment('')
     setDifficulty('beginner')
+    setIsUnilateral(false)
     setPrimaryMuscles([])
     setSecondaryMuscles([])
     setVideoUrl('')
@@ -64,6 +67,7 @@ export default function AddExerciseDialog({
       setDescription(exercise.description)
       setEquipment(exercise.equipment)
       setDifficulty(exercise.difficulty_level)
+      setIsUnilateral(exercise.is_unilateral)
       setPrimaryMuscles(exercise.primary_muscle_groups.map(String))
       setSecondaryMuscles(exercise.secondary_muscle_groups.map(String))
       setVideoUrl(exercise.video_url ?? '')
@@ -98,6 +102,7 @@ export default function AddExerciseDialog({
       description: description.trim(),
       equipment: equipment.trim(),
       difficulty_level: difficulty,
+      is_unilateral: isUnilateral,
       primary_muscle_groups: primaryMuscles.map(Number),
       secondary_muscle_groups: secondaryMuscles.map(Number),
       video_url: videoUrl.trim() || null,
@@ -162,6 +167,17 @@ export default function AddExerciseDialog({
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
+          </div>
+
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2.5">
+            <div className="flex flex-col">
+              <Label htmlFor="exercise-unilateral">Tracked per side</Label>
+              <span className="text-xs text-muted-foreground">
+                Done one side at a time, e.g. Single-Arm Dumbbell Row - logging will ask for weight, reps, and RPE
+                separately for left and right.
+              </span>
+            </div>
+            <Switch id="exercise-unilateral" checked={isUnilateral} onCheckedChange={setIsUnilateral} />
           </div>
 
           <div className="flex gap-3">

@@ -42,6 +42,10 @@ class Exercise(models.Model):
         MuscleGroup, related_name="secondary_exercises", blank=True
     )
     difficulty_level = models.CharField(max_length=15, choices=Difficulty.choices, default=Difficulty.BEGINNER)
+    # One side at a time (e.g. Single-Arm Dumbbell Row, Bulgarian Split
+    # Squat) - logging captures weight/reps/RPE separately per side instead
+    # of one combined value (see LoggedSet's own _left/_right fields).
+    is_unilateral = models.BooleanField(default=False)
     image = models.ImageField(upload_to="exercises/", null=True, blank=True)
     video_url = models.URLField(null=True, blank=True)
     # Not symmetrical: each exercise curates its own top alternatives (see
@@ -210,9 +214,18 @@ class LoggedSet(models.Model):
 
     logged_exercise = models.ForeignKey(LoggedExercise, on_delete=models.CASCADE, related_name="sets")
     set_number = models.PositiveSmallIntegerField()
-    weight = models.DecimalField(max_digits=6, decimal_places=2)
+    # weight/reps_done/rpe hold a bilateral set's single value; for a
+    # unilateral exercise (Exercise.is_unilateral, resolved via
+    # substituted_exercise if one was logged) these stay null and the
+    # matching _left/_right pair below is used instead - exactly one shape is
+    # ever populated for a given set, enforced by WorkoutSessionSerializer.
+    weight = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
     weight_unit = models.CharField(max_length=2, choices=WeightUnit.choices, default=WeightUnit.KG)
-    reps_done = models.PositiveSmallIntegerField()
+    reps_done = models.PositiveSmallIntegerField(null=True, blank=True)
+    weight_left = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    weight_right = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
+    reps_done_left = models.PositiveSmallIntegerField(null=True, blank=True)
+    reps_done_right = models.PositiveSmallIntegerField(null=True, blank=True)
     rest_seconds = models.PositiveSmallIntegerField(null=True, blank=True)
     # Excluded from avg-reps-per-set (weight suggestions) and the Progress
     # strength score, so warming up doesn't skew either.
@@ -220,6 +233,12 @@ class LoggedSet(models.Model):
     # Rate of perceived exertion, 1-10. Optional - richer tracking for users
     # who want it, never required to complete a log.
     rpe = models.PositiveSmallIntegerField(
+        null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(10)]
+    )
+    rpe_left = models.PositiveSmallIntegerField(
+        null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(10)]
+    )
+    rpe_right = models.PositiveSmallIntegerField(
         null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(10)]
     )
 

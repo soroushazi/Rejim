@@ -70,13 +70,19 @@ export default function ExerciseLogBlock({
     }
   }, [planExercise.exercise])
 
-  const suggestion = suggestWeight(history, planExercise.target_reps_min, planExercise.target_reps_max)
+  const isUnilateral = exercise?.is_unilateral ?? false
+  // Weight suggestions/PR detection don't cover per-side data yet (see
+  // lib/weightSuggestion.ts/lib/personalRecord.ts), so both are skipped for
+  // a unilateral exercise rather than computed against the wrong fields.
+  const suggestion = isUnilateral
+    ? ({ status: 'first' } as const)
+    : suggestWeight(history, planExercise.target_reps_min, planExercise.target_reps_max)
   const confirmedWorkingCount = workingSets.filter((s) => s.confirmed).length
   const hasActiveWarmup = warmupSets.some((s) => !s.confirmed)
   const allWorkingConfirmed = workingSets.length > 0 && workingSets.every((s) => s.confirmed)
 
   function prFor(set: DraftSet): PersonalRecordKind {
-    if (set.weight.trim() === '' || set.reps_done.trim() === '') return null
+    if (isUnilateral || set.weight.trim() === '' || set.reps_done.trim() === '') return null
     return checkPersonalRecord(history, Number(set.weight), Number(set.reps_done), set.is_warmup)
   }
 
@@ -191,24 +197,29 @@ export default function ExerciseLogBlock({
             </div>
           )}
 
-          {suggestion.status === 'first' && (
+          {isUnilateral && (
+            <p className="rounded-md bg-muted px-2.5 py-1.5 text-xs text-muted-foreground">
+              Tracked per side — enter weight, reps, and RPE for left and right separately.
+            </p>
+          )}
+          {!isUnilateral && suggestion.status === 'first' && (
             <p className="rounded-md bg-muted px-2.5 py-1.5 text-xs text-muted-foreground">
               First time — enter weight with no suggestion.
             </p>
           )}
-          {suggestion.status === 'low' && (
+          {!isUnilateral && suggestion.status === 'low' && (
             <p className="rounded-md bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive">
               Last time you lifted {suggestion.lastWeight}
               {suggestion.lastWeightUnit} and stayed under 8 reps — consider lowering the weight.
             </p>
           )}
-          {suggestion.status === 'high' && (
+          {!isUnilateral && suggestion.status === 'high' && (
             <p className="rounded-md bg-emerald-500/10 px-2.5 py-1.5 text-xs text-emerald-700 dark:text-emerald-400">
               Last time you lifted {suggestion.lastWeight}
               {suggestion.lastWeightUnit} and exceeded 12 reps — consider raising the weight.
             </p>
           )}
-          {suggestion.status === 'good' && (
+          {!isUnilateral && suggestion.status === 'good' && (
             <p className="rounded-md bg-muted px-2.5 py-1.5 text-xs text-muted-foreground">
               Last time: {suggestion.lastWeight}
               {suggestion.lastWeightUnit} for ~{suggestion.avgReps} reps/set — same weight suggested.
@@ -224,6 +235,7 @@ export default function ExerciseLogBlock({
                   label={`Warm-up ${i + 1}`}
                   set={set}
                   isPr={null}
+                  isUnilateral={isUnilateral}
                   onEdit={() => updateWarmup(i, { confirmed: false })}
                   onRemove={() => removeWarmup(i)}
                 />
@@ -232,6 +244,7 @@ export default function ExerciseLogBlock({
                   key={i}
                   label={`Warm-up ${i + 1}`}
                   set={set}
+                  isUnilateral={isUnilateral}
                   onChange={(patch) => updateWarmup(i, patch)}
                   onConfirm={() => updateWarmup(i, { confirmed: true })}
                   onRemove={() => removeWarmup(i)}
@@ -254,6 +267,7 @@ export default function ExerciseLogBlock({
                   label={`Set ${i + 1}`}
                   set={set}
                   isPr={prFor(set)}
+                  isUnilateral={isUnilateral}
                   onEdit={() => updateWorking(i, { confirmed: false })}
                   onRemove={() => removeWorking(i)}
                 />
@@ -263,6 +277,7 @@ export default function ExerciseLogBlock({
                   label={`Set ${i + 1}`}
                   set={set}
                   suggestion={suggestion}
+                  isUnilateral={isUnilateral}
                   onChange={(patch) => updateWorking(i, patch)}
                   onConfirm={() => confirmWorking(i)}
                   onRemove={() => removeWorking(i)}

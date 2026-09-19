@@ -10,7 +10,13 @@ export type WeightSuggestion =
  * the weight - per spec, warm-up sets are excluded so they don't skew the
  * average. */
 export function suggestWeight(history: ExerciseHistorySet[], targetRepsMin: number, targetRepsMax: number): WeightSuggestion {
-  const working = history.filter((s) => !s.is_warmup)
+  // A per-side (Exercise.is_unilateral) exercise's history has a null
+  // `weight`/`reps_done` - not yet supported here, so those rows are
+  // excluded rather than coerced into a misleading average of 0.
+  const working = history.filter(
+    (s): s is ExerciseHistorySet & { weight: string; reps_done: number } =>
+      !s.is_warmup && s.weight !== null && s.reps_done !== null,
+  )
   if (working.length === 0) return { status: 'first' }
 
   const mostRecentDate = working.reduce(

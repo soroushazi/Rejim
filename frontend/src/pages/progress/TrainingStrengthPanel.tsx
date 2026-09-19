@@ -72,7 +72,13 @@ export default function TrainingStrengthPanel({ range, traineeId }: Props) {
       .then((history) => {
         if (cancelled) return
         setPrEvents(computePrTimeline(history))
-        const working = history.filter((s) => !s.is_warmup)
+        // A per-side (Exercise.is_unilateral) exercise's history has a null
+        // weight/reps_done, not yet supported by this all-time PR summary -
+        // excluded rather than coerced into a misleading "PR: 0".
+        const working = history.filter(
+          (s): s is typeof s & { weight: string; reps_done: number } =>
+            !s.is_warmup && s.weight !== null && s.reps_done !== null,
+        )
         if (working.length === 0) {
           setCurrentPr(null)
           return

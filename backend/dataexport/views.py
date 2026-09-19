@@ -101,9 +101,15 @@ class WorkoutLogExportView(APIView):
                 "weight",
                 "weight_unit",
                 "reps_done",
+                "weight_left",
+                "weight_right",
+                "reps_done_left",
+                "reps_done_right",
                 "rest_seconds",
                 "is_warmup",
                 "rpe",
+                "rpe_left",
+                "rpe_right",
             ]
         )
         for s in sets:
@@ -117,9 +123,15 @@ class WorkoutLogExportView(APIView):
                     s.weight,
                     s.weight_unit,
                     s.reps_done,
+                    s.weight_left,
+                    s.weight_right,
+                    s.reps_done_left,
+                    s.reps_done_right,
                     s.rest_seconds,
                     s.is_warmup,
                     s.rpe,
+                    s.rpe_left,
+                    s.rpe_right,
                 ]
             )
         return response

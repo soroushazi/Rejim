@@ -37,6 +37,11 @@ export default function ExerciseDetailDialog({ exercise, muscleGroups, exercises
               <Badge variant={DIFFICULTY_BADGE_VARIANT[exercise.difficulty_level]} className="font-normal">
                 {DIFFICULTY_LABEL[exercise.difficulty_level]}
               </Badge>
+              {exercise.is_unilateral && (
+                <Badge variant="outline" className="font-normal">
+                  Per side
+                </Badge>
+              )}
               {exercise.equipment && <span className="text-xs text-muted-foreground">{exercise.equipment}</span>}
             </div>
 

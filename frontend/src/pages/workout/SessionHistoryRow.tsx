@@ -52,9 +52,21 @@ export default function SessionHistoryRow({ session }: { session: WorkoutSession
                             {s.is_warmup ? ' · warm-up' : ''}
                           </span>
                           <span>
-                            {s.weight}
-                            {s.weight_unit} × {s.reps_done}
-                            {s.rpe !== null ? ` · ${rpeLabel(s.rpe)}` : ''}
+                            {s.weight === null ? (
+                              <>
+                                L {s.weight_left}
+                                {s.weight_unit}×{s.reps_done_left}
+                                {s.rpe_left !== null ? ` (${rpeLabel(s.rpe_left)})` : ''} · R {s.weight_right}
+                                {s.weight_unit}×{s.reps_done_right}
+                                {s.rpe_right !== null ? ` (${rpeLabel(s.rpe_right)})` : ''}
+                              </>
+                            ) : (
+                              <>
+                                {s.weight}
+                                {s.weight_unit} × {s.reps_done}
+                                {s.rpe !== null ? ` · ${rpeLabel(s.rpe)}` : ''}
+                              </>
+                            )}
                           </span>
                         </li>
                       ))}

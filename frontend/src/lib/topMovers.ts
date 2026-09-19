@@ -14,7 +14,12 @@ export type ExerciseMover = {
  * working reps/set - the same "simple strength score" the spec asks for.
  * Warm-up sets are excluded, same convention as weight suggestions/PRs. */
 function sessionScore(logged: LoggedExerciseEntry): number | null {
-  const working = logged.sets.filter((s) => !s.is_warmup)
+  // A per-side (Exercise.is_unilateral) exercise's sets have a null weight/
+  // reps_done - not yet supported here, so they're excluded from the score
+  // rather than coerced into a misleading 0.
+  const working = logged.sets.filter(
+    (s): s is typeof s & { weight: string; reps_done: number } => !s.is_warmup && s.weight !== null && s.reps_done !== null,
+  )
   if (working.length === 0) return null
   const maxWeight = Math.max(...working.map((s) => Number(s.weight)))
   const avgReps = working.reduce((sum, s) => sum + s.reps_done, 0) / working.length

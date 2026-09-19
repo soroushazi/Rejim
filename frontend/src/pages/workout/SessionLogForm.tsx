@@ -25,6 +25,7 @@ import {
 } from '@/lib/exerciseOverrides'
 import ExerciseLogBlock, { type DraftSet } from './ExerciseLogBlock'
 import OffProgramDialog from './OffProgramDialog'
+import { newDraftSet } from './SetRows'
 import SupersetLogBlock, { type ExerciseLogEntry } from './SupersetLogBlock'
 
 type ExerciseDrafts = { warmup: DraftSet[]; working: DraftSet[] }
@@ -67,7 +68,33 @@ type Props = {
   onDeleted: () => void
 }
 
-function draftSetsToPayload(sets: DraftSet[], weightUnit: WeightUnit, startNumber: number): NewLoggedSet[] {
+function draftSetsToPayload(
+  sets: DraftSet[],
+  weightUnit: WeightUnit,
+  startNumber: number,
+  isUnilateral: boolean,
+): NewLoggedSet[] {
+  if (isUnilateral) {
+    return sets
+      .filter(
+        (s) =>
+          s.weight_left.trim() !== '' &&
+          s.weight_right.trim() !== '' &&
+          s.reps_done_left.trim() !== '' &&
+          s.reps_done_right.trim() !== '',
+      )
+      .map((s, i) => ({
+        set_number: startNumber + i,
+        weight_unit: weightUnit,
+        weight_left: s.weight_left,
+        weight_right: s.weight_right,
+        reps_done_left: Number(s.reps_done_left),
+        reps_done_right: Number(s.reps_done_right),
+        is_warmup: s.is_warmup,
+        rpe_left: s.rpe_left.trim() ? Number(s.rpe_left) : null,
+        rpe_right: s.rpe_right.trim() ? Number(s.rpe_right) : null,
+      }))
+  }
   return sets
     .filter((s) => s.weight.trim() !== '' && s.reps_done.trim() !== '')
     .map((s, i) => ({
@@ -134,10 +161,16 @@ export default function SessionLogForm({
         if (logged && logged.sets.length > 0) {
           unit = logged.sets[0].weight_unit
           const toDraft = (s: (typeof logged.sets)[number]): DraftSet => ({
-            weight: s.weight,
-            reps_done: String(s.reps_done),
-            is_warmup: s.is_warmup,
+            ...newDraftSet(s.is_warmup),
+            weight: s.weight ?? '',
+            reps_done: s.reps_done !== null ? String(s.reps_done) : '',
             rpe: s.rpe !== null ? String(s.rpe) : '',
+            weight_left: s.weight_left ?? '',
+            weight_right: s.weight_right ?? '',
+            reps_done_left: s.reps_done_left !== null ? String(s.reps_done_left) : '',
+            reps_done_right: s.reps_done_right !== null ? String(s.reps_done_right) : '',
+            rpe_left: s.rpe_left !== null ? String(s.rpe_left) : '',
+            rpe_right: s.rpe_right !== null ? String(s.rpe_right) : '',
             confirmed: true,
           })
           nextDrafts[pe.id] = {
@@ -145,7 +178,7 @@ export default function SessionLogForm({
             working: logged.sets.filter((s) => !s.is_warmup).map(toDraft),
           }
         } else {
-          nextDrafts[pe.id] = { warmup: [], working: [{ weight: '', reps_done: '', is_warmup: false, rpe: '', confirmed: false }] }
+          nextDrafts[pe.id] = { warmup: [], working: [newDraftSet(false)] }
         }
       }
       const nextOverrides: ExerciseOverrideMap = {}
@@ -163,7 +196,7 @@ export default function SessionLogForm({
     } else {
       const nextDrafts: Record<number, ExerciseDrafts> = {}
       for (const pe of session.exercises) {
-        nextDrafts[pe.id] = { warmup: [], working: [{ weight: '', reps_done: '', is_warmup: false, rpe: '', confirmed: false }] }
+        nextDrafts[pe.id] = { warmup: [], working: [newDraftSet(false)] }
       }
       setExerciseOrder(session.exercises.map((pe) => pe.id))
       setDrafts(nextDrafts)
@@ -196,9 +229,12 @@ export default function SessionLogForm({
     const loggedExercises = exerciseOrder
       .map((peId, order) => {
         const draft = drafts[peId] ?? { warmup: [], working: [] }
-        const warmupSets = draftSetsToPayload(draft.warmup, weightUnit, 1)
-        const workingSets = draftSetsToPayload(draft.working, weightUnit, warmupSets.length + 1)
         const pe = exercisesById.get(peId)
+        const isUnilateral = pe
+          ? (exerciseBankById.get(effectiveExerciseId(pe, overrides))?.is_unilateral ?? false)
+          : false
+        const warmupSets = draftSetsToPayload(draft.warmup, weightUnit, 1, isUnilateral)
+        const workingSets = draftSetsToPayload(draft.working, weightUnit, warmupSets.length + 1, isUnilateral)
         const substitutedExercise = overrides[peId]?.substitutedExercise ?? null
         const supersetPartner = pe ? effectiveSupersetPartner(peId, exercisesById, overrides) : null
         return {

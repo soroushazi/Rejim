@@ -2,6 +2,16 @@ import type { ExerciseHistorySet } from '@/api/types'
 
 export type PersonalRecordKind = 'weight' | 'reps' | null
 
+type MeasuredSet = ExerciseHistorySet & { weight: string; reps_done: number }
+
+/** A per-side (Exercise.is_unilateral) exercise's history has a null
+ * `weight`/`reps_done` (see ExerciseHistorySet) - not yet supported by PR
+ * detection/weight suggestions, so those rows are excluded rather than
+ * coerced into a misleading 0. */
+function hasBilateralValues(s: ExerciseHistorySet): s is MeasuredSet {
+  return s.weight !== null && s.reps_done !== null
+}
+
 /** Checks a newly-entered working set against prior (non-warmup) history for
  * this exercise: a new all-time max weight, or - at a weight already tried
  * before - a new max reps at that weight. Warm-up sets never trigger a PR and
@@ -13,7 +23,7 @@ export function checkPersonalRecord(
   isWarmup: boolean,
 ): PersonalRecordKind {
   if (isWarmup || !Number.isFinite(weight) || !Number.isFinite(reps)) return null
-  const working = history.filter((s) => !s.is_warmup)
+  const working = history.filter((s) => !s.is_warmup).filter(hasBilateralValues)
   if (working.length === 0) return null
 
   const maxWeight = Math.max(...working.map((s) => Number(s.weight)))
@@ -38,11 +48,12 @@ export type PrEvent = { date: string; kind: 'weight' | 'reps'; weight: number; r
 export function computePrTimeline(history: ExerciseHistorySet[]): PrEvent[] {
   const working = history
     .filter((s) => !s.is_warmup)
+    .filter(hasBilateralValues)
     .slice()
     .sort((a, b) => a.session_date.localeCompare(b.session_date) || a.set_number - b.set_number)
 
   const events: PrEvent[] = []
-  const seenSoFar: ExerciseHistorySet[] = []
+  const seenSoFar: MeasuredSet[] = []
   for (const set of working) {
     const weight = Number(set.weight)
     const kind = checkPersonalRecord(seenSoFar, weight, set.reps_done, false)
