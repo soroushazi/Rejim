@@ -1,3 +1,13 @@
+/** DRF's PageNumberPagination response shape - only FoodItemViewSet paginates today
+ * (see FoodItemPagination on the backend), everything else is small enough to fetch
+ * in full. */
+export type Page<T> = {
+  count: number
+  next: string | null
+  previous: string | null
+  results: T[]
+}
+
 export type GymLocation = 'home' | 'commercial' | 'outdoor' | 'none'
 export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced'
 export type Sex = 'male' | 'female' | 'unspecified'
@@ -95,8 +105,9 @@ export type DietaryTag = {
 export type FoodItem = {
   id: number
   name: string
+  brand_name: string | null
   barcode: string | null
-  source: 'seeded' | 'off'
+  source: 'seeded' | 'off' | 'usda'
   kind: FoodItemKind
   measures: FoodItemMeasure[]
   calories_per_100g: string

@@ -209,13 +209,19 @@ export default function LogMealPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meal, loading, existingLoggedMeal, quickItems])
 
-  // Food Bank results: always fetched (empty search returns the default list),
-  // so the Food Bank tab has something to browse even with no query typed.
+  // Food Bank results: only fetched once something's typed - with the Food Bank
+  // covering USDA's full catalog (millions of items), an eager empty-search
+  // "default list" would just be a meaningless alphabetical wall of branded
+  // products, not something worth browsing. Matches IngredientPicker's pattern.
   useEffect(() => {
+    if (!query.trim()) {
+      setBankResults([])
+      return
+    }
     let cancelled = false
     const timer = setTimeout(() => {
-      listFoodItems({ search: query }).then((items) => {
-        if (!cancelled) setBankResults(items)
+      listFoodItems({ search: query, pageSize: 20 }).then((data) => {
+        if (!cancelled) setBankResults(data.results)
       })
     }, 250)
     return () => {
@@ -558,18 +564,24 @@ export default function LogMealPage() {
 
             {tab === 'bank' && (
               <div className="flex flex-col gap-2">
-                <ul className="flex flex-col overflow-hidden rounded-lg border border-border">
-                  {bankResults.map((item) => (
-                    <BrowseListItem
-                      key={item.id}
-                      name={item.name}
-                      caption={`${item.calories_per_100g} kcal/100g`}
-                      added={cartHasFood(item.id)}
-                      onToggle={() => toggleFoodItem(item)}
-                    />
-                  ))}
-                </ul>
-                {bankResults.length === 0 && <p className="text-sm text-muted-foreground">No foods found.</p>}
+                {bankResults.length > 0 && (
+                  <ul className="flex flex-col overflow-hidden rounded-lg border border-border">
+                    {bankResults.map((item) => (
+                      <BrowseListItem
+                        key={item.id}
+                        name={item.name}
+                        caption={`${item.calories_per_100g} kcal/100g`}
+                        added={cartHasFood(item.id)}
+                        onToggle={() => toggleFoodItem(item)}
+                      />
+                    ))}
+                  </ul>
+                )}
+                {bankResults.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    {query.trim() ? 'No foods found.' : 'Search the food bank…'}
+                  </p>
+                )}
                 <Button type="button" variant="link" className="h-auto justify-start px-0" onClick={() => setAddFoodOpen(true)}>
                   <Plus className="size-3.5" /> Add a new food item
                 </Button>

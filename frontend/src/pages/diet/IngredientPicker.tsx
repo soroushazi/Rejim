@@ -44,8 +44,8 @@ export default function IngredientPicker({ value, onChange, autoFocusSearch }: I
     }
     let cancelled = false
     const timer = setTimeout(() => {
-      listFoodItems({ search: query }).then((items) => {
-        if (!cancelled) setResults(items)
+      listFoodItems({ search: query, pageSize: 20 }).then((data) => {
+        if (!cancelled) setResults(data.results)
       })
     }, 250)
     return () => {
@@ -103,7 +103,10 @@ export default function IngredientPicker({ value, onChange, autoFocusSearch }: I
                 className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-muted"
                 onClick={() => addComponent(item)}
               >
-                <span>{item.name}</span>
+                <span>
+                  {item.name}
+                  {item.brand_name && <span className="text-muted-foreground"> ({item.brand_name})</span>}
+                </span>
                 <span className="text-xs text-muted-foreground">{item.calories_per_100g} kcal/100g</span>
               </button>
             </li>

@@ -22,6 +22,28 @@ def _split_env_list(name):
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def _load_root_dotenv():
+    """Local-dev convenience only: fill in os.environ from a gitignored `.env` at
+    the repo root (sibling to `backend/`) for vars not already set. Never used in
+    production - docker-compose.prod.yml's env_file (backed by .env.prod) sets
+    real env vars directly, so this is a no-op there. Keeps one-off credentials
+    (e.g. USDA_API_KEY) out of shell profiles without adding a dotenv dependency."""
+    dotenv_path = BASE_DIR.parent / ".env"
+    if not dotenv_path.exists():
+        return
+    for line in dotenv_path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        os.environ.setdefault(key, value)
+
+
+_load_root_dotenv()
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 # Every setting below falls back to its original dev-only value when the
@@ -229,3 +251,9 @@ VAPID_PRIVATE_KEY = os.environ.get(
     "BkvIicEnZ5+LSLWEYPocYGaTS831Oh4UgRSDhotahs9K0F7d6iM+2G4S",
 )
 VAPID_SUBJECT = os.environ.get("VAPID_SUBJECT", "mailto:admin@example.com")
+
+
+# USDA FoodData Central (one-off/occasional Food Bank imports - see
+# USDA_API_SETUP_SPEC.md). Never read outside management/commands/import_usda_food.py;
+# nothing in the live request path calls out to USDA.
+USDA_API_KEY = os.environ.get("USDA_API_KEY", "")

@@ -66,6 +66,9 @@ export default function FoodItemCard({
         <div className="flex items-baseline justify-between gap-2">
           <span className="flex flex-wrap items-center gap-1.5 font-semibold">
             {item.name}
+            {item.brand_name && (
+              <span className="font-normal text-muted-foreground">({item.brand_name})</span>
+            )}
             {item.kind === 'composite' && (
               <Badge variant="secondary" className="font-normal">
                 Recipe

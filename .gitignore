@@ -6,3 +6,5 @@ backend/media/
 node_modules/
 .env
 .env.*
+USDA_API_SETUP_SPEC.md
+FoodData_Central_csv_*/

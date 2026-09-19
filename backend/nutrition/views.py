@@ -1,5 +1,6 @@
 from rest_framework import filters, viewsets
 from rest_framework.decorators import action
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
 from accounts.mixins import TraineeScopedQuerysetMixin
@@ -55,11 +56,22 @@ class DietaryTagViewSet(viewsets.ModelViewSet):
     serializer_class = DietaryTagSerializer
 
 
+class FoodItemPagination(PageNumberPagination):
+    """Scoped to FoodItemViewSet only - every other list endpoint in the app is small
+    enough to fetch in full by design (see CLAUDE.md's Exercise Bank section); this one
+    isn't, once the Food Bank includes USDA's full catalog (~2M rows)."""
+
+    page_size = 25
+    page_size_query_param = "page_size"
+    max_page_size = 100
+
+
 class FoodItemViewSet(viewsets.ModelViewSet):
     serializer_class = FoodItemSerializer
     permission_classes = [FoodItemWritePermission]
+    pagination_class = FoodItemPagination
     filter_backends = [filters.SearchFilter]
-    search_fields = ["name"]
+    search_fields = ["name", "brand_name"]
 
     def get_queryset(self):
         queryset = FoodItem.visible_to(self.request.user).order_by("name")

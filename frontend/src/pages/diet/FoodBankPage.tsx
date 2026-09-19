@@ -23,6 +23,9 @@ export default function FoodBankPage() {
   const [selectedMacroFilters, setSelectedMacroFilters] = useState<string[]>([])
   const [selectedDietaryTags, setSelectedDietaryTags] = useState<string[]>([])
   const [items, setItems] = useState<FoodItem[]>([])
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [editRequests, setEditRequests] = useState<FoodItemEditRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -74,7 +77,9 @@ export default function FoodBankPage() {
       })
         .then((data) => {
           if (!cancelled) {
-            setItems(data)
+            setItems(data.results)
+            setPage(1)
+            setHasMore(data.next !== null)
             setError(false)
           }
         })
@@ -90,6 +95,24 @@ export default function FoodBankPage() {
       clearTimeout(timer)
     }
   }, [search, selectedMacroFilters, selectedDietaryTags])
+
+  function handleLoadMore() {
+    const nextPage = page + 1
+    setLoadingMore(true)
+    listFoodItems({
+      search,
+      macroFilterIds: selectedMacroFilters.map(Number),
+      dietaryTagIds: selectedDietaryTags.map(Number),
+      page: nextPage,
+    })
+      .then((data) => {
+        setItems((prev) => [...prev, ...data.results])
+        setPage(nextPage)
+        setHasMore(data.next !== null)
+      })
+      .catch(() => setError(true))
+      .finally(() => setLoadingMore(false))
+  }
 
   function handleUpdated(updated: FoodItem) {
     setItems((prev) => prev.map((item) => (item.id === updated.id ? updated : item)))
@@ -165,6 +188,12 @@ export default function FoodBankPage() {
             />
           ))}
         </ul>
+      )}
+
+      {!loading && !error && hasMore && (
+        <Button type="button" variant="outline" onClick={handleLoadMore} disabled={loadingMore}>
+          {loadingMore ? 'Loading…' : 'Load more'}
+        </Button>
       )}
 
       <Button

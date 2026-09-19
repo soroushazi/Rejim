@@ -7,21 +7,26 @@ import type {
   MacroFilter,
   NewFoodItem,
   NewFoodItemEditRequest,
+  Page,
 } from './types'
 
 export type FoodItemFilters = {
   search?: string
   macroFilterIds?: number[]
   dietaryTagIds?: number[]
+  page?: number
+  pageSize?: number
 }
 
-export function listFoodItems(filters: FoodItemFilters): Promise<FoodItem[]> {
+export function listFoodItems(filters: FoodItemFilters): Promise<Page<FoodItem>> {
   const params = new URLSearchParams()
   if (filters.search?.trim()) params.set('search', filters.search.trim())
   for (const id of filters.macroFilterIds ?? []) params.append('macro_filter', String(id))
   for (const id of filters.dietaryTagIds ?? []) params.append('dietary_tag', String(id))
+  if (filters.page) params.set('page', String(filters.page))
+  if (filters.pageSize) params.set('page_size', String(filters.pageSize))
   const query = params.toString()
-  return apiFetch<FoodItem[]>(`/nutrition/food-items/${query ? `?${query}` : ''}`)
+  return apiFetch<Page<FoodItem>>(`/nutrition/food-items/${query ? `?${query}` : ''}`)
 }
 
 export function getFoodItem(id: number): Promise<FoodItem> {

@@ -47,6 +47,7 @@ class FoodItem(models.Model):
     class Source(models.TextChoices):
         SEEDED = "seeded", "Seeded"
         OPEN_FOOD_FACTS = "off", "Open Food Facts"
+        USDA = "usda", "USDA FoodData Central"
 
     class Kind(models.TextChoices):
         SINGLE = "single", "Single item"
@@ -63,7 +64,13 @@ class FoodItem(models.Model):
         REJECTED = "rejected", "Rejected"
 
     name = models.CharField(max_length=255)
+    # Branded-food disambiguation only (e.g. "Chicken Noodle Soup" from a dozen different
+    # brands) - blank for seeded/whole-food rows, which have no brand.
+    brand_name = models.CharField(max_length=255, null=True, blank=True, default="")
     barcode = models.CharField(max_length=64, null=True, blank=True, unique=True)
+    # USDA FoodData Central's own id for this food, when source=USDA - lets a re-run of
+    # import_usda_food update the same row (by fdc_id) instead of creating a duplicate.
+    fdc_id = models.PositiveIntegerField(null=True, blank=True, unique=True)
     source = models.CharField(max_length=10, choices=Source.choices, default=Source.SEEDED)
     kind = models.CharField(max_length=10, choices=Kind.choices, default=Kind.SINGLE)
 
@@ -182,6 +189,11 @@ class FoodItemMeasure(models.Model):
         ordering = ["id"]
         constraints = [
             models.UniqueConstraint(fields=["food_item", "label"], name="unique_measure_label_per_food_item"),
+            models.UniqueConstraint(
+                fields=["food_item"],
+                condition=Q(is_default=True),
+                name="one_default_measure_per_food_item",
+            ),
         ]
 
     def __str__(self):

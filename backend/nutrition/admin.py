@@ -30,9 +30,9 @@ class ReferenceMealItemInline(admin.TabularInline):
 
 @admin.register(FoodItem)
 class FoodItemAdmin(admin.ModelAdmin):
-    list_display = ("name", "barcode", "source", "calories_per_100g", "protein_g_per_100g", "carbs_g_per_100g", "fat_g_per_100g")
+    list_display = ("name", "brand_name", "barcode", "fdc_id", "source", "calories_per_100g", "protein_g_per_100g", "carbs_g_per_100g", "fat_g_per_100g")
     list_filter = ("source",)
-    search_fields = ("name", "barcode")
+    search_fields = ("name", "brand_name", "barcode", "fdc_id")
 
 
 @admin.register(QuickLogItem)

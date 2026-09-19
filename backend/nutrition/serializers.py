@@ -55,6 +55,7 @@ class FoodItemSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "name",
+            "brand_name",
             "barcode",
             "source",
             "kind",
