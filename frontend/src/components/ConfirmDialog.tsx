@@ -8,17 +8,25 @@ type ConfirmDialogProps = {
   title: string
   description?: string
   confirmLabel?: string
+  /** Shown on the confirm button while `onConfirm` is pending, in place of `confirmLabel`. */
+  confirmingLabel?: string
+  /** The confirm button's variant - 'destructive' (default) for a delete/remove action,
+   * 'default' for a non-destructive save (e.g. confirming a status change). */
+  variant?: 'destructive' | 'default'
   onConfirm: () => Promise<unknown> | void
 }
 
 /** A small app-styled "are you sure?" card, in place of the browser's native
- * window.confirm popup - used for destructive actions like deleting a meal. */
+ * window.confirm popup - used for destructive actions like deleting a meal, and for
+ * any other change (e.g. a status change) that should be staged then explicitly saved. */
 export default function ConfirmDialog({
   open,
   onOpenChange,
   title,
   description,
   confirmLabel = 'Delete',
+  confirmingLabel = 'Deleting…',
+  variant = 'destructive',
   onConfirm,
 }: ConfirmDialogProps) {
   const [confirming, setConfirming] = useState(false)
@@ -54,8 +62,8 @@ export default function ConfirmDialog({
           <Button type="button" variant="outline" size="sm" onClick={() => handleOpenChange(false)}>
             Cancel
           </Button>
-          <Button type="button" variant="destructive" size="sm" disabled={confirming} onClick={handleConfirm}>
-            {confirming ? 'Deleting…' : confirmLabel}
+          <Button type="button" variant={variant} size="sm" disabled={confirming} onClick={handleConfirm}>
+            {confirming ? confirmingLabel : confirmLabel}
           </Button>
         </div>
       </DialogContent>

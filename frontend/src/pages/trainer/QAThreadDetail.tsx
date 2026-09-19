@@ -5,6 +5,7 @@ import { markQAThreadRead, updateQAThreadStatus } from '@/api/qaThreads'
 import type { QAMessage, QAThread, QAThreadStatus } from '@/api/types'
 import { useAuth } from '@/auth/AuthContext'
 import { Button } from '@/components/ui/button'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
@@ -41,8 +42,14 @@ export default function QAThreadDetail({ thread, onBack, onStatusChange, viewerI
   const [body, setBody] = useState('')
   const [sending, setSending] = useState(false)
   const [statusSaving, setStatusSaving] = useState(false)
+  const [pendingStatus, setPendingStatus] = useState<QAThreadStatus>(thread.status)
+  const [confirmingStatus, setConfirmingStatus] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    setPendingStatus(thread.status)
+  }, [thread.id, thread.status])
 
   useEffect(() => {
     let cancelled = false
@@ -81,14 +88,11 @@ export default function QAThreadDetail({ thread, onBack, onStatusChange, viewerI
     }
   }
 
-  async function handleStatusChange(status: QAThreadStatus) {
+  async function handleConfirmStatusChange() {
     setStatusSaving(true)
-    setError(null)
     try {
-      const updated = await updateQAThreadStatus(thread.id, status)
+      const updated = await updateQAThreadStatus(thread.id, pendingStatus)
       onStatusChange(updated)
-    } catch {
-      setError('Could not update the status.')
     } finally {
       setStatusSaving(false)
     }
@@ -150,8 +154,8 @@ export default function QAThreadDetail({ thread, onBack, onStatusChange, viewerI
             Thread status
           </Label>
           <Select
-            value={thread.status}
-            onValueChange={(v) => handleStatusChange(v as QAThreadStatus)}
+            value={pendingStatus}
+            onValueChange={(v) => setPendingStatus(v as QAThreadStatus)}
             disabled={statusSaving}
           >
             <SelectTrigger id="qa-thread-status" size="sm" className="w-full">
@@ -165,8 +169,29 @@ export default function QAThreadDetail({ thread, onBack, onStatusChange, viewerI
               ))}
             </SelectContent>
           </Select>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="w-full"
+            disabled={pendingStatus === thread.status || statusSaving}
+            onClick={() => setConfirmingStatus(true)}
+          >
+            Save status
+          </Button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmingStatus}
+        onOpenChange={setConfirmingStatus}
+        title="Change thread status?"
+        description={`Mark this thread as "${STATUS_OPTIONS.find((o) => o.value === pendingStatus)?.label}"?`}
+        confirmLabel="Save"
+        confirmingLabel="Saving…"
+        variant="default"
+        onConfirm={handleConfirmStatusChange}
+      />
     </div>
   )
 }
