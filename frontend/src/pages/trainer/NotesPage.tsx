@@ -1,12 +1,7 @@
 import { useEffect, useState } from 'react'
-import { listTrainees } from '@/api/accounts'
-import { ApiError } from '@/api/client'
-import { createTrainerNote, listTrainerNotes, markNoteRead } from '@/api/trainerNotes'
-import type { TrainerNote, User } from '@/api/types'
-import { useAuth } from '@/auth/AuthContext'
+import { archiveTrainerNote, listTrainerNotes, markNoteRead, unarchiveTrainerNote } from '@/api/trainerNotes'
+import type { TrainerNote } from '@/api/types'
 import { Button } from '@/components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 
 function formatTimestamp(value: string) {
@@ -18,7 +13,7 @@ function formatTimestamp(value: string) {
   })
 }
 
-function NoteCard({ note, variant }: { note: TrainerNote; variant: 'inbox' | 'sent' }) {
+function NoteCard({ note, onToggleArchived }: { note: TrainerNote; onToggleArchived: () => void }) {
   return (
     <li
       className={cn(
@@ -27,21 +22,27 @@ function NoteCard({ note, variant }: { note: TrainerNote; variant: 'inbox' | 'se
       )}
     >
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-xs text-muted-foreground">{formatTimestamp(note.created_at)}</span>
-        {variant === 'inbox' && !note.read && <span className="text-xs font-semibold text-primary">New</span>}
-        {variant === 'sent' && (
-          <span className={cn('text-xs', note.read ? 'text-muted-foreground' : 'font-semibold text-primary')}>
-            {note.read ? 'Seen' : 'Not seen yet'}
-          </span>
-        )}
+        <div className="flex items-baseline gap-2">
+          <span className="text-xs text-muted-foreground">{formatTimestamp(note.created_at)}</span>
+          {!note.read && <span className="text-xs font-semibold text-primary">New</span>}
+        </div>
+        <Button type="button" variant="ghost" size="sm" className="h-auto px-1.5 py-0.5 text-xs" onClick={onToggleArchived}>
+          {note.archived ? 'Unarchive' : 'Archive'}
+        </Button>
       </div>
       <p className="whitespace-pre-wrap text-sm">{note.body}</p>
     </li>
   )
 }
 
-function TraineeNotes() {
+/** A trainee's own inbox of notes their trainer sent them (see
+ * connection.models.TrainerNote) - reached via the Trainer tab's "Notes"
+ * pill (TrainerLayout). The trainer's own composer for these lives on the
+ * trainee-dashboard side instead (TrainerNotesSection, in TraineeDetailPage's
+ * Notes & Q&A tab), since it needs a specific trainee already in context. */
+export default function NotesPage() {
   const [notes, setNotes] = useState<TrainerNote[] | null>(null)
+  const [showArchived, setShowArchived] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -71,106 +72,37 @@ function TraineeNotes() {
     }
   }, [])
 
+  async function handleToggleArchived(note: TrainerNote) {
+    const updated = note.archived ? await unarchiveTrainerNote(note.id) : await archiveTrainerNote(note.id)
+    setNotes((prev) => (prev ?? []).map((n) => (n.id === updated.id ? updated : n)))
+  }
+
   if (notes === null) return <p className="mt-6 text-center text-sm text-muted-foreground">Loading…</p>
   if (notes.length === 0) {
     return <p className="mt-6 text-center text-sm text-muted-foreground">No notes from your trainer yet.</p>
   }
 
-  return (
-    <ul className="flex flex-col gap-2">
-      {notes.map((note) => (
-        <NoteCard key={note.id} note={note} variant="inbox" />
-      ))}
-    </ul>
-  )
-}
-
-function TrainerNotes() {
-  const [trainees, setTrainees] = useState<User[] | null>(null)
-  const [notes, setNotes] = useState<TrainerNote[] | null>(null)
-  const [selectedTraineeId, setSelectedTraineeId] = useState<number | undefined>(undefined)
-  const [body, setBody] = useState('')
-  const [sending, setSending] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    listTrainees()
-      .then((data) => {
-        setTrainees(data)
-        setSelectedTraineeId((prev) => prev ?? data[0]?.id)
-      })
-      .catch(() => setTrainees([]))
-    listTrainerNotes()
-      .then(setNotes)
-      .catch(() => setNotes([]))
-  }, [])
-
-  async function handleSend() {
-    if (!selectedTraineeId || !body.trim()) return
-    setSending(true)
-    setError(null)
-    try {
-      const created = await createTrainerNote({ trainee: selectedTraineeId, body: body.trim() })
-      setNotes((prev) => [created, ...(prev ?? [])])
-      setBody('')
-    } catch (err) {
-      setError(err instanceof ApiError ? 'Could not send this note.' : 'Something went wrong.')
-    } finally {
-      setSending(false)
-    }
-  }
-
-  if (trainees === null || notes === null) {
-    return <p className="mt-6 text-center text-sm text-muted-foreground">Loading…</p>
-  }
-  if (trainees.length === 0) {
-    return <p className="mt-6 text-center text-sm text-muted-foreground">You have no trainees yet.</p>
-  }
-
-  const visibleNotes = notes.filter((n) => n.trainee === selectedTraineeId)
+  const visibleNotes = notes.filter((n) => showArchived || !n.archived)
+  const archivedCount = notes.filter((n) => n.archived).length
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2 rounded-xl border border-border bg-card px-3.5 py-3">
-        {trainees.length > 1 && (
-          <Select value={String(selectedTraineeId)} onValueChange={(v) => setSelectedTraineeId(Number(v))}>
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {trainees.map((t) => (
-                <SelectItem key={t.id} value={String(t.id)}>
-                  {t.username}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-        <Textarea
-          placeholder="Something to keep in mind, e.g. 'focus on tempo this week'…"
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-        />
-        {error && <p className="text-sm text-destructive">{error}</p>}
-        <Button type="button" size="sm" disabled={sending || !body.trim()} onClick={handleSend} className="self-start">
-          {sending ? 'Sending…' : 'Send note'}
-        </Button>
-      </div>
-
+    <div className="flex flex-col gap-3">
+      {archivedCount > 0 && (
+        <div className="flex justify-end">
+          <Button type="button" size="sm" variant="ghost" onClick={() => setShowArchived((v) => !v)}>
+            {showArchived ? 'Hide archived' : `Show archived (${archivedCount})`}
+          </Button>
+        </div>
+      )}
       {visibleNotes.length === 0 ? (
-        <p className="mt-2 text-center text-sm text-muted-foreground">No notes sent yet.</p>
+        <p className="mt-6 text-center text-sm text-muted-foreground">All caught up - every note is archived.</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {visibleNotes.map((note) => (
-            <NoteCard key={note.id} note={note} variant="sent" />
+            <NoteCard key={note.id} note={note} onToggleArchived={() => handleToggleArchived(note)} />
           ))}
         </ul>
       )}
     </div>
   )
-}
-
-export default function NotesPage() {
-  const { viewMode } = useAuth()
-  return viewMode === 'trainer' ? <TrainerNotes /> : <TraineeNotes />
 }

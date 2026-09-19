@@ -18,6 +18,10 @@ class QAThread(models.Model):
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.OPEN)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    # Bookkeeping only, never serialized directly - backs the trainee's
+    # Trainer-tab unread badge (see QAThreadViewSet.mark_read / views.UnreadSummaryView).
+    # Null means "never opened" - every non-self message counts as unread.
+    trainee_last_read_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-updated_at"]
@@ -50,6 +54,11 @@ class TrainerNote(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     read = models.BooleanField(default=False)
     read_at = models.DateTimeField(null=True, blank=True)
+    # Trainee-only housekeeping - hides the note from their own inbox without
+    # affecting the trainer's "sent" list or the unread count (a note is only
+    # ever unread before its first view, which always happens before it could
+    # be archived - see views.TrainerNoteViewSet.archive/unarchive).
+    archived = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["-created_at"]

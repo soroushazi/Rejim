@@ -2,6 +2,7 @@ import { CalendarCheck, Dumbbell, TrendingUp, User, Users, Utensils, type Lucide
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
 import { cn } from '@/lib/utils'
+import { useTrainerUnreadCounts } from '@/lib/useTrainerUnreadCounts'
 
 type NavItem = { to: string; label: string; Icon: LucideIcon; emphasized?: boolean }
 
@@ -26,6 +27,10 @@ const TRAINER_NAV_ITEMS: NavItem[] = [
 export default function BottomNav() {
   const { viewMode } = useAuth()
   const items = viewMode === 'trainer' ? TRAINER_NAV_ITEMS : TRAINEE_NAV_ITEMS
+  // Sum of unread trainer notes + unseen Q&A messages, badged on the Trainer
+  // tab below - harmless to fetch even in trainer viewMode (just unused then).
+  const { notesUnread, qaUnread } = useTrainerUnreadCounts()
+  const trainerUnread = notesUnread + qaUnread
 
   return (
     <nav
@@ -61,7 +66,17 @@ export default function BottomNav() {
               </>
             ) : (
               <>
-                <Icon className="size-[22px]" strokeWidth={1.8} />
+                <span className="relative">
+                  <Icon className="size-[22px]" strokeWidth={1.8} />
+                  {to === '/trainer' && trainerUnread > 0 && (
+                    <span
+                      className="absolute -top-1 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground"
+                      aria-label={`${trainerUnread} unread`}
+                    >
+                      {trainerUnread > 9 ? '9+' : trainerUnread}
+                    </span>
+                  )}
+                </span>
                 <span className="text-[11px] font-medium">{label}</span>
               </>
             )

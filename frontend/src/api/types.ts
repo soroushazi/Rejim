@@ -19,6 +19,11 @@ export type User = {
   /** Latest DailyMetric weight if logged, else starting_weight - see
    * accounts/services.py::resolve_current_weight_kg. Null if neither exists. */
   current_weight_kg: number | null
+  /** The account's own display-unit preference (kg/lb) - see usersettings.models
+   * UserPreference. Exposed on User (not just /preferences/) so a trainer
+   * viewing a trainee's Progress data can display weights in *their*
+   * preference rather than the trainer's own. */
+  default_weight_unit: WeightUnit
   meal_preferences: number[]
   meal_preferences_notes: string
   workout_days_per_week: number | null
@@ -84,6 +89,7 @@ export type MacroFilter = {
 export type DietaryTag = {
   id: number
   name: string
+  description: string
 }
 
 export type FoodItem = {
@@ -167,14 +173,15 @@ export type DietPlanDetail = DietPlanSummary & {
   average_daily_nutrients: Nutrients
 }
 
-export type LoggedMealSource = 'plan' | 'custom'
+export type LoggedMealSource = 'plan' | 'custom' | 'mixed'
 
 export type LoggedMealItem = {
   id: number
   reference_meal_item: number | null
   food_item: number | null
+  quick_log_item: number | null
   food_item_name: string
-  actual_weight_grams: string
+  actual_weight_grams: string | null
   actual_nutrients: Nutrients
 }
 
@@ -190,15 +197,45 @@ export type LoggedMeal = {
   total_nutrients: Nutrients
 }
 
+/** `source` is intentionally absent - the backend derives the meal's overall
+ * source from the mix of item types (LoggedMealSerializer._upsert), since a
+ * single log can now freely combine plan, food-bank, and quick-log items. */
 export type NewLoggedMealItem =
   | { reference_meal_item: number; actual_weight_grams: string }
   | { food_item: number; actual_weight_grams: string }
+  | { quick_log_item: number }
 
 export type NewLoggedMeal = {
   reference_meal: number
   date: string
-  source: LoggedMealSource
   items: NewLoggedMealItem[]
+}
+
+/** A trainee's own saved shortcut (e.g. "my protein shake") with fixed
+ * per-serving nutrition values - not scaled by weight, see backend
+ * nutrition/models.py::QuickLogItem. Private to the owner. */
+export type QuickLogItem = {
+  id: number
+  name: string
+  calories: string
+  protein_g: string | null
+  carbs_g: string | null
+  fat_g: string | null
+  fiber_g: string | null
+  sugar_g: string | null
+  sodium_mg: string | null
+  created_at: string
+}
+
+export type NewQuickLogItem = {
+  name: string
+  calories: string
+  protein_g?: string | null
+  carbs_g?: string | null
+  fat_g?: string | null
+  fiber_g?: string | null
+  sugar_g?: string | null
+  sodium_mg?: string | null
 }
 
 export type NewFoodItemComponent = {
@@ -244,6 +281,10 @@ export type Exercise = {
   primary_muscle_groups: number[]
   secondary_muscle_groups: number[]
   difficulty_level: ExerciseDifficulty
+  /** Done one side at a time (e.g. Single-Arm Dumbbell Row) - logging
+   * captures weight/reps/RPE separately per side instead of one combined
+   * value (see LoggedSetEntry's own _left/_right fields). */
+  is_unilateral: boolean
   image: string | null
   video_url: string | null
   alternatives: number[]
@@ -256,6 +297,7 @@ export type NewExercise = {
   primary_muscle_groups: number[]
   secondary_muscle_groups: number[]
   difficulty_level: ExerciseDifficulty
+  is_unilateral: boolean
   video_url: string | null
 }
 
@@ -334,12 +376,21 @@ export type WeightUnit = 'kg' | 'lb'
 export type LoggedSetEntry = {
   id: number
   set_number: number
-  weight: string
+  /** Bilateral shape - null for a per-side (Exercise.is_unilateral) exercise,
+   * which uses the _left/_right pair below instead. Exactly one shape is
+   * ever populated for a given set. */
+  weight: string | null
   weight_unit: WeightUnit
-  reps_done: number
+  reps_done: number | null
+  weight_left: string | null
+  weight_right: string | null
+  reps_done_left: number | null
+  reps_done_right: number | null
   rest_seconds: number | null
   is_warmup: boolean
   rpe: number | null
+  rpe_left: number | null
+  rpe_right: number | null
 }
 
 export type LoggedExerciseEntry = {
@@ -372,12 +423,20 @@ export type WorkoutSessionLog = {
 
 export type NewLoggedSet = {
   set_number: number
-  weight: string
   weight_unit: WeightUnit
-  reps_done: number
+  /** Send either weight+reps_done (bilateral) or all four _left/_right
+   * fields (a per-side exercise) - never both, see LoggedSetEntry. */
+  weight?: string
+  reps_done?: number
+  weight_left?: string
+  weight_right?: string
+  reps_done_left?: number
+  reps_done_right?: number
   rest_seconds?: number | null
   is_warmup?: boolean
   rpe?: number | null
+  rpe_left?: number | null
+  rpe_right?: number | null
 }
 
 export type NewLoggedExercise = {
@@ -510,6 +569,7 @@ export type TrainerNote = {
   created_at: string
   read: boolean
   read_at: string | null
+  archived: boolean
 }
 
 export type NewTrainerNote = {
@@ -517,19 +577,36 @@ export type NewTrainerNote = {
   body: string
 }
 
+/** Backs the trainee's Trainer-tab bottom-nav badge and the Notes/Q&A pill
+ * counts in TrainerLayout - see connection.views.UnreadSummaryView. */
+export type UnreadSummary = {
+  notes_unread: number
+  qa_unread: number
+}
+
 /** Flat shape returned by GET /workouts/logged-sets/?exercise=<id> - one row per
  * set across every past session for that exercise, used for the history list
- * and chart (and, client-side, weight suggestions + PR detection). */
+ * and chart (and, client-side, weight suggestions + PR detection). weight/
+ * reps_done are null for a per-side (Exercise.is_unilateral) exercise's sets,
+ * which use the _left/_right pair instead - weight-suggestion/PR-detection
+ * don't yet support per-side data, so callers should treat a null weight as
+ * "skip this row" rather than coercing it. */
 export type ExerciseHistorySet = {
   id: number
   logged_exercise: number
   set_number: number
-  weight: string
+  weight: string | null
   weight_unit: WeightUnit
-  reps_done: number
+  reps_done: number | null
+  weight_left: string | null
+  weight_right: string | null
+  reps_done_left: number | null
+  reps_done_right: number | null
   rest_seconds: number | null
   is_warmup: boolean
   rpe: number | null
+  rpe_left: number | null
+  rpe_right: number | null
   session_date: string
   exercise: number
 }

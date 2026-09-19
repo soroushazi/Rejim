@@ -8,6 +8,7 @@ from .views import (
     TrainerConnectionView,
     TrainerNoteViewSet,
     TrainerPrivateNoteViewSet,
+    UnreadSummaryView,
 )
 
 router = DefaultRouter()
@@ -19,4 +20,5 @@ router.register("plan-change-log", PlanChangeLogViewSet, basename="planchangelog
 
 urlpatterns = [
     path("trainer-connection/", TrainerConnectionView.as_view(), name="trainer-connection"),
+    path("unread-summary/", UnreadSummaryView.as_view(), name="unread-summary"),
 ] + router.urls

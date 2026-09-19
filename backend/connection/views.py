@@ -39,6 +39,15 @@ class QAThreadViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
             # already restricted to that queryset by the serializer).
             serializer.save()
 
+    @action(detail=True, methods=["post"])
+    def mark_read(self, request, pk=None):
+        thread = self.get_object()
+        if request.user != thread.trainee:
+            raise PermissionDenied("Only the thread's trainee can mark it read.")
+        thread.trainee_last_read_at = timezone.now()
+        thread.save(update_fields=["trainee_last_read_at"])
+        return Response(self.get_serializer(thread).data)
+
 
 class QAMessageViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = QAMessage.objects.all()
@@ -67,7 +76,7 @@ class TrainerNoteViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
     trainee_path = "trainee"
 
     def get_permissions(self):
-        if self.action == "mark_read":
+        if self.action in ("mark_read", "archive", "unarchive"):
             return [IsAuthenticated()]
         return super().get_permissions()
 
@@ -80,6 +89,44 @@ class TrainerNoteViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
         note.read_at = timezone.now()
         note.save(update_fields=["read", "read_at"])
         return Response(self.get_serializer(note).data)
+
+    @action(detail=True, methods=["post"])
+    def archive(self, request, pk=None):
+        note = self.get_object()
+        if request.user != note.trainee:
+            raise PermissionDenied("Only the note's trainee can archive it.")
+        note.archived = True
+        note.save(update_fields=["archived"])
+        return Response(self.get_serializer(note).data)
+
+    @action(detail=True, methods=["post"])
+    def unarchive(self, request, pk=None):
+        note = self.get_object()
+        if request.user != note.trainee:
+            raise PermissionDenied("Only the note's trainee can unarchive it.")
+        note.archived = False
+        note.save(update_fields=["archived"])
+        return Response(self.get_serializer(note).data)
+
+
+class UnreadSummaryView(APIView):
+    """Counts backing the trainee's Trainer-tab bottom-nav badge and the
+    Notes/Q&A pill counts in TrainerLayout - unread TrainerNotes plus unseen
+    QAMessages across every thread. Scoped to `request.user` as a trainee
+    (naturally zero for a pure trainer, who has no equivalent badge)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        notes_unread = TrainerNote.objects.filter(trainee=user, read=False).count()
+        qa_unread = 0
+        for thread in QAThread.objects.filter(trainee=user):
+            unseen = QAMessage.objects.filter(thread=thread).exclude(sender=user)
+            if thread.trainee_last_read_at:
+                unseen = unseen.filter(created_at__gt=thread.trainee_last_read_at)
+            qa_unread += unseen.count()
+        return Response({"notes_unread": notes_unread, "qa_unread": qa_unread})
 
 
 class TrainerConnectionView(APIView):

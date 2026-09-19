@@ -22,3 +22,11 @@ export function updateQAThreadStatus(id: number, status: QAThreadStatus): Promis
     body: JSON.stringify({ status }),
   })
 }
+
+/** Call when the thread's own trainee opens it, so the trainer's later
+ * replies stop counting toward the Trainer-tab unread badge - see
+ * connection.views.QAThreadViewSet.mark_read. A no-op (403, ignored) if
+ * called by anyone else, e.g. a trainer viewing their trainee's thread. */
+export function markQAThreadRead(id: number): Promise<QAThread> {
+  return apiFetch<QAThread>(`/connection/threads/${id}/mark_read/`, { method: 'POST' })
+}

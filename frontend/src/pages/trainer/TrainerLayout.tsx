@@ -1,12 +1,14 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { cn } from '@/lib/utils'
-
-const SUB_TABS = [
-  { to: '/trainer/notes', label: 'Notes' },
-  { to: '/trainer/qa', label: 'Q&A' },
-]
+import { useTrainerUnreadCounts } from '@/lib/useTrainerUnreadCounts'
 
 export default function TrainerLayout() {
+  const { notesUnread, qaUnread } = useTrainerUnreadCounts()
+  const subTabs = [
+    { to: '/trainer/notes', label: 'Notes', unread: notesUnread },
+    { to: '/trainer/qa', label: 'Q&A', unread: qaUnread },
+  ]
+
   return (
     <div className="-mx-4">
       <div
@@ -14,18 +16,23 @@ export default function TrainerLayout() {
         style={{ top: 'calc(var(--header-height) + env(safe-area-inset-top))' }}
       >
         <div className="flex rounded-full bg-muted p-1 shadow-sm ring-1 ring-border/60">
-          {SUB_TABS.map(({ to, label }) => (
+          {subTabs.map(({ to, label, unread }) => (
             <NavLink
               key={to}
               to={to}
               className={({ isActive }) =>
                 cn(
-                  'flex-1 rounded-full py-1.5 text-center text-[13px] font-semibold transition-colors',
+                  'flex flex-1 items-center justify-center gap-1.5 rounded-full py-1.5 text-center text-[13px] font-semibold transition-colors',
                   isActive ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
                 )
               }
             >
               {label}
+              {unread > 0 && (
+                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">
+                  {unread > 9 ? '9+' : unread}
+                </span>
+              )}
             </NavLink>
           ))}
         </div>

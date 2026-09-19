@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
-import { createTrainerPrivateNote, listTrainerPrivateNotes } from '@/api/trainerPrivateNotes'
+import { Trash2 } from 'lucide-react'
+import { createTrainerPrivateNote, deleteTrainerPrivateNote, listTrainerPrivateNotes } from '@/api/trainerPrivateNotes'
 import type { TrainerPrivateNote } from '@/api/types'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 
@@ -15,6 +17,7 @@ export default function TrainerPrivateNotes({ traineeId }: { traineeId: number }
   const [notes, setNotes] = useState<TrainerPrivateNote[] | null>(null)
   const [draft, setDraft] = useState('')
   const [saving, setSaving] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<TrainerPrivateNote | null>(null)
 
   function reload() {
     listTrainerPrivateNotes(traineeId)
@@ -39,6 +42,12 @@ export default function TrainerPrivateNotes({ traineeId }: { traineeId: number }
     }
   }
 
+  async function handleDelete() {
+    if (!deleteTarget) return
+    await deleteTrainerPrivateNote(deleteTarget.id)
+    setNotes((prev) => (prev ?? []).filter((n) => n.id !== deleteTarget.id))
+  }
+
   return (
     <div className="flex flex-col gap-2">
       <p className="text-xs text-muted-foreground">Private notes — only you can see these.</p>
@@ -55,13 +64,32 @@ export default function TrainerPrivateNotes({ traineeId }: { traineeId: number }
       ) : (
         <ul className="flex flex-col gap-1.5">
           {notes.map((note) => (
-            <li key={note.id} className="rounded-lg border border-border bg-card px-3 py-2 text-sm">
-              <p>{note.content}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{formatTimestamp(note.created_at)}</p>
+            <li key={note.id} className="flex items-start justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm">
+              <div>
+                <p>{note.content}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{formatTimestamp(note.created_at)}</p>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="shrink-0 text-muted-foreground hover:text-destructive"
+                aria-label="Delete note"
+                onClick={() => setDeleteTarget(note)}
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
             </li>
           ))}
         </ul>
       )}
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Delete this private note?"
+        onConfirm={handleDelete}
+      />
     </div>
   )
 }

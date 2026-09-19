@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronLeft } from 'lucide-react'
 import { listQAMessages, sendQAMessage } from '@/api/qaMessages'
-import { updateQAThreadStatus } from '@/api/qaThreads'
+import { markQAThreadRead, updateQAThreadStatus } from '@/api/qaThreads'
 import type { QAMessage, QAThread, QAThreadStatus } from '@/api/types'
 import { useAuth } from '@/auth/AuthContext'
 import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
@@ -13,6 +14,10 @@ type Props = {
   thread: QAThread
   onBack: () => void
   onStatusChange: (thread: QAThread) => void
+  /** True when the viewer is this thread's own trainee (not their trainer
+   * viewing it) - the only case that should clear the Trainer-tab unread
+   * badge for it, see api/qaThreads.ts::markQAThreadRead. */
+  viewerIsOwnTrainee: boolean
 }
 
 const STATUS_OPTIONS: { value: QAThreadStatus; label: string }[] = [
@@ -30,7 +35,7 @@ function formatTimestamp(value: string) {
   })
 }
 
-export default function QAThreadDetail({ thread, onBack, onStatusChange }: Props) {
+export default function QAThreadDetail({ thread, onBack, onStatusChange, viewerIsOwnTrainee }: Props) {
   const { user } = useAuth()
   const [messages, setMessages] = useState<QAMessage[] | null>(null)
   const [body, setBody] = useState('')
@@ -52,6 +57,10 @@ export default function QAThreadDetail({ thread, onBack, onStatusChange }: Props
       cancelled = true
     }
   }, [thread.id])
+
+  useEffect(() => {
+    if (viewerIsOwnTrainee) markQAThreadRead(thread.id).catch(() => {})
+  }, [thread.id, viewerIsOwnTrainee])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: 'end' })
@@ -95,22 +104,6 @@ export default function QAThreadDetail({ thread, onBack, onStatusChange }: Props
           <span className="truncate font-semibold">{thread.subject}</span>
           <span className="text-xs text-muted-foreground">{thread.trainee_username}</span>
         </div>
-        <Select
-          value={thread.status}
-          onValueChange={(v) => handleStatusChange(v as QAThreadStatus)}
-          disabled={statusSaving}
-        >
-          <SelectTrigger size="sm" className="w-32">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {STATUS_OPTIONS.map((o) => (
-              <SelectItem key={o.value} value={o.value}>
-                {o.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
 
       <div className="flex flex-col gap-2 rounded-xl border border-border bg-card px-3 py-3">
@@ -141,16 +134,38 @@ export default function QAThreadDetail({ thread, onBack, onStatusChange }: Props
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2">
         <Textarea
           placeholder="Write a reply…"
           value={body}
           onChange={(e) => setBody(e.target.value)}
-          className="flex-1"
+          className="w-full"
         />
-        <Button type="button" size="sm" disabled={sending || !body.trim()} onClick={handleSend} className="self-end">
+        <Button type="button" size="sm" className="w-full" disabled={sending || !body.trim()} onClick={handleSend}>
           {sending ? 'Sending…' : 'Send'}
         </Button>
+
+        <div className="flex flex-col gap-1 border-t border-border pt-2">
+          <Label htmlFor="qa-thread-status" className="text-xs font-normal text-muted-foreground">
+            Thread status
+          </Label>
+          <Select
+            value={thread.status}
+            onValueChange={(v) => handleStatusChange(v as QAThreadStatus)}
+            disabled={statusSaving}
+          >
+            <SelectTrigger id="qa-thread-status" size="sm" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
     </div>
   )

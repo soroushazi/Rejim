@@ -52,8 +52,8 @@ class TrainerNoteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = TrainerNote
-        fields = ["id", "trainee", "trainee_username", "body", "created_at", "read", "read_at"]
-        read_only_fields = ["created_at", "read", "read_at"]
+        fields = ["id", "trainee", "trainee_username", "body", "created_at", "read", "read_at", "archived"]
+        read_only_fields = ["created_at", "read", "read_at", "archived"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

@@ -11,3 +11,7 @@ export function createTrainerPrivateNote(data: NewTrainerPrivateNote): Promise<T
     body: JSON.stringify(data),
   })
 }
+
+export function deleteTrainerPrivateNote(id: number): Promise<void> {
+  return apiFetch<void>(`/connection/private-notes/${id}/`, { method: 'DELETE' })
+}

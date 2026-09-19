@@ -9,6 +9,7 @@ import DietPlanEditor from './diet/plan-editor/DietPlanEditor'
 import GoalsSection from './goals/GoalsSection'
 import ProgressDashboard from './progress/ProgressDashboard'
 import QASection from './trainer/QASection'
+import TrainerNotesSection from './trainer/TrainerNotesSection'
 import TrainerPrivateNotes from './trainer/TrainerPrivateNotes'
 import WorkoutPlanEditor from './trainer/workout-editor/WorkoutPlanEditor'
 
@@ -73,10 +74,18 @@ export default function TraineeDetailPage() {
           <WorkoutPlanEditor traineeId={traineeId} />
         </TabsContent>
         <TabsContent value="progress" className="mt-3">
-          <ProgressDashboard traineeId={traineeId} />
+          <ProgressDashboard traineeId={traineeId} trainee={trainee} />
         </TabsContent>
         <TabsContent value="notes" className="mt-3">
           <div className="flex flex-col gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Notes</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <TrainerNotesSection traineeId={traineeId} />
+              </CardContent>
+            </Card>
             <Card>
               <CardHeader>
                 <CardTitle>Private Notes</CardTitle>

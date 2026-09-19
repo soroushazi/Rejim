@@ -103,7 +103,14 @@ export default function QASection({ traineeId }: Props) {
   if (selectedThreadId !== null) {
     const thread = threads?.find((t) => t.id === selectedThreadId)
     if (thread) {
-      return <QAThreadDetail thread={thread} onBack={() => setSelectedThreadId(null)} onStatusChange={handleThreadUpdated} />
+      return (
+        <QAThreadDetail
+          thread={thread}
+          onBack={() => setSelectedThreadId(null)}
+          onStatusChange={handleThreadUpdated}
+          viewerIsOwnTrainee={!actingForTrainee}
+        />
+      )
     }
     return (
       <div className="flex flex-col gap-3">
