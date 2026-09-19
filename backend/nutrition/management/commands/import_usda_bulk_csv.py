@@ -190,12 +190,21 @@ class Command(BaseCommand):
     # -- transform/load ---------------------------------------------------------------
 
     def _transform_and_load(self, raw_conn, data_types, dry_run):
+        # FoodItem's nutrient fields are DecimalField(max_digits=7, decimal_places=2) -
+        # max representable absolute value is 99999.99. USDA's Branded Foods data has a
+        # real (if rare) rate of bad outlier entries (wrong units, data-entry typos) that
+        # blow past that - e.g. a mislabeled micronutrient in the hundreds of thousands.
+        # Excluding those from the pivot (rather than importing them or crashing the
+        # whole batch) drops just that one bad value, not the food, unless the bad value
+        # happened to be a required macro - then missing_required_fields catches it below.
+        valid_range = "fn.amount >= 0 AND fn.amount < 100000"
         nutrient_filters = "\n".join(
-            f"        MAX(fn.amount) FILTER (WHERE n.nutrient_nbr = '{number}') AS {field},"
+            f"        MAX(fn.amount) FILTER (WHERE n.nutrient_nbr = '{number}' AND {valid_range}) AS {field},"
             for number, field in NUTRIENT_NUMBER_TO_FIELD.items()
         )
         calorie_coalesce = ", ".join(
-            f"MAX(fn.amount) FILTER (WHERE n.nutrient_nbr = '{number}')" for number in CALORIE_NUTRIENT_NUMBERS
+            f"MAX(fn.amount) FILTER (WHERE n.nutrient_nbr = '{number}' AND {valid_range})"
+            for number in CALORIE_NUTRIENT_NUMBERS
         )
         # calories_per_100g is checked separately (it's the COALESCE column, not a plain
         # nutrient_pivot field) - the other 3 required macros come straight from the map.
@@ -318,7 +327,10 @@ class Command(BaseCommand):
             CREATE TEMP TABLE portion_deduped AS
             SELECT DISTINCT ON (fdc_id, label) fdc_id, label, grams_per_unit, seq_num
             FROM portion_labeled
+            -- Same DecimalField(7,2) overflow guard as the nutrient pivot above -
+            -- FoodItemMeasure.grams_per_unit has the same 99999.99 ceiling.
             WHERE label IS NOT NULL AND grams_per_unit IS NOT NULL
+              AND grams_per_unit >= 0 AND grams_per_unit < 100000
             ORDER BY fdc_id, label, seq_num
         """)
         cur.execute("""
@@ -351,6 +363,7 @@ class Command(BaseCommand):
             JOIN imported_map im ON im.fdc_id = b.fdc_id
             WHERE b.serving_size IS NOT NULL
               AND b.serving_size_unit IN ('g', 'ml')
+              AND b.serving_size >= 0 AND b.serving_size < 100000
               AND b.fdc_id NOT IN (SELECT fdc_id FROM portion_ranked)
         """)
         cur.execute("""
