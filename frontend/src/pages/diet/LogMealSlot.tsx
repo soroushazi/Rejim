@@ -10,12 +10,12 @@ import ConfirmDialog from '@/components/ConfirmDialog'
 import { round } from '@/lib/utils'
 
 /** Slot-card tint by logged state: off-plan (any custom item) reads as a
- * warning (reddish), fully on-plan reads as a confirmed match to the
- * trainer's plan (purplish, the brand color), and mixed/not-yet-logged stay
- * neutral (no distinct "did they follow the plan?" signal to give yet). */
+ * warning (reddish), fully on-plan or plan+off-plan both read as a confirmed
+ * match to the trainer's plan (purplish, the brand color), and not-yet-logged
+ * stays neutral (no distinct "did they follow the plan?" signal to give yet). */
 function slotClassName(source: LoggedMeal['source'] | undefined) {
   if (source === 'custom') return 'overflow-hidden rounded-lg border border-destructive/40 bg-destructive/5'
-  if (source === 'plan') return 'overflow-hidden rounded-lg border border-primary/40 bg-primary/5'
+  if (source === 'plan' || source === 'mixed') return 'overflow-hidden rounded-lg border border-primary/40 bg-primary/5'
   return 'overflow-hidden rounded-lg border border-border bg-background'
 }
 
