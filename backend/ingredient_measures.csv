@@ -46,10 +46,13 @@ Egg white (cooked),whole (large egg white),33,True
 "Milk, whole (3.25%)",cup,244,True
 "Milk, whole (3.25%)",fl oz,30.5,False
 "Milk, whole (3.25%)",tbsp,15.3,False
+"Milk, whole (3.25%)",ml,1.03,False
 "Milk, skim",cup,245,True
 "Milk, skim",fl oz,30.6,False
+"Milk, skim",ml,1.03,False
 "Milk, 2%",cup,244,True
 "Milk, 2%",fl oz,30.5,False
+"Milk, 2%",ml,1.03,False
 "Mozzarella cheese, part-skim",oz,28.35,True
 "Mozzarella cheese, part-skim",slice,28,False
 Cheddar cheese,oz,28.35,True
@@ -60,6 +63,7 @@ Cream cheese,tbsp,14.5,True
 Cream cheese,oz,28.35,False
 "Kefir, plain, low-fat",cup,243,True
 "Kefir, plain, low-fat",fl oz,30.4,False
+"Kefir, plain, low-fat",ml,1.03,False
 "Tofu, firm",oz,28.35,False
 "Tofu, firm",cup (cubed),124,True
 Tempeh,oz,28.35,True
@@ -140,6 +144,7 @@ Almonds,cup (whole),143,False
 Peanut butter,tbsp,16,True
 Olive oil,tbsp,13.5,True
 Olive oil,tsp,4.5,False
+Olive oil,ml,0.91,False
 Ground turkey 93/7 (raw),oz,28.35,True
 Lean ground beef 90/10 (raw),oz,28.35,True
 Beef sirloin steak (raw),oz,28.35,True
@@ -181,3 +186,40 @@ Cauliflower (cooked),cup (chopped),124,True
 "Mushroom, white/button (cooked)",cup (sliced),156,True
 Zucchini (cooked),cup (sliced),180,True
 Onion (cooked),cup (chopped),210,True
+Butter,tbsp,14.2,True
+Butter,tsp,4.7,False
+Coconut oil,tbsp,13.6,True
+Coconut oil,tsp,4.53,False
+Coconut oil,ml,0.92,False
+Honey,tbsp,21,True
+Honey,tsp,7,False
+Maple syrup,tbsp,20,True
+Maple syrup,tsp,6.7,False
+Almond butter,tbsp,16,True
+Ketchup,tbsp,17,True
+Mayonnaise,tbsp,13.8,True
+Hummus,cup,246,True
+Hummus,tbsp,15,False
+"Almond milk, unsweetened",cup,245,True
+"Almond milk, unsweetened",fl oz,30.6,False
+"Almond milk, unsweetened",ml,1.04,False
+"Oat milk, unsweetened",cup,246,True
+"Oat milk, unsweetened",fl oz,30.8,False
+"Oat milk, unsweetened",ml,1.04,False
+"Soy milk, unsweetened",cup,243,True
+"Soy milk, unsweetened",fl oz,30.4,False
+"Soy milk, unsweetened",ml,1.03,False
+Walnuts,oz,28.35,True
+Walnuts,cup (chopped),117,False
+Cashews,oz,28.35,True
+Cashews,cup (whole),137,False
+Pistachios (shelled),oz,28.35,True
+Pistachios (shelled),cup,123,False
+Chia seeds,tbsp,12,True
+Ground flaxseed,tbsp,7,True
+Feta cheese,oz,28.35,True
+Feta cheese,cup (crumbled),150,False
+Swiss cheese,oz,28.35,True
+Swiss cheese,slice,28,False
+Pear,whole (medium),178,True
+"Bagel, plain",whole,105,True
