@@ -1,4 +1,6 @@
+import { ArrowLeft } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { ApiError } from '@/api/client'
 import { listExercises, listMuscleGroups } from '@/api/exercises'
 import { deleteWorkoutSession, saveWorkoutSession } from '@/api/workoutSessions'
@@ -23,10 +25,13 @@ import {
   effectiveSupersetPartner,
   type ExerciseOverrideMap,
 } from '@/lib/exerciseOverrides'
+import { cn } from '@/lib/utils'
 import ExerciseLogBlock, { type DraftSet } from './ExerciseLogBlock'
+import ExerciseLogListRow from './ExerciseLogListRow'
 import OffProgramDialog from './OffProgramDialog'
 import { newDraftSet } from './SetRows'
 import SupersetLogBlock, { type ExerciseLogEntry } from './SupersetLogBlock'
+import SupersetLogListRow from './SupersetLogListRow'
 
 type ExerciseDrafts = { warmup: DraftSet[]; working: DraftSet[] }
 
@@ -55,6 +60,18 @@ function buildBlocks(order: number[], exercisesById: Map<number, PlanExerciseDet
     }
   }
   return blocks
+}
+
+/** How many rounds (one working set of each exercise) are fully confirmed on
+ * both sides - mirrors SupersetLogBlock's own round-pairing logic, needed
+ * here too for the list row's "x/y rounds" summary. */
+function countConfirmedRounds(a: ExerciseLogEntry, b: ExerciseLogEntry) {
+  const roundCount = Math.max(a.workingSets.length, b.workingSets.length, 1)
+  let confirmed = 0
+  for (let i = 0; i < roundCount; i++) {
+    if ((a.workingSets[i]?.confirmed ?? false) && (b.workingSets[i]?.confirmed ?? false)) confirmed++
+  }
+  return confirmed
 }
 
 type Props = {
@@ -120,10 +137,11 @@ export default function SessionLogForm({
   const session = sessions.find((s) => s.id === selectedSessionId) ?? sessions[0]
   const [exerciseOrder, setExerciseOrder] = useState<number[]>([])
   const [drafts, setDrafts] = useState<Record<number, ExerciseDrafts>>({})
-  // Only one exercise card open at a time - besides the "not all open" ask,
-  // this also avoids reordering shuffling an already-expanded neighbor into
-  // the spot you just tapped, which read as "the card I clicked uncollapsed".
-  const [expandedExerciseId, setExpandedExerciseId] = useState<number | null>(null)
+  // Which block (by its first plan_exercise id) is currently open in the
+  // full-screen logging view - null shows the session overview list instead.
+  // Only one at a time, for the same reason reordering only ever shows one
+  // thing at once: no risk of "the block I tapped" shifting under a finger.
+  const [focusedPeId, setFocusedPeId] = useState<number | null>(null)
   const [reordering, setReordering] = useState(false)
   const [weightUnit, setWeightUnit] = useState<WeightUnit>('lb')
   const [notes, setNotes] = useState('')
@@ -149,6 +167,7 @@ export default function SessionLogForm({
     setSaved(false)
     setError(null)
     setReordering(false)
+    setFocusedPeId(null)
 
     if (existingLog) {
       const byPlanExercise = new Map(existingLog.logged_exercises.map((le) => [le.plan_exercise, le]))
@@ -222,6 +241,33 @@ export default function SessionLogForm({
       ;[next[index], next[target]] = [next[target], next[index]]
       return next.flatMap((b) => (b.type === 'pair' ? [b.peId, b.partnerId] : [b.peId]))
     })
+  }
+
+  function entryFor(peId: number): ExerciseLogEntry | null {
+    const pe = exercisesById.get(peId)
+    if (!pe) return null
+    const effectiveExId = effectiveExerciseId(pe, overrides)
+    const displayPe = effectiveExId === pe.exercise ? pe : { ...pe, exercise: effectiveExId, exercise_name: exerciseBankById.get(effectiveExId)?.name ?? pe.exercise_name }
+    const draft = drafts[peId] ?? { warmup: [], working: [] }
+    return {
+      planExercise: displayPe,
+      exercise: exerciseBankById.get(effectiveExId) ?? null,
+      warmupSets: draft.warmup,
+      workingSets: draft.working,
+      onWarmupSetsChange: (warmup) => setDrafts((d) => ({ ...d, [peId]: { ...d[peId], warmup } })),
+      onWorkingSetsChange: (working) => setDrafts((d) => ({ ...d, [peId]: { ...d[peId], working } })),
+    }
+  }
+
+  function substitutionBadge(peId: number) {
+    const pe = exercisesById.get(peId)
+    const subId = overrides[peId]?.substitutedExercise
+    if (!pe || !subId) return null
+    return (
+      <p key={peId} className="mb-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+        Off-program: swapped in for {pe.exercise_name}
+      </p>
+    )
   }
 
   async function handleSave() {
@@ -300,10 +346,57 @@ export default function SessionLogForm({
     }
   }
 
+  const focusedBlock = blocks.find((b) => b.peId === focusedPeId) ?? null
+
+  if (focusedBlock) {
+    const entryA = entryFor(focusedBlock.peId)
+    const entryB = focusedBlock.type === 'pair' ? entryFor(focusedBlock.partnerId) : null
+    const title =
+      focusedBlock.type === 'pair' && entryA && entryB
+        ? `${entryA.planExercise.exercise_name} + ${entryB.planExercise.exercise_name}`
+        : (entryA?.planExercise.exercise_name ?? '')
+
+    return (
+      <div className="-mx-4 flex flex-col gap-3">
+        <div
+          className="sticky z-10 flex items-center gap-2 border-b border-border bg-background px-4 pb-3 pt-1"
+          style={{ top: 'calc(var(--header-height) + env(safe-area-inset-top))' }}
+        >
+          <Button type="button" variant="ghost" size="icon" aria-label="Back to session" onClick={() => setFocusedPeId(null)}>
+            <ArrowLeft className="size-5" />
+          </Button>
+          <span className="min-w-0 flex-1 truncate font-semibold">{title}</span>
+        </div>
+
+        <div className="flex flex-col gap-3 px-4">
+          {focusedBlock.type === 'pair' && entryA && entryB ? (
+            <>
+              {substitutionBadge(focusedBlock.peId)}
+              {substitutionBadge(focusedBlock.partnerId)}
+              <SupersetLogBlock entries={[entryA, entryB]} />
+            </>
+          ) : entryA ? (
+            <>
+              {substitutionBadge(focusedBlock.peId)}
+              <ExerciseLogBlock
+                planExercise={entryA.planExercise}
+                exercise={entryA.exercise}
+                warmupSets={entryA.warmupSets}
+                workingSets={entryA.workingSets}
+                onWarmupSetsChange={entryA.onWarmupSetsChange}
+                onWorkingSetsChange={entryA.onWorkingSetsChange}
+              />
+            </>
+          ) : null}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="flex min-w-0 flex-col gap-1.5">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="log-session">Session</Label>
           <Select value={String(selectedSessionId)} onValueChange={(v) => onSelectSession(Number(v))}>
             <SelectTrigger id="log-session" className="w-full">
@@ -318,7 +411,7 @@ export default function SessionLogForm({
             </SelectContent>
           </Select>
         </div>
-        <div className="flex min-w-0 flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="log-date">Date</Label>
           <Input
             id="log-date"
@@ -330,18 +423,35 @@ export default function SessionLogForm({
         </div>
       </div>
 
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="w-full"
-        onClick={() =>
-          setReordering((r) => {
-            if (!r) setExpandedExerciseId(null)
-            return !r
-          })
-        }
-      >
+      <div className="flex flex-col gap-1.5 rounded-lg border border-border px-3 py-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <Label className="text-xs font-normal text-muted-foreground">Weight unit</Label>
+          <div className="flex gap-1 rounded-full bg-muted p-0.5 text-xs">
+            {(['lb', 'kg'] as const).map((unit) => (
+              <button
+                key={unit}
+                type="button"
+                onClick={() => setWeightUnit(unit)}
+                className={cn(
+                  'rounded-full px-2 py-0.5 font-medium',
+                  weightUnit === unit ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground',
+                )}
+              >
+                {unit}
+              </button>
+            ))}
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Applies to every exercise below. To change your default, go to{' '}
+          <Link to="/preferences" className="underline underline-offset-2">
+            Unit Preferences
+          </Link>
+          .
+        </p>
+      </div>
+
+      <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => setReordering((r) => !r)}>
         {reordering ? 'Done reordering' : 'Reorder exercises'}
       </Button>
 
@@ -362,33 +472,6 @@ export default function SessionLogForm({
 
       <ul className="flex flex-col gap-2">
         {blocks.map((block, index) => {
-          function substitutionBadge(peId: number) {
-            const pe = exercisesById.get(peId)
-            const subId = overrides[peId]?.substitutedExercise
-            if (!pe || !subId) return null
-            return (
-              <p key={peId} className="mb-1 text-xs font-medium text-amber-600 dark:text-amber-400">
-                Off-program: swapped in for {pe.exercise_name}
-              </p>
-            )
-          }
-
-          function entryFor(peId: number): ExerciseLogEntry | null {
-            const pe = exercisesById.get(peId)
-            if (!pe) return null
-            const effectiveExId = effectiveExerciseId(pe, overrides)
-            const displayPe = effectiveExId === pe.exercise ? pe : { ...pe, exercise: effectiveExId, exercise_name: exerciseBankById.get(effectiveExId)?.name ?? pe.exercise_name }
-            const draft = drafts[peId] ?? { warmup: [], working: [] }
-            return {
-              planExercise: displayPe,
-              exercise: exerciseBankById.get(effectiveExId) ?? null,
-              warmupSets: draft.warmup,
-              workingSets: draft.working,
-              onWarmupSetsChange: (warmup) => setDrafts((d) => ({ ...d, [peId]: { ...d[peId], warmup } })),
-              onWorkingSetsChange: (working) => setDrafts((d) => ({ ...d, [peId]: { ...d[peId], working } })),
-            }
-          }
-
           if (block.type === 'pair') {
             const entryA = entryFor(block.peId)
             const entryB = entryFor(block.partnerId)
@@ -397,19 +480,21 @@ export default function SessionLogForm({
               <li key={block.peId}>
                 {substitutionBadge(block.peId)}
                 {substitutionBadge(block.partnerId)}
-                <SupersetLogBlock
-                  entries={[entryA, entryB]}
+                <SupersetLogListRow
+                  planExerciseA={entryA.planExercise}
+                  planExerciseB={entryB.planExercise}
+                  exerciseA={entryA.exercise}
+                  exerciseB={entryB.exercise}
                   exercisesById={exerciseBankById}
                   muscleGroups={muscleGroups}
-                  weightUnit={weightUnit}
-                  onWeightUnitChange={setWeightUnit}
+                  confirmedRounds={countConfirmedRounds(entryA, entryB)}
+                  targetRounds={Math.max(entryA.planExercise.target_sets, entryB.planExercise.target_sets)}
                   onMoveUp={() => moveBlock(index, -1)}
                   onMoveDown={() => moveBlock(index, 1)}
                   canMoveUp={index > 0}
                   canMoveDown={index < blocks.length - 1}
                   reordering={reordering}
-                  expanded={expandedExerciseId === block.peId}
-                  onToggleExpanded={() => setExpandedExerciseId((cur) => (cur === block.peId ? null : block.peId))}
+                  onLog={() => setFocusedPeId(block.peId)}
                 />
               </li>
             )
@@ -420,24 +505,18 @@ export default function SessionLogForm({
           return (
             <li key={block.peId}>
               {substitutionBadge(block.peId)}
-              <ExerciseLogBlock
+              <ExerciseLogListRow
                 planExercise={entry.planExercise}
                 exercise={entry.exercise}
                 exercisesById={exerciseBankById}
                 muscleGroups={muscleGroups}
-                warmupSets={entry.warmupSets}
-                workingSets={entry.workingSets}
-                onWarmupSetsChange={entry.onWarmupSetsChange}
-                onWorkingSetsChange={entry.onWorkingSetsChange}
-                weightUnit={weightUnit}
-                onWeightUnitChange={setWeightUnit}
+                confirmedWorkingCount={entry.workingSets.filter((s) => s.confirmed).length}
                 onMoveUp={() => moveBlock(index, -1)}
                 onMoveDown={() => moveBlock(index, 1)}
                 canMoveUp={index > 0}
                 canMoveDown={index < blocks.length - 1}
                 reordering={reordering}
-                expanded={expandedExerciseId === block.peId}
-                onToggleExpanded={() => setExpandedExerciseId((cur) => (cur === block.peId ? null : block.peId))}
+                onLog={() => setFocusedPeId(block.peId)}
               />
             </li>
           )

@@ -1,14 +1,12 @@
 import { useEffect, useState } from 'react'
-import { ChevronDown, ChevronUp, Info, Link2, Trophy, X } from 'lucide-react'
+import { Trophy, X } from 'lucide-react'
 import { listExerciseHistory } from '@/api/loggedSets'
-import type { Exercise, ExerciseHistorySet, MuscleGroup, PlanExerciseDetail, WeightUnit } from '@/api/types'
+import type { Exercise, ExerciseHistorySet, PlanExerciseDetail } from '@/api/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { checkPersonalRecord } from '@/lib/personalRecord'
-import { cn } from '@/lib/utils'
 import { suggestWeight } from '@/lib/weightSuggestion'
-import ExerciseDetailDialog from './ExerciseDetailDialog'
-import ExerciseHistoryDialog from './ExerciseHistoryDialog'
+import ExerciseHistoryDisclosure from './ExerciseHistoryDisclosure'
 import RestTimer from './RestTimer'
 import { newDraftSet, SetEditorRow, SetSummaryRow, type DraftSet } from './SetRows'
 
@@ -43,7 +41,9 @@ function useHistory(exerciseId: number) {
 }
 
 /** One side's warm-up section - independent per exercise, since which side
- * (if either) needs warming up varies by pairing. */
+ * (if either) needs warming up varies by pairing. Stacked under the other
+ * side (see the `flex-col` wrapper below), not side by side - a 2-column
+ * grid squeezed each set-editor row too tight on a phone. */
 function WarmupColumn({ entry }: { entry: ExerciseLogEntry }) {
   const { planExercise, exercise, warmupSets, onWarmupSetsChange } = entry
   const isUnilateral = exercise?.is_unilateral ?? false
@@ -58,7 +58,7 @@ function WarmupColumn({ entry }: { entry: ExerciseLogEntry }) {
 
   return (
     <div className="flex flex-col gap-1.5">
-      <p className="text-xs font-semibold text-muted-foreground">{planExercise.exercise_name} warm-up</p>
+      <p className="text-sm font-medium">{planExercise.exercise_name}</p>
       {warmupSets.map((set, i) =>
         set.confirmed ? (
           <SetSummaryRow
@@ -99,17 +99,6 @@ function WarmupColumn({ entry }: { entry: ExerciseLogEntry }) {
 
 type Props = {
   entries: [ExerciseLogEntry, ExerciseLogEntry]
-  exercisesById: Map<number, Exercise>
-  muscleGroups: MuscleGroup[]
-  weightUnit: WeightUnit
-  onWeightUnitChange: (unit: WeightUnit) => void
-  onMoveUp: () => void
-  onMoveDown: () => void
-  canMoveUp: boolean
-  canMoveDown: boolean
-  reordering: boolean
-  expanded: boolean
-  onToggleExpanded: () => void
 }
 
 /** Logs a pair of exercises tied together as a superset: one working set of
@@ -117,28 +106,17 @@ type Props = {
  * rest only happens once the round is done. Warm-ups stay independent per
  * exercise (see WarmupColumn); only working sets are paired into rounds. No
  * backend concept of a "round" exists - saving still produces two ordinary
- * LoggedExercise entries (see SessionLogForm), one set_number per round. */
-export default function SupersetLogBlock({
-  entries,
-  exercisesById,
-  muscleGroups,
-  weightUnit,
-  onWeightUnitChange,
-  onMoveUp,
-  onMoveDown,
-  canMoveUp,
-  canMoveDown,
-  reordering,
-  expanded,
-  onToggleExpanded,
-}: Props) {
+ * LoggedExercise entries (see SessionLogForm), one set_number per round.
+ *
+ * The actual set-logging content for a superset pair - rendered as the body
+ * of SessionLogForm's full-screen "Log exercise(s)" view, which supplies the
+ * shared back-button header above it. */
+export default function SupersetLogBlock({ entries }: Props) {
   const [a, b] = entries
   const isUnilateralA = a.exercise?.is_unilateral ?? false
   const isUnilateralB = b.exercise?.is_unilateral ?? false
   const historyA = useHistory(a.planExercise.exercise)
   const historyB = useHistory(b.planExercise.exercise)
-  const [detailsFor, setDetailsFor] = useState<0 | 1 | null>(null)
-  const [historyFor, setHistoryFor] = useState<0 | 1 | null>(null)
 
   // Weight suggestions/PR detection don't cover per-side data yet, so both
   // are skipped for whichever side is unilateral (see ExerciseLogBlock).
@@ -191,210 +169,126 @@ export default function SupersetLogBlock({
   const restSeconds = Math.max(a.planExercise.default_rest_seconds, b.planExercise.default_rest_seconds)
 
   return (
-    <div className="overflow-hidden rounded-lg border border-primary/30">
-      <div className="flex items-center gap-0.5 bg-primary/5 px-3 py-2.5">
-        <Link2 className="size-3.5 shrink-0 text-primary" />
-        <div className="flex min-w-0 shrink flex-col leading-tight">
-          <span className="flex min-w-0 items-center gap-1 truncate text-sm font-medium">
-            <span className="min-w-0 truncate">{a.planExercise.exercise_name}</span>
-            <button
-              type="button"
-              className="shrink-0 text-muted-foreground hover:text-foreground"
-              onClick={() => setDetailsFor(0)}
-              aria-label={`View details for ${a.planExercise.exercise_name}`}
-            >
-              <Info className="size-3.5" />
-            </button>
-          </span>
-          <span className="flex min-w-0 items-center gap-1 truncate text-sm font-medium">
-            <span className="min-w-0 truncate">+ {b.planExercise.exercise_name}</span>
-            <button
-              type="button"
-              className="shrink-0 text-muted-foreground hover:text-foreground"
-              onClick={() => setDetailsFor(1)}
-              aria-label={`View details for ${b.planExercise.exercise_name}`}
-            >
-              <Info className="size-3.5" />
-            </button>
-          </span>
-        </div>
-        <button
-          type="button"
-          className="flex min-w-0 flex-1 items-baseline justify-end gap-2 text-left"
-          onClick={onToggleExpanded}
-          aria-expanded={expanded}
-          aria-label={`${expanded ? 'Collapse' : 'Expand'} superset`}
-        >
-          <span className="whitespace-nowrap text-xs text-muted-foreground">
-            {confirmedRounds}/{targetRounds} rounds
-          </span>
-        </button>
-        {reordering && (
-          <>
-            <Button type="button" variant="ghost" size="icon-sm" disabled={!canMoveUp} onClick={onMoveUp} aria-label="Move superset earlier">
-              <ChevronUp className="size-4" />
-            </Button>
-            <Button type="button" variant="ghost" size="icon-sm" disabled={!canMoveDown} onClick={onMoveDown} aria-label="Move superset later">
-              <ChevronDown className="size-4" />
-            </Button>
-          </>
+    <div className="flex flex-col gap-3">
+      <ExerciseHistoryDisclosure
+        targets={[
+          { exerciseId: a.planExercise.exercise, exerciseName: a.planExercise.exercise_name },
+          { exerciseId: b.planExercise.exercise, exerciseName: b.planExercise.exercise_name },
+        ]}
+      />
+
+      {[a, b].map((entry, idx) =>
+        entry.planExercise.notes.trim() !== '' ? (
+          <div key={idx} className="rounded-md border border-primary/20 bg-primary/5 px-2.5 py-1.5">
+            <p className="mb-0.5 text-xs font-semibold text-primary">Note for {entry.planExercise.exercise_name}</p>
+            <p className="text-sm text-foreground">{entry.planExercise.notes}</p>
+          </div>
+        ) : null,
+      )}
+
+      <div className="flex flex-col gap-3">
+        <p className="text-xs font-semibold text-muted-foreground">Warm-up</p>
+        <WarmupColumn entry={a} />
+        <WarmupColumn entry={b} />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <p className="text-xs font-semibold text-muted-foreground">Rounds (one set of each, back to back)</p>
+        {Array.from({ length: roundCount }, (_, i) => i).map((i) => {
+          const [setA, setB] = roundsAt(i)
+          const bothConfirmed = setA.confirmed && setB.confirmed
+          function sideSummary(set: DraftSet, isUnilateral: boolean) {
+            return isUnilateral ? (
+              <>
+                L {set.weight_left}×{set.reps_done_left} · R {set.weight_right}×{set.reps_done_right}
+              </>
+            ) : (
+              <>
+                {set.weight}×{set.reps_done}
+              </>
+            )
+          }
+          if (bothConfirmed) {
+            const prA = isUnilateralA
+              ? null
+              : checkPersonalRecord(historyA, Number(setA.weight), Number(setA.reps_done), setA.is_warmup)
+            const prB = isUnilateralB
+              ? null
+              : checkPersonalRecord(historyB, Number(setB.weight), Number(setB.reps_done), setB.is_warmup)
+            return (
+              <div key={i} className="flex items-center gap-2 rounded-md bg-muted px-2.5 py-1.5 text-sm">
+                <button
+                  type="button"
+                  onClick={() => writeRound(i, { confirmed: false }, { confirmed: false })}
+                  className="min-w-0 flex-1 text-left"
+                >
+                  <span className="text-muted-foreground">Round {i + 1}</span>{' '}
+                  {a.planExercise.exercise_name} {sideSummary(setA, isUnilateralA)}
+                  {' → '}
+                  {b.planExercise.exercise_name} {sideSummary(setB, isUnilateralB)}
+                </button>
+                {(prA || prB) && (
+                  <Badge className="gap-1 font-normal">
+                    <Trophy className="size-3" /> PR
+                  </Badge>
+                )}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="shrink-0 text-muted-foreground hover:text-destructive"
+                  onClick={() => removeRound(i)}
+                  aria-label={`Remove round ${i + 1}`}
+                >
+                  <X className="size-3.5" />
+                </Button>
+              </div>
+            )
+          }
+          const canConfirmSide = (set: DraftSet, isUnilateral: boolean) =>
+            isUnilateral
+              ? [set.weight_left, set.weight_right, set.reps_done_left, set.reps_done_right].every(
+                  (v) => v.trim() !== '',
+                )
+              : set.weight.trim() !== '' && set.reps_done.trim() !== ''
+          const canConfirm = canConfirmSide(setA, isUnilateralA) && canConfirmSide(setB, isUnilateralB)
+          return (
+            <div key={i} className="flex flex-col gap-1.5 rounded-md border border-border p-2">
+              <span className="text-xs font-medium text-muted-foreground">Round {i + 1}</span>
+              <SetEditorRow
+                label={a.planExercise.exercise_name}
+                set={setA}
+                suggestion={suggestionA}
+                isUnilateral={isUnilateralA}
+                onChange={(patch) => writeRound(i, patch, null)}
+                onConfirm={() => {}}
+                onRemove={() => {}}
+                hideActions
+              />
+              <SetEditorRow
+                label={b.planExercise.exercise_name}
+                set={setB}
+                suggestion={suggestionB}
+                isUnilateral={isUnilateralB}
+                onChange={(patch) => writeRound(i, null, patch)}
+                onConfirm={() => {}}
+                onRemove={() => {}}
+                hideActions
+              />
+              <Button type="button" className="w-full" disabled={!canConfirm} onClick={() => confirmRound(i)}>
+                Confirm round {i + 1}
+              </Button>
+            </div>
+          )
+        })}
+        {allRoundsConfirmed && (
+          <Button type="button" variant="outline" size="sm" className="self-start" onClick={addRound}>
+            + Add round
+          </Button>
         )}
       </div>
 
-      {expanded && (
-        <div className="flex flex-col gap-3 border-t border-border p-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex gap-3">
-              <button type="button" className="text-xs text-muted-foreground underline-offset-2 hover:underline" onClick={() => setHistoryFor(0)}>
-                {a.planExercise.exercise_name} history
-              </button>
-              <button type="button" className="text-xs text-muted-foreground underline-offset-2 hover:underline" onClick={() => setHistoryFor(1)}>
-                {b.planExercise.exercise_name} history
-              </button>
-            </div>
-            <div className="flex gap-1 rounded-full bg-muted p-0.5 text-xs">
-              {(['lb', 'kg'] as const).map((unit) => (
-                <button
-                  key={unit}
-                  type="button"
-                  onClick={() => onWeightUnitChange(unit)}
-                  className={cn(
-                    'rounded-full px-2 py-0.5 font-medium',
-                    weightUnit === unit ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground',
-                  )}
-                >
-                  {unit}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {[a, b].map((entry, idx) =>
-            entry.planExercise.notes.trim() !== '' ? (
-              <div key={idx} className="rounded-md border border-primary/20 bg-primary/5 px-2.5 py-1.5">
-                <p className="mb-0.5 text-xs font-semibold text-primary">Note for {entry.planExercise.exercise_name}</p>
-                <p className="text-sm text-foreground">{entry.planExercise.notes}</p>
-              </div>
-            ) : null,
-          )}
-
-          <div className="grid grid-cols-2 gap-3">
-            <WarmupColumn entry={a} />
-            <WarmupColumn entry={b} />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <p className="text-xs font-semibold text-muted-foreground">Rounds (one set of each, back to back)</p>
-            {Array.from({ length: roundCount }, (_, i) => i).map((i) => {
-              const [setA, setB] = roundsAt(i)
-              const bothConfirmed = setA.confirmed && setB.confirmed
-              function sideSummary(set: DraftSet, isUnilateral: boolean) {
-                return isUnilateral ? (
-                  <>
-                    L {set.weight_left}×{set.reps_done_left} · R {set.weight_right}×{set.reps_done_right}
-                  </>
-                ) : (
-                  <>
-                    {set.weight}×{set.reps_done}
-                  </>
-                )
-              }
-              if (bothConfirmed) {
-                const prA = isUnilateralA
-                  ? null
-                  : checkPersonalRecord(historyA, Number(setA.weight), Number(setA.reps_done), setA.is_warmup)
-                const prB = isUnilateralB
-                  ? null
-                  : checkPersonalRecord(historyB, Number(setB.weight), Number(setB.reps_done), setB.is_warmup)
-                return (
-                  <div key={i} className="flex items-center gap-2 rounded-md bg-muted px-2.5 py-1.5 text-sm">
-                    <button
-                      type="button"
-                      onClick={() => writeRound(i, { confirmed: false }, { confirmed: false })}
-                      className="min-w-0 flex-1 text-left"
-                    >
-                      <span className="text-muted-foreground">Round {i + 1}</span>{' '}
-                      {a.planExercise.exercise_name} {sideSummary(setA, isUnilateralA)}
-                      {' → '}
-                      {b.planExercise.exercise_name} {sideSummary(setB, isUnilateralB)}
-                    </button>
-                    {(prA || prB) && (
-                      <Badge className="gap-1 font-normal">
-                        <Trophy className="size-3" /> PR
-                      </Badge>
-                    )}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      className="shrink-0 text-muted-foreground hover:text-destructive"
-                      onClick={() => removeRound(i)}
-                      aria-label={`Remove round ${i + 1}`}
-                    >
-                      <X className="size-3.5" />
-                    </Button>
-                  </div>
-                )
-              }
-              const canConfirmSide = (set: DraftSet, isUnilateral: boolean) =>
-                isUnilateral
-                  ? [set.weight_left, set.weight_right, set.reps_done_left, set.reps_done_right].every(
-                      (v) => v.trim() !== '',
-                    )
-                  : set.weight.trim() !== '' && set.reps_done.trim() !== ''
-              const canConfirm = canConfirmSide(setA, isUnilateralA) && canConfirmSide(setB, isUnilateralB)
-              return (
-                <div key={i} className="flex flex-col gap-1.5 rounded-md border border-border p-2">
-                  <span className="text-xs font-medium text-muted-foreground">Round {i + 1}</span>
-                  <SetEditorRow
-                    label={a.planExercise.exercise_name}
-                    set={setA}
-                    suggestion={suggestionA}
-                    isUnilateral={isUnilateralA}
-                    onChange={(patch) => writeRound(i, patch, null)}
-                    onConfirm={() => {}}
-                    onRemove={() => {}}
-                    hideActions
-                  />
-                  <SetEditorRow
-                    label={b.planExercise.exercise_name}
-                    set={setB}
-                    suggestion={suggestionB}
-                    isUnilateral={isUnilateralB}
-                    onChange={(patch) => writeRound(i, null, patch)}
-                    onConfirm={() => {}}
-                    onRemove={() => {}}
-                    hideActions
-                  />
-                  <Button type="button" className="w-full" disabled={!canConfirm} onClick={() => confirmRound(i)}>
-                    Confirm round {i + 1}
-                  </Button>
-                </div>
-              )
-            })}
-            {allRoundsConfirmed && (
-              <Button type="button" variant="outline" size="sm" className="self-start" onClick={addRound}>
-                + Add round
-              </Button>
-            )}
-          </div>
-
-          <RestTimer defaultSeconds={restSeconds} />
-        </div>
-      )}
-
-      <ExerciseHistoryDialog
-        exerciseId={historyFor !== null ? entries[historyFor].planExercise.exercise : null}
-        exerciseName={historyFor !== null ? entries[historyFor].planExercise.exercise_name : ''}
-        onOpenChange={(open) => !open && setHistoryFor(null)}
-      />
-
-      <ExerciseDetailDialog
-        exercise={detailsFor !== null ? entries[detailsFor].exercise : null}
-        exercisesById={exercisesById}
-        muscleGroups={muscleGroups}
-        onOpenChange={(open) => !open && setDetailsFor(null)}
-      />
+      <RestTimer defaultSeconds={restSeconds} />
     </div>
   )
 }
