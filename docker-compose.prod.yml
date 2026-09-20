@@ -8,10 +8,13 @@
 #
 # Run with:
 #   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build backend db
-#   docker compose -f docker-compose.prod.yml --env-file .env.prod run --rm frontend-build
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod run --rm --build frontend-build
 # (re-run frontend-build whenever frontend code changes, to refresh the
 # shared volume Caddy serves from - it's a one-shot task, not a long-running
-# service.)
+# service. The --build flag is required every time: `docker compose run`
+# only builds an image the first time it's missing, so without --build it
+# silently reuses a stale image - and stale frontend code - on every
+# subsequent deploy.)
 
 name: rejim
 

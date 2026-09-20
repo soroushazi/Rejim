@@ -186,3 +186,17 @@ body {
     transform: rotate(90deg);
   }
 }
+
+/* Safari (iOS and macOS) gives text-like inputs - including type="date"/
+   "time" - a `-webkit-min-logical-width` floor that sits alongside, and
+   isn't overridden by, the regular CSS `min-width` property (Tailwind's
+   `min-w-0` has no effect on it). In a narrow flex column (e.g. Session/Date
+   side by side on the workout log page) this lets the date input ignore its
+   allotted width and spill out of its container on a real iPhone, even
+   though it renders fine in Chrome DevTools' device emulation - that's
+   still Blink, which has no such floor. */
+input[type='date'],
+input[type='time'],
+input[type='datetime-local'] {
+  -webkit-min-logical-width: 0 !important;
+}
