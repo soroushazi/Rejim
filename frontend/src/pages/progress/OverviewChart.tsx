@@ -3,7 +3,7 @@ import { useState } from 'react'
 import type { ProgressOverviewDay, User, WeightUnit } from '@/api/types'
 import ZoomableChart, { ChartEmptyState } from '@/components/charts/ZoomableChart'
 import { cn } from '@/lib/utils'
-import { fromKg } from '@/lib/weightUnits'
+import { fromKg, toKg } from '@/lib/weightUnits'
 import { usePreferredWeightUnit } from '@/lib/usePreferredWeightUnit'
 
 type SeriesKey = 'weight' | 'netCalories' | 'sleepHours' | 'steps' | 'water'
@@ -53,6 +53,47 @@ function computeAxis(values: number[]) {
   const niceMin = minValue < 0 ? Math.floor(minValue / step) * step : 0
   const ticks: number[] = []
   for (let v = niceMin; v <= niceMax + step * 0.001; v += step) ticks.push(Math.round(v / step) * step)
+  return { niceMin, niceMax, ticks }
+}
+
+const WEIGHT_AXIS_PAD_LB = 10
+
+/** Weight gets its own axis logic rather than computeAxis's generic "0-floored,
+ * nicely-rounded" bounds: starting the axis at 0 buries a realistic weight change
+ * (e.g. 155 -> 150) in a sliver at the top of the chart. Instead the axis hugs the
+ * data: 10lb past whichever end is "further along" a goal - the goal's own side
+ * (below it, for a loss goal; above it, for a gain goal) padded 10lb beyond the goal
+ * itself so progress toward it is visible from the start, and the opposite side
+ * padded 10lb beyond the actual recorded extreme. No goal at all just pads both
+ * actual extremes by 10lb. Ticks are nice round numbers *within* that exact range,
+ * not bounds rounded outward, so the padding stays exactly 10lb. */
+function computeWeightAxis(values: number[], goal: number | undefined, weightUnit: WeightUnit) {
+  const pad = fromKg(toKg(WEIGHT_AXIS_PAD_LB, 'lb'), weightUnit)
+  const maxActual = values.length ? Math.max(...values) : (goal ?? 0)
+  const minActual = values.length ? Math.min(...values) : (goal ?? 0)
+
+  let niceMin: number
+  let niceMax: number
+  if (goal !== undefined && goal <= maxActual) {
+    // Loss-style (or already-at-goal): goal anchors the bottom, actual data's own
+    // peak anchors the top.
+    niceMin = goal - pad
+    niceMax = maxActual + pad
+  } else if (goal !== undefined) {
+    // Gain-style: goal is above every recorded value so far - it anchors the top,
+    // actual data's own low anchors the bottom.
+    niceMin = minActual - pad
+    niceMax = goal + pad
+  } else {
+    niceMin = minActual - pad
+    niceMax = maxActual + pad
+  }
+
+  const step = niceStep((niceMax - niceMin || 1) / 4)
+  const ticks: number[] = []
+  for (let v = Math.ceil(niceMin / step) * step; v <= niceMax + step * 0.001; v += step) {
+    ticks.push(Math.round(v / step) * step)
+  }
   return { niceMin, niceMax, ticks }
 }
 
@@ -134,10 +175,7 @@ export default function OverviewChart({
   const axes = (Object.keys(SERIES) as SeriesKey[]).reduce(
     (acc, key) => {
       const values = rawValues[key].filter((v): v is number => v !== null)
-      // Fold the weight goal into the axis's own input so the dashed target
-      // line never clips off-chart, same idiom as the strength chart's goal line.
-      if (key === 'weight' && weightGoal !== undefined) values.push(weightGoal)
-      acc[key] = computeAxis(values)
+      acc[key] = key === 'weight' ? computeWeightAxis(values, weightGoal, weightUnit) : computeAxis(values)
       return acc
     },
     {} as Record<SeriesKey, ReturnType<typeof computeAxis>>,
