@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Info, Plus, ScanBarcode, Search, X } from 'lucide-react'
 import { ApiError } from '@/api/client'
@@ -692,8 +692,22 @@ function BrowseListItem({
   // yet) rather than shown disabled, same as elsewhere in the app's info-icon pattern.
   onInfo?: () => void
 }) {
+  // Tapping anywhere on the row opens info, not just the icon - except the Add/Added
+  // button, which must keep doing its own thing. Same "let a nested button opt out of
+  // the row-level click" pattern as ZoomableChart's figure-click handler.
+  function handleRowClick(e: MouseEvent<HTMLLIElement>) {
+    if (!onInfo || (e.target as HTMLElement).closest('button')) return
+    onInfo()
+  }
+
   return (
-    <li className="flex items-center gap-2 border-b border-border px-3 py-2 last:border-b-0">
+    <li
+      onClick={handleRowClick}
+      className={cn(
+        'flex items-center gap-2 border-b border-border px-3 py-2 last:border-b-0',
+        onInfo && 'cursor-pointer',
+      )}
+    >
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-sm">{name}</span>
         <span className="text-xs text-muted-foreground">{caption}</span>
