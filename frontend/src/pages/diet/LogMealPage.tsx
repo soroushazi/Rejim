@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Plus, ScanBarcode, Search, X } from 'lucide-react'
+import { ArrowLeft, Info, Plus, ScanBarcode, Search, X } from 'lucide-react'
 import { ApiError } from '@/api/client'
 import { getDietPlan, listDietPlans } from '@/api/dietPlan'
 import { getFoodItem, listFoodItems } from '@/api/foodItems'
@@ -27,6 +27,7 @@ import { toDateKey } from '@/lib/date'
 import AddFoodItemDialog from './AddFoodItemDialog'
 import AddQuickLogItemDialog from './AddQuickLogItemDialog'
 import BarcodeScannerDialog from './BarcodeScannerDialog'
+import NutritionFactsDialog from './NutritionFactsDialog'
 
 type Tab = 'plan' | 'mine' | 'bank'
 
@@ -132,6 +133,7 @@ export default function LogMealPage() {
   const [addQuickOpen, setAddQuickOpen] = useState(false)
   const [scannerOpen, setScannerOpen] = useState(false)
   const [scannedBarcode, setScannedBarcode] = useState('')
+  const [detailRow, setDetailRow] = useState<{ name: string; caption: string; nutrients: Nutrients } | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -252,6 +254,22 @@ export default function LogMealPage() {
 
   function addQuickItem(item: QuickLogItem) {
     setCart((prev) => [...prev, quickCartItem(item)])
+  }
+
+  function showPlanItemInfo(item: ReferenceMealItemDetail) {
+    setDetailRow({
+      name: item.food_item_name,
+      caption: `Per serving (${item.reference_weight_grams}g)`,
+      nutrients: item.reference_nutrients,
+    })
+  }
+
+  function showQuickItemInfo(item: QuickLogItem) {
+    setDetailRow({ name: item.name, caption: 'Fixed serving', nutrients: quickLogNutrients(item) })
+  }
+
+  function showFoodItemInfo(item: FoodItem) {
+    setDetailRow({ name: item.name, caption: 'Per 100g', nutrients: nutrientsForWeight(item, 100) })
   }
 
   function removeCartItem(key: string) {
@@ -474,6 +492,7 @@ export default function LogMealPage() {
                     caption={`${item.reference_weight_grams}g`}
                     added={cartHasPlan(item.id)}
                     onToggle={() => togglePlanItem(item)}
+                    onInfo={() => showPlanItemInfo(item)}
                   />
                 ))}
               </BrowseSection>
@@ -481,7 +500,14 @@ export default function LogMealPage() {
             {matchingQuickItems.length > 0 && (
               <BrowseSection title="My meals">
                 {matchingQuickItems.map((item) => (
-                  <BrowseListItem key={item.id} name={item.name} caption={`${item.calories} kcal`} added={false} onToggle={() => addQuickItem(item)} />
+                  <BrowseListItem
+                    key={item.id}
+                    name={item.name}
+                    caption={`${item.calories} kcal`}
+                    added={false}
+                    onToggle={() => addQuickItem(item)}
+                    onInfo={() => showQuickItemInfo(item)}
+                  />
                 ))}
               </BrowseSection>
             )}
@@ -494,6 +520,7 @@ export default function LogMealPage() {
                     caption={`${item.calories_per_100g} kcal/100g`}
                     added={cartHasFood(item.id)}
                     onToggle={() => toggleFoodItem(item)}
+                    onInfo={() => showFoodItemInfo(item)}
                   />
                 ))}
               </BrowseSection>
@@ -534,6 +561,7 @@ export default function LogMealPage() {
                         caption={`${item.reference_weight_grams}g`}
                         added={cartHasPlan(item.id)}
                         onToggle={() => togglePlanItem(item)}
+                        onInfo={() => showPlanItemInfo(item)}
                       />
                     ))}
                   </ul>
@@ -553,6 +581,7 @@ export default function LogMealPage() {
                       added={false}
                       addLabel="Add"
                       onToggle={() => addQuickItem(item)}
+                      onInfo={() => showQuickItemInfo(item)}
                     />
                   ))}
                 </ul>
@@ -576,6 +605,7 @@ export default function LogMealPage() {
                         caption={`${item.calories_per_100g} kcal/100g`}
                         added={cartHasFood(item.id)}
                         onToggle={() => toggleFoodItem(item)}
+                        onInfo={() => showFoodItemInfo(item)}
                       />
                     ))}
                   </ul>
@@ -625,6 +655,13 @@ export default function LogMealPage() {
           setAddFoodOpen(true)
         }}
       />
+      <NutritionFactsDialog
+        open={detailRow !== null}
+        onOpenChange={(next) => !next && setDetailRow(null)}
+        name={detailRow?.name ?? ''}
+        caption={detailRow?.caption ?? ''}
+        nutrients={detailRow?.nutrients ?? sumNutrients([])}
+      />
     </div>
   )
 }
@@ -644,19 +681,33 @@ function BrowseListItem({
   added,
   addLabel,
   onToggle,
+  onInfo,
 }: {
   name: string
   caption: string
   added: boolean
   addLabel?: string
   onToggle: () => void
+  // Opens a nutrition-facts popup for this item - omitted (e.g. no case has come up
+  // yet) rather than shown disabled, same as elsewhere in the app's info-icon pattern.
+  onInfo?: () => void
 }) {
   return (
-    <li className="flex items-center justify-between gap-2 border-b border-border px-3 py-2 last:border-b-0">
-      <div className="flex min-w-0 flex-col">
+    <li className="flex items-center gap-2 border-b border-border px-3 py-2 last:border-b-0">
+      <div className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-sm">{name}</span>
         <span className="text-xs text-muted-foreground">{caption}</span>
       </div>
+      {onInfo && (
+        <button
+          type="button"
+          className="shrink-0 text-muted-foreground hover:text-foreground"
+          onClick={onInfo}
+          aria-label={`View nutrition for ${name}`}
+        >
+          <Info className="size-4" />
+        </button>
+      )}
       <Button type="button" size="sm" variant={added ? 'secondary' : 'outline'} onClick={onToggle}>
         {added ? 'Added' : (addLabel ?? 'Add')}
       </Button>
