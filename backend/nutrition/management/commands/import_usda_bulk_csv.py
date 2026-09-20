@@ -137,9 +137,19 @@ class Command(BaseCommand):
         try:
             self._create_staging_tables(raw_conn)
             self._load_staging_tables(raw_conn, csv_dir, limit)
-            counts = self._transform_and_load(raw_conn, data_types, dry_run)
-            raw_conn.commit()
+            # Autocommit off from here so a --dry-run can roll back the real INSERT/
+            # upsert work instead of skipping it - otherwise dry-run would only ever
+            # validate the filtering SQL, never the write itself, and would silently
+            # miss exactly the kind of data-quality surprises (numeric/varchar overflow)
+            # that only show up on the actual insert.
+            raw_conn.autocommit = False
+            counts = self._transform_and_load(raw_conn, data_types)
+            if dry_run:
+                raw_conn.rollback()
+            else:
+                raw_conn.commit()
         finally:
+            raw_conn.autocommit = True
             self._drop_staging_tables(raw_conn)
             raw_conn.commit()
 
@@ -189,7 +199,7 @@ class Command(BaseCommand):
 
     # -- transform/load ---------------------------------------------------------------
 
-    def _transform_and_load(self, raw_conn, data_types, dry_run):
+    def _transform_and_load(self, raw_conn, data_types):
         # FoodItem's nutrient fields are DecimalField(max_digits=7, decimal_places=2) -
         # max representable absolute value is 99999.99. USDA's Branded Foods data has a
         # real (if rare) rate of bad outlier entries (wrong units, data-entry typos) that
@@ -248,20 +258,10 @@ class Command(BaseCommand):
                 UPDATE eligible e SET resolved_barcode = e.gtin_upc
                 FROM ranked r WHERE r.fdc_id = e.fdc_id AND r.rn = 1
             """)
-            cur.execute("SELECT COUNT(*) FROM eligible")
-            (eligible_count,) = cur.fetchone()
             cur.execute("SELECT COUNT(DISTINCT gtin_upc) FROM eligible WHERE gtin_upc IS NOT NULL")
             (barcode_owners,) = cur.fetchone()
             cur.execute("SELECT COUNT(*) FROM eligible WHERE gtin_upc IS NOT NULL AND resolved_barcode IS NULL")
             (barcode_collisions_dropped,) = cur.fetchone()
-
-            if dry_run:
-                counts = {
-                    "would import/update": eligible_count,
-                    "distinct barcodes claimed": barcode_owners,
-                    "barcode collisions dropped (kept NULL)": barcode_collisions_dropped,
-                }
-                return counts
 
             nutrient_field_list = ", ".join(NUTRIENT_NUMBER_TO_FIELD.values())
             cur.execute(f"""
