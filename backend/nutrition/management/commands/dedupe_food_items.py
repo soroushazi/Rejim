@@ -8,16 +8,27 @@ items are curated by hand, not a bulk-import artifact) and only an exact name +
 calories_per_100g match - not a fuzzy/near-duplicate pass. Keeps the earliest-imported
 (lowest id) row of each duplicate group, deletes the rest.
 
-A duplicate already referenced by a trainer's plan (ReferenceMealItem) or a trainee's
-log (FoodLog) is left alone rather than deleted out from under real data - both are
-on_delete=PROTECT, so Django refuses the delete; this command catches that per row and
-reports it as skipped instead of crashing the whole batch.
+Finding the duplicates is a single ROW_NUMBER() OVER (PARTITION BY name,
+calories_per_100g ORDER BY id) window query, not a per-group SELECT loop - at
+USDA-bulk-import scale (~2M rows, no btree index on name/calories_per_100g, only the
+trigram GIN index used for substring search) a query-per-duplicate-group approach does
+one large-ish scan per group and can run for many hours. A single window-function pass
+does one scan total, and works on both Postgres (prod) and SQLite (dev) since both
+support ROW_NUMBER().
 
-Usage: manage.py dedupe_food_items [--dry-run]
+Deletes are still batched (--batch-size) so a run has visible progress and doesn't hold
+one massive transaction. A duplicate already referenced by a trainer's plan
+(ReferenceMealItem) or a trainee's log (FoodLog) is left alone rather than deleted out
+from under real data - both are on_delete=PROTECT; a batch containing one falls back to
+deleting that batch row-by-row so the rest of the batch still goes through, and the
+protected row is reported as skipped instead of crashing the run.
+
+Usage: manage.py dedupe_food_items [--dry-run] [--batch-size N]
 """
 
 from django.core.management.base import BaseCommand
-from django.db.models import Count, Min, ProtectedError
+from django.db import connection
+from django.db.models import ProtectedError
 
 from nutrition.models import FoodItem
 
@@ -27,41 +38,60 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--dry-run", action="store_true", help="Report counts only, delete nothing.")
+        parser.add_argument(
+            "--batch-size",
+            type=int,
+            default=2000,
+            help="Rows per delete batch (progress is printed after each batch). Ignored for --dry-run.",
+        )
 
     def handle(self, *args, **options):
         dry_run = options["dry_run"]
-        base = FoodItem.objects.filter(source=FoodItem.Source.USDA)
+        batch_size = options["batch_size"]
 
-        groups = (
-            base.values("name", "calories_per_100g")
-            .annotate(count=Count("id"), keep_id=Min("id"))
-            .filter(count__gt=1)
-        )
+        self.stdout.write("Scanning for duplicate USDA FoodItems (single pass)...")
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT id FROM (
+                    SELECT id, ROW_NUMBER() OVER (
+                        PARTITION BY name, calories_per_100g ORDER BY id
+                    ) AS rn
+                    FROM nutrition_fooditem
+                    WHERE source = %s
+                ) ranked
+                WHERE rn > 1
+                ORDER BY id
+                """,
+                [FoodItem.Source.USDA],
+            )
+            duplicate_ids = [row[0] for row in cursor.fetchall()]
 
-        group_count = 0
+        total = len(duplicate_ids)
+        prefix = "[DRY RUN] " if dry_run else ""
+
+        if dry_run or total == 0:
+            self.stdout.write(self.style.SUCCESS(f"{prefix}Done."))
+            self.stdout.write(f"  duplicate rows found: {total}")
+            return
+
         deleted = 0
         skipped_protected = 0
+        for start in range(0, total, batch_size):
+            batch = duplicate_ids[start : start + batch_size]
+            try:
+                _, details = FoodItem.objects.filter(id__in=batch).delete()
+                deleted += details.get(FoodItem._meta.label, 0)
+            except ProtectedError:
+                for item_id in batch:
+                    try:
+                        FoodItem(pk=item_id).delete()
+                        deleted += 1
+                    except ProtectedError:
+                        skipped_protected += 1
+            self.stdout.write(f"  progress: {min(start + batch_size, total)}/{total}")
 
-        for group in groups.iterator():
-            group_count += 1
-            duplicate_ids = (
-                base.filter(name=group["name"], calories_per_100g=group["calories_per_100g"])
-                .exclude(id=group["keep_id"])
-                .values_list("id", flat=True)
-            )
-
-            for item_id in duplicate_ids:
-                if dry_run:
-                    deleted += 1
-                    continue
-                try:
-                    FoodItem(pk=item_id).delete()
-                    deleted += 1
-                except ProtectedError:
-                    skipped_protected += 1
-
-        self.stdout.write(self.style.SUCCESS(f"{'[DRY RUN] ' if dry_run else ''}Done."))
-        self.stdout.write(f"  duplicate groups found: {group_count}")
-        self.stdout.write(f"  {'would delete' if dry_run else 'deleted'}: {deleted}")
-        if not dry_run:
-            self.stdout.write(f"  skipped (referenced by a plan or log, protected): {skipped_protected}")
+        self.stdout.write(self.style.SUCCESS("Done."))
+        self.stdout.write(f"  duplicate rows found: {total}")
+        self.stdout.write(f"  deleted: {deleted}")
+        self.stdout.write(f"  skipped (referenced by a plan or log, protected): {skipped_protected}")
