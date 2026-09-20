@@ -46,3 +46,16 @@ def average_nutrients(nutrient_dicts):
         return {field: None for field in NUTRIENT_FIELDS}
     totals = sum_nutrients(nutrient_dicts)
     return {field: (value / count if value is not None else None) for field, value in totals.items()}
+
+
+def normalize_barcode(raw):
+    """GS1's own GTIN-14 normalization: numeric-only, left-padded with zeros to 14
+    digits. Needed because a physical barcode's width varies by symbology (a UPC-A scan
+    returns 12 digits, EAN-13 13, GTIN-14 14, ...) for what's otherwise the same code -
+    USDA's own gtin_upc data (see import_usda_bulk_csv.py) isn't width-consistent either,
+    so both storage and lookup normalize through this same function. Returns None for
+    anything that isn't a plausible barcode (non-numeric, or too long to be a real GTIN)."""
+    digits = "".join(ch for ch in raw if ch.isdigit())
+    if not digits or len(digits) > 14:
+        return None
+    return digits.zfill(14)

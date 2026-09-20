@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Plus, Search, X } from 'lucide-react'
+import { ArrowLeft, Plus, ScanBarcode, Search, X } from 'lucide-react'
 import { ApiError } from '@/api/client'
 import { getDietPlan, listDietPlans } from '@/api/dietPlan'
 import { getFoodItem, listFoodItems } from '@/api/foodItems'
@@ -26,6 +26,7 @@ import { cn, round } from '@/lib/utils'
 import { toDateKey } from '@/lib/date'
 import AddFoodItemDialog from './AddFoodItemDialog'
 import AddQuickLogItemDialog from './AddQuickLogItemDialog'
+import BarcodeScannerDialog from './BarcodeScannerDialog'
 
 type Tab = 'plan' | 'mine' | 'bank'
 
@@ -129,6 +130,8 @@ export default function LogMealPage() {
   const [bankResults, setBankResults] = useState<FoodItem[]>([])
   const [addFoodOpen, setAddFoodOpen] = useState(false)
   const [addQuickOpen, setAddQuickOpen] = useState(false)
+  const [scannerOpen, setScannerOpen] = useState(false)
+  const [scannedBarcode, setScannedBarcode] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -591,8 +594,37 @@ export default function LogMealPage() {
         )}
       </div>
 
-      <AddFoodItemDialog open={addFoodOpen} onOpenChange={setAddFoodOpen} onCreated={(item) => toggleFoodItem(item)} initialName={trimmedQuery} />
+      <Button
+        type="button"
+        size="icon-lg"
+        className="fixed z-15 rounded-full shadow-lg"
+        style={{ right: 16, bottom: 'calc(var(--nav-height) + env(safe-area-inset-bottom) + 16px)' }}
+        onClick={() => setScannerOpen(true)}
+        aria-label="Scan a barcode"
+      >
+        <ScanBarcode className="size-6" />
+      </Button>
+
+      <AddFoodItemDialog
+        open={addFoodOpen}
+        onOpenChange={(next) => {
+          setAddFoodOpen(next)
+          if (!next) setScannedBarcode('')
+        }}
+        onCreated={(item) => toggleFoodItem(item)}
+        initialName={scannedBarcode ? '' : trimmedQuery}
+        initialBarcode={scannedBarcode || undefined}
+      />
       <AddQuickLogItemDialog open={addQuickOpen} onOpenChange={setAddQuickOpen} onCreated={(item) => { setQuickItems((prev) => [item, ...prev]); addQuickItem(item) }} initialName={trimmedQuery} />
+      <BarcodeScannerDialog
+        open={scannerOpen}
+        onOpenChange={setScannerOpen}
+        onFound={(item) => toggleFoodItem(item)}
+        onNotFound={(barcode) => {
+          setScannedBarcode(barcode)
+          setAddFoodOpen(true)
+        }}
+      />
     </div>
   )
 }

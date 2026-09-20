@@ -25,6 +25,9 @@ type AddFoodItemDialogProps = {
   item?: FoodItem
   // Seeds the Name field when opening to create (e.g. from a Food Bank search that had no results).
   initialName?: string
+  // Seeds the new item's barcode when opening to create (e.g. from a barcode scan that
+  // found no match) - so a future scan of the same product succeeds. Ignored when editing.
+  initialBarcode?: string
 }
 
 const MACRO_FIELDS: { key: string; label: string }[] = [
@@ -63,6 +66,7 @@ export default function AddFoodItemDialog({
   singleItemOnly,
   item,
   initialName,
+  initialBarcode,
 }: AddFoodItemDialogProps) {
   const isEditing = item !== undefined
   const { user } = useAuth()
@@ -224,9 +228,12 @@ export default function AddFoodItemDialog({
     setSubmitting(true)
     try {
       // Editing never touches barcode (this form has no field for it) - only a
-      // fresh create sends barcode: null, so an edit can't blank out a seeded
-      // item's real barcode.
-      const saved = isEditing ? await updateFoodItem(item.id, payload) : await createFoodItem({ ...payload, barcode: null })
+      // fresh create sends one, so an edit can't blank out a seeded item's real
+      // barcode. initialBarcode carries through a scan that found no match, so the
+      // next scan of the same product succeeds.
+      const saved = isEditing
+        ? await updateFoodItem(item.id, payload)
+        : await createFoodItem({ ...payload, barcode: initialBarcode ?? null })
       onCreated(saved)
       handleOpenChange(false)
     } catch {

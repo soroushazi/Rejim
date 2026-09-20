@@ -14,6 +14,7 @@ export type FoodItemFilters = {
   search?: string
   macroFilterIds?: number[]
   dietaryTagIds?: number[]
+  barcode?: string
   page?: number
   pageSize?: number
 }
@@ -23,10 +24,20 @@ export function listFoodItems(filters: FoodItemFilters): Promise<Page<FoodItem>>
   if (filters.search?.trim()) params.set('search', filters.search.trim())
   for (const id of filters.macroFilterIds ?? []) params.append('macro_filter', String(id))
   for (const id of filters.dietaryTagIds ?? []) params.append('dietary_tag', String(id))
+  if (filters.barcode) params.set('barcode', filters.barcode)
   if (filters.page) params.set('page', String(filters.page))
   if (filters.pageSize) params.set('page_size', String(filters.pageSize))
   const query = params.toString()
   return apiFetch<Page<FoodItem>>(`/nutrition/food-items/${query ? `?${query}` : ''}`)
+}
+
+/** Barcode is unique on FoodItem, so at most one match - see FoodItemViewSet's
+ * `barcode` query param (nutrition/views.py) and normalizeBarcode (lib/barcode.ts) for
+ * why the raw scanned string doesn't need pre-normalizing here (the backend does it too,
+ * defensively, using the same rule). */
+export async function getFoodItemByBarcode(barcode: string): Promise<FoodItem | null> {
+  const page = await listFoodItems({ barcode })
+  return page.results[0] ?? null
 }
 
 export function getFoodItem(id: number): Promise<FoodItem> {

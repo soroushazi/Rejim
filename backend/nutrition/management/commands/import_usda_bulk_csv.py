@@ -249,18 +249,29 @@ class Command(BaseCommand):
                   AND np.calories_per_100g IS NOT NULL
             """, {"data_types": data_types})
 
+            # gtin_upc isn't width-consistent in USDA's data (12-digit UPC-A, 13-digit
+            # EAN-13, 14-digit GTIN-14 all appear for the *same kind* of barcode - a
+            # camera scan of a UPC-A symbol always returns 12 digits) - normalize every
+            # plausible code (numeric, <=14 digits; a handful of rows have garbage like
+            # brand-name text or 15+ digit junk in this column - excluded) to GS1's own
+            # canonical GTIN-14 form (left-pad with zeros) so a scanned code and a stored
+            # one compare equal regardless of which width USDA happened to store.
             cur.execute("ALTER TABLE eligible ADD COLUMN resolved_barcode text")
-            cur.execute("""
-                WITH ranked AS (
-                    SELECT fdc_id, gtin_upc, ROW_NUMBER() OVER (PARTITION BY gtin_upc ORDER BY fdc_id) AS rn
-                    FROM eligible WHERE gtin_upc IS NOT NULL
+            cur.execute(r"""
+                WITH candidates AS (
+                    SELECT fdc_id, LPAD(gtin_upc, 14, '0') AS gtin14
+                    FROM eligible WHERE gtin_upc ~ '^[0-9]{1,14}$'
+                ),
+                ranked AS (
+                    SELECT fdc_id, gtin14, ROW_NUMBER() OVER (PARTITION BY gtin14 ORDER BY fdc_id) AS rn
+                    FROM candidates
                 )
-                UPDATE eligible e SET resolved_barcode = e.gtin_upc
+                UPDATE eligible e SET resolved_barcode = r.gtin14
                 FROM ranked r WHERE r.fdc_id = e.fdc_id AND r.rn = 1
             """)
-            cur.execute("SELECT COUNT(DISTINCT gtin_upc) FROM eligible WHERE gtin_upc IS NOT NULL")
+            cur.execute("SELECT COUNT(DISTINCT LPAD(gtin_upc, 14, '0')) FROM eligible WHERE gtin_upc ~ '^[0-9]{1,14}$'")
             (barcode_owners,) = cur.fetchone()
-            cur.execute("SELECT COUNT(*) FROM eligible WHERE gtin_upc IS NOT NULL AND resolved_barcode IS NULL")
+            cur.execute("SELECT COUNT(*) FROM eligible WHERE gtin_upc ~ '^[0-9]{1,14}$' AND resolved_barcode IS NULL")
             (barcode_collisions_dropped,) = cur.fetchone()
 
             nutrient_field_list = ", ".join(NUTRIENT_NUMBER_TO_FIELD.values())
@@ -274,7 +285,7 @@ class Command(BaseCommand):
                     SELECT
                         COALESCE(LEFT(e.description, 255), 'USDA food ' || e.fdc_id::text),
                         LEFT(COALESCE(NULLIF(e.brand_name, ''), e.brand_owner, ''), 255),
-                        CASE WHEN LENGTH(e.resolved_barcode) <= 64 THEN e.resolved_barcode END,
+                        e.resolved_barcode,
                         e.fdc_id, 'usda', 'single', 'public', 'approved',
                         e.calories_per_100g, {", ".join(f"e.{f}" for f in NUTRIENT_NUMBER_TO_FIELD.values())}
                     FROM eligible e

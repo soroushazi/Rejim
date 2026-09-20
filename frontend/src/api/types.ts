@@ -256,7 +256,7 @@ export type NewFoodItemComponent = {
 
 export type NewFoodItem = {
   name: string
-  barcode: null
+  barcode: string | null
   kind: FoodItemKind
   visibility: FoodItemVisibility
   measures?: NewFoodItemMeasure[]

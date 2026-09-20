@@ -40,6 +40,7 @@ from .serializers import (
     ReferenceMealItemSerializer,
     ReferenceMealSerializer,
 )
+from .services import normalize_barcode
 
 
 class MacroFilterViewSet(viewsets.ModelViewSet):
@@ -75,6 +76,13 @@ class FoodItemViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = FoodItem.visible_to(self.request.user).order_by("name")
+        barcode = self.request.query_params.get("barcode")
+        if barcode:
+            normalized = normalize_barcode(barcode)
+            # An unrecognizable barcode (non-numeric, or implausibly long) can never
+            # match a stored one - short-circuit to an empty result rather than
+            # silently falling through to an unfiltered list.
+            queryset = queryset.filter(barcode=normalized) if normalized else queryset.none()
         macro_filter_ids = self.request.query_params.getlist("macro_filter")
         if macro_filter_ids:
             queryset = queryset.filter(macro_filters__id__in=macro_filter_ids)
