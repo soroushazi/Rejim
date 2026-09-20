@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.conf import settings
+from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
@@ -117,6 +118,17 @@ class FoodItem(models.Model):
     # they add themselves.
     macro_filters = models.ManyToManyField(MacroFilter, blank=True, related_name="food_items")
     dietary_tags = models.ManyToManyField(DietaryTag, blank=True, related_name="food_items")
+
+    class Meta:
+        # Postgres-only (pg_trgm GIN, for fast substring search at USDA-catalog scale -
+        # see migration 0017) - declared here too, not just in the migration's
+        # operations, so makemigrations' autodetector sees the same index set on every
+        # backend and doesn't propose removing them on Postgres (where the migration's
+        # vendor-gated operations *do* create them) while leaving them undeclared here.
+        indexes = [
+            GinIndex(fields=["name"], name="fooditem_name_trgm_gin", opclasses=["gin_trgm_ops"]),
+            GinIndex(fields=["brand_name"], name="fooditem_brand_trgm_gin", opclasses=["gin_trgm_ops"]),
+        ]
 
     def __str__(self):
         return self.name
