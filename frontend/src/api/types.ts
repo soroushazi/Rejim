@@ -491,11 +491,18 @@ export type NewDailyMetric = {
   notes: string
 }
 
+export type ActivityMET = {
+  id: number
+  name: string
+  met_value: string
+}
+
 export type ActivityLogEntry = {
   id: number
   trainee: number
   date: string
-  activity_type: string
+  activity_met: number
+  activity_met_name: string
   duration_minutes: number
   calories_burned: number | null
   notes: string
@@ -503,7 +510,7 @@ export type ActivityLogEntry = {
 
 export type NewActivityLogEntry = {
   date: string
-  activity_type: string
+  activity_met: number
   duration_minutes: number
   calories_burned: number | null
   notes: string
@@ -512,7 +519,7 @@ export type NewActivityLogEntry = {
 /** Read-side rollup from GET /tracker/daily-summary/?date= - calories/macros
  * consumed (Diet logs), calories burned (an estimated TDEE from the
  * trainee's body stats, plus logged workouts and ActivityLog entries - see
- * tracker/services.py::estimate_calories_out), net balance, and the diet
+ * tracker/services.py::calculate_tdee), net balance, and the diet
  * plan's target for a planned-vs-actual comparison (null if no plan exists
  * yet). */
 export type DailySummary = {
@@ -525,16 +532,23 @@ export type DailySummary = {
   net_calories: number
 }
 
+/** TDEE = bmr + neat + (workout_calories + activity_calories) + tef - see
+ * tdee-calculation-spec.md at the repo root and tracker/services.py::calculate_tdee. */
 export type CaloriesBurnedBreakdown = {
   /** Basal metabolic rate (Mifflin-St Jeor), or null if the trainee's
    * profile lacks height/age/a resolvable weight. */
   bmr: number | null
-  /** Multiplier applied to bmr, picked from that day's step count. */
-  activity_multiplier: number
-  /** bmr x activity_multiplier, or null when bmr is null. */
-  tdee: number | null
+  /** Non-exercise activity thermogenesis, from that day's step count - 0 if no
+   * steps logged (or bmr's weight is unresolvable), never a bucketed guess. */
+  neat: number
+  /** MET-based estimate for logged WorkoutSessions that day (intensity inferred
+   * from average logged RPE across working sets - see calculate_tdee). */
   workout_calories: number
+  /** MET-based estimate for logged ActivityLog entries that day, or each
+   * entry's own manually-entered calories_burned when present. */
   activity_calories: number
+  /** Thermic effect of food: 10% of that day's logged food calories. */
+  tef: number
   total: number
 }
 

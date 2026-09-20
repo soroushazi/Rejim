@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import ActivityLog, DailyMetric
+from .models import ActivityLog, ActivityMET, DailyMetric
 
 
 class DailyMetricSerializer(serializers.ModelSerializer):
@@ -31,8 +31,25 @@ class DailyMetricSerializer(serializers.ModelSerializer):
         return metric
 
 
+class ActivityMETSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ActivityMET
+        fields = ["id", "name", "met_value"]
+
+
 class ActivityLogSerializer(serializers.ModelSerializer):
+    activity_met_name = serializers.CharField(source="activity_met.name", read_only=True)
+
     class Meta:
         model = ActivityLog
-        fields = ["id", "trainee", "date", "activity_type", "duration_minutes", "calories_burned", "notes"]
+        fields = [
+            "id",
+            "trainee",
+            "date",
+            "activity_met",
+            "activity_met_name",
+            "duration_minutes",
+            "calories_burned",
+            "notes",
+        ]
         read_only_fields = ["trainee"]

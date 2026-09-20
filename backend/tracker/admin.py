@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import ActivityLog, DailyMetric
+from .models import ActivityLog, ActivityMET, DailyMetric
 
 
 @admin.register(DailyMetric)
@@ -9,7 +9,13 @@ class DailyMetricAdmin(admin.ModelAdmin):
     list_filter = ("trainee",)
 
 
+@admin.register(ActivityMET)
+class ActivityMETAdmin(admin.ModelAdmin):
+    list_display = ("name", "met_value")
+    search_fields = ("name",)
+
+
 @admin.register(ActivityLog)
 class ActivityLogAdmin(admin.ModelAdmin):
-    list_display = ("trainee", "date", "activity_type", "duration_minutes", "calories_burned")
-    list_filter = ("trainee", "activity_type")
+    list_display = ("trainee", "date", "activity_met", "duration_minutes", "calories_burned")
+    list_filter = ("trainee", "activity_met")

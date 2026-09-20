@@ -19,6 +19,24 @@ def resolve_current_weight_kg(user):
     return None
 
 
+def resolve_weight_kg_as_of(user, date):
+    """Same fallback as resolve_current_weight_kg (latest DailyMetric weight, else
+    starting_weight), but scoped to a specific date - for TDEE math (tracker.services.
+    calculate_tdee), which estimates a *past* day and should use the weight known as of
+    that day, not whatever the trainee weighs now. resolve_current_weight_kg itself
+    stays as "true latest" for BMI/Goals, which always want today's answer regardless
+    of what date something else on the page happens to be showing."""
+    from progress.services import to_kg
+    from tracker.models import DailyMetric
+
+    latest = DailyMetric.objects.filter(trainee=user, weight__isnull=False, date__lte=date).order_by("-date").first()
+    if latest is not None:
+        return to_kg(latest.weight, latest.weight_unit)
+    if user.starting_weight is not None:
+        return to_kg(user.starting_weight, user.starting_weight_unit)
+    return None
+
+
 def compute_bmi(user):
     """(bmi, category) rounded to 1 decimal, or (None, None) if height or a
     resolvable weight is missing (e.g. every trainer, or a trainee who hasn't
@@ -44,13 +62,16 @@ def compute_bmi(user):
     return bmi, category
 
 
-def compute_bmr(user):
+def compute_bmr(user, as_of=None):
     """Basal metabolic rate in kcal/day via Mifflin-St Jeor, or None if
     height, age, or a resolvable weight is missing. `Sex.UNSPECIFIED` uses the
-    average of the male/female sex terms (+5 / -161) rather than guessing."""
+    average of the male/female sex terms (+5 / -161) rather than guessing.
+    `as_of`: resolve weight as of that date (see resolve_weight_kg_as_of) instead of
+    the true latest - used by tracker.services.calculate_tdee, which estimates a past
+    day and shouldn't use a weight logged after it."""
     if user.height_cm is None or user.age is None:
         return None
-    weight_kg = resolve_current_weight_kg(user)
+    weight_kg = resolve_weight_kg_as_of(user, as_of) if as_of is not None else resolve_current_weight_kg(user)
     if weight_kg is None:
         return None
 

@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { ApiError } from '@/api/client'
 import { createActivityLog, deleteActivityLog, listActivityLogs, updateActivityLog } from '@/api/activityLogs'
-import type { ActivityLogEntry, NewActivityLogEntry } from '@/api/types'
+import { createActivityMet, listActivityMets } from '@/api/activityMets'
+import type { ActivityLogEntry, ActivityMET, NewActivityLogEntry } from '@/api/types'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import SearchableSelect from '@/components/SearchableSelect'
 
 type Props = {
   date: string
@@ -15,17 +18,21 @@ type Props = {
 }
 
 type DraftState = {
-  activity_type: string
+  activity_met: number | null
   duration_minutes: string
   calories_burned: string
   notes: string
 }
 
-const EMPTY_DRAFT: DraftState = { activity_type: '', duration_minutes: '', calories_burned: '', notes: '' }
+const EMPTY_DRAFT: DraftState = { activity_met: null, duration_minutes: '', calories_burned: '', notes: '' }
+
+// A brand-new activity type gets this MET until someone corrects it (Django admin) -
+// same "moderate effort" ballpark as most of the seeded table's own entries.
+const DEFAULT_NEW_ACTIVITY_MET = '4.0'
 
 function toDraft(entry: ActivityLogEntry): DraftState {
   return {
-    activity_type: entry.activity_type,
+    activity_met: entry.activity_met,
     duration_minutes: String(entry.duration_minutes),
     calories_burned: entry.calories_burned !== null ? String(entry.calories_burned) : '',
     notes: entry.notes,
@@ -34,12 +41,12 @@ function toDraft(entry: ActivityLogEntry): DraftState {
 
 function toPayload(date: string, draft: DraftState): NewActivityLogEntry | null {
   const duration = Number(draft.duration_minutes)
-  if (!draft.activity_type.trim() || !draft.duration_minutes.trim() || Number.isNaN(duration) || duration <= 0) {
+  if (draft.activity_met === null || !draft.duration_minutes.trim() || Number.isNaN(duration) || duration <= 0) {
     return null
   }
   return {
     date,
-    activity_type: draft.activity_type.trim(),
+    activity_met: draft.activity_met,
     duration_minutes: duration,
     calories_burned: draft.calories_burned.trim() ? Number(draft.calories_burned) : null,
     notes: draft.notes,
@@ -50,21 +57,26 @@ function DraftFields({
   draft,
   onChange,
   idPrefix,
+  activityMets,
+  onRequestCreateActivity,
 }: {
   draft: DraftState
   onChange: (draft: DraftState) => void
   idPrefix: string
+  activityMets: ActivityMET[]
+  onRequestCreateActivity: (query: string, applyTo: (id: number) => void) => void
 }) {
   return (
     <div className="flex flex-col gap-2">
       <div className="grid grid-cols-2 gap-2">
         <div className="col-span-2 flex flex-col gap-1">
           <Label htmlFor={`${idPrefix}-type`}>Activity</Label>
-          <Input
-            id={`${idPrefix}-type`}
+          <SearchableSelect
             placeholder="walk, swim, yoga…"
-            value={draft.activity_type}
-            onChange={(e) => onChange({ ...draft, activity_type: e.target.value })}
+            options={activityMets}
+            value={draft.activity_met}
+            onChange={(id) => onChange({ ...draft, activity_met: id })}
+            onCreateNew={(query) => onRequestCreateActivity(query, (id) => onChange({ ...draft, activity_met: id }))}
           />
         </div>
         <div className="flex flex-col gap-1">
@@ -106,12 +118,26 @@ function DraftFields({
 
 export default function ActivityLogSection({ date, canLog, onChange }: Props) {
   const [entries, setEntries] = useState<ActivityLogEntry[] | null>(null)
+  const [activityMets, setActivityMets] = useState<ActivityMET[]>([])
   const [adding, setAdding] = useState(false)
   const [addDraft, setAddDraft] = useState<DraftState>(EMPTY_DRAFT)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editDraft, setEditDraft] = useState<DraftState>(EMPTY_DRAFT)
   const [busyId, setBusyId] = useState<number | 'new' | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  const [newActivityDraft, setNewActivityDraft] = useState<{
+    name: string
+    met_value: string
+    applyTo: (id: number) => void
+  } | null>(null)
+  const [creatingActivity, setCreatingActivity] = useState(false)
+
+  useEffect(() => {
+    listActivityMets()
+      .then(setActivityMets)
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -131,10 +157,28 @@ export default function ActivityLogSection({ date, canLog, onChange }: Props) {
     }
   }, [date])
 
+  async function handleCreateActivity() {
+    if (!newActivityDraft || !newActivityDraft.name.trim() || !newActivityDraft.met_value.trim()) return
+    setCreatingActivity(true)
+    try {
+      const created = await createActivityMet({
+        name: newActivityDraft.name.trim(),
+        met_value: newActivityDraft.met_value.trim(),
+      })
+      setActivityMets((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)))
+      newActivityDraft.applyTo(created.id)
+      setNewActivityDraft(null)
+    } catch {
+      setError('Could not add this activity type.')
+    } finally {
+      setCreatingActivity(false)
+    }
+  }
+
   async function handleAdd() {
     const payload = toPayload(date, addDraft)
     if (!payload) {
-      setError('Enter an activity type and a duration.')
+      setError('Pick an activity and enter a duration.')
       return
     }
     setBusyId('new')
@@ -159,7 +203,7 @@ export default function ActivityLogSection({ date, canLog, onChange }: Props) {
   async function handleUpdate(id: number) {
     const payload = toPayload(date, editDraft)
     if (!payload) {
-      setError('Enter an activity type and a duration.')
+      setError('Pick an activity and enter a duration.')
       return
     }
     setBusyId(id)
@@ -209,7 +253,15 @@ export default function ActivityLogSection({ date, canLog, onChange }: Props) {
             <li key={entry.id} className="overflow-hidden rounded-lg border border-border bg-background">
               {editingId === entry.id ? (
                 <div className="flex flex-col gap-3 px-3 py-3">
-                  <DraftFields draft={editDraft} onChange={setEditDraft} idPrefix={`activity-edit-${entry.id}`} />
+                  <DraftFields
+                    draft={editDraft}
+                    onChange={setEditDraft}
+                    idPrefix={`activity-edit-${entry.id}`}
+                    activityMets={activityMets}
+                    onRequestCreateActivity={(query, applyTo) =>
+                      setNewActivityDraft({ name: query, met_value: DEFAULT_NEW_ACTIVITY_MET, applyTo })
+                    }
+                  />
                   <div className="flex gap-2">
                     <Button
                       type="button"
@@ -227,7 +279,7 @@ export default function ActivityLogSection({ date, canLog, onChange }: Props) {
               ) : (
                 <div className="flex items-center justify-between gap-2 px-3 py-2.5">
                   <div className="flex flex-col gap-0.5">
-                    <span className="font-medium capitalize">{entry.activity_type}</span>
+                    <span className="font-medium">{entry.activity_met_name}</span>
                     <span className="text-xs text-muted-foreground">
                       {entry.duration_minutes} min
                       {entry.calories_burned !== null ? ` · ${entry.calories_burned} kcal` : ''}
@@ -240,7 +292,7 @@ export default function ActivityLogSection({ date, canLog, onChange }: Props) {
                         type="button"
                         size="icon-sm"
                         variant="ghost"
-                        aria-label={`Edit ${entry.activity_type}`}
+                        aria-label={`Edit ${entry.activity_met_name}`}
                         onClick={() => startEditing(entry)}
                       >
                         <Pencil className="size-3.5" />
@@ -251,7 +303,7 @@ export default function ActivityLogSection({ date, canLog, onChange }: Props) {
                         variant="ghost"
                         className="text-muted-foreground hover:text-destructive"
                         disabled={busyId === entry.id}
-                        aria-label={`Remove ${entry.activity_type}`}
+                        aria-label={`Remove ${entry.activity_met_name}`}
                         onClick={() => handleDelete(entry.id)}
                       >
                         <Trash2 className="size-3.5" />
@@ -269,7 +321,15 @@ export default function ActivityLogSection({ date, canLog, onChange }: Props) {
 
       {canLog && adding && (
         <div className="flex flex-col gap-3 rounded-lg border border-border px-3 py-3">
-          <DraftFields draft={addDraft} onChange={setAddDraft} idPrefix="activity-add" />
+          <DraftFields
+            draft={addDraft}
+            onChange={setAddDraft}
+            idPrefix="activity-add"
+            activityMets={activityMets}
+            onRequestCreateActivity={(query, applyTo) =>
+              setNewActivityDraft({ name: query, met_value: DEFAULT_NEW_ACTIVITY_MET, applyTo })
+            }
+          />
           <div className="flex gap-2">
             <Button type="button" size="sm" disabled={busyId === 'new'} onClick={handleAdd}>
               Add
@@ -294,6 +354,47 @@ export default function ActivityLogSection({ date, canLog, onChange }: Props) {
           <Plus className="size-3.5" /> Add activity
         </Button>
       )}
+
+      <Dialog open={newActivityDraft !== null} onOpenChange={(open) => !open && setNewActivityDraft(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Add a new activity type</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="new-activity-name">Name</Label>
+              <Input
+                id="new-activity-name"
+                value={newActivityDraft?.name ?? ''}
+                onChange={(e) => setNewActivityDraft((prev) => (prev ? { ...prev, name: e.target.value } : prev))}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="new-activity-met">MET (intensity)</Label>
+              <Input
+                id="new-activity-met"
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.1"
+                value={newActivityDraft?.met_value ?? ''}
+                onChange={(e) => setNewActivityDraft((prev) => (prev ? { ...prev, met_value: e.target.value } : prev))}
+              />
+              <p className="text-xs text-muted-foreground">
+                Defaulted to a moderate-effort estimate - raise it for something vigorous, lower it for something
+                light.
+              </p>
+            </div>
+            <Button
+              type="button"
+              disabled={creatingActivity || !newActivityDraft?.name.trim() || !newActivityDraft?.met_value.trim()}
+              onClick={handleCreateActivity}
+            >
+              {creatingActivity ? 'Adding…' : 'Add activity'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

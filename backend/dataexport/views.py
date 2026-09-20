@@ -184,8 +184,12 @@ class DailyMetricsExportView(APIView):
                     m.notes,
                 ]
             )
-        for a in ActivityLog.objects.filter(trainee=request.user, date__range=(start, end)).order_by("date"):
+        for a in (
+            ActivityLog.objects.filter(trainee=request.user, date__range=(start, end))
+            .select_related("activity_met")
+            .order_by("date")
+        ):
             writer.writerow(
-                ["activity", a.date, "", "", "", "", "", "", "", a.activity_type, a.duration_minutes, a.calories_burned, a.notes]
+                ["activity", a.date, "", "", "", "", "", "", "", a.activity_met.name, a.duration_minutes, a.calories_burned, a.notes]
             )
         return response

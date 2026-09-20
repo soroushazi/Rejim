@@ -13,9 +13,9 @@ from nutrition.models import FoodLog
 from nutrition.services import sum_nutrients
 from workouts.models import WorkoutSession
 
-from .models import ActivityLog, DailyMetric
-from .serializers import ActivityLogSerializer, DailyMetricSerializer
-from .services import estimate_calories_out
+from .models import ActivityLog, ActivityMET, DailyMetric
+from .serializers import ActivityLogSerializer, ActivityMETSerializer, DailyMetricSerializer
+from .services import calculate_tdee
 
 
 def _resolve_trainee(request):
@@ -61,6 +61,15 @@ class DailyMetricViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
         if date_param:
             queryset = queryset.filter(date=date_param)
         return queryset
+
+
+class ActivityMETViewSet(viewsets.ModelViewSet):
+    """Open-write reference data (same trust model as nutrition.DietaryTag) - list +
+    create only in practice (no frontend path calls update/destroy; corrections go
+    through Django admin), but plain ModelViewSet costs nothing extra to expose."""
+
+    queryset = ActivityMET.objects.all()
+    serializer_class = ActivityMETSerializer
 
 
 class ActivityLogViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
@@ -127,7 +136,7 @@ class DailySummaryView(APIView):
         )
         consumed = sum_nutrients([log.actual_nutrients() for log in food_logs])
 
-        calories_out = estimate_calories_out(trainee, target_date)
+        calories_out = calculate_tdee(trainee, target_date, consumed_calories=consumed["calories"])
         calories_burned = calories_out["total"]
         net_calories = (consumed["calories"] or 0) - calories_burned
 
