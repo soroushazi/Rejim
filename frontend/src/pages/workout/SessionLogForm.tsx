@@ -395,8 +395,8 @@ export default function SessionLogForm({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex gap-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex min-w-0 flex-col gap-1.5 overflow-hidden">
           <Label htmlFor="log-date">Date</Label>
           <Input
             id="log-date"
@@ -406,7 +406,7 @@ export default function SessionLogForm({
             onChange={(e) => onDateChange(e.target.value)}
           />
         </div>
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <div className="flex min-w-0 flex-col gap-1.5">
           <Label htmlFor="log-session">Session</Label>
           <Select value={String(selectedSessionId)} onValueChange={(v) => onSelectSession(Number(v))}>
             <SelectTrigger id="log-session" className="w-full">
