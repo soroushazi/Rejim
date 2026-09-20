@@ -1,3 +1,4 @@
+from django.db.models import Case, IntegerField, Q, Value, When
 from rest_framework import filters, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
@@ -75,7 +76,35 @@ class FoodItemViewSet(viewsets.ModelViewSet):
     search_fields = ["name", "brand_name"]
 
     def get_queryset(self):
-        queryset = FoodItem.visible_to(self.request.user).order_by("name")
+        queryset = FoodItem.visible_to(self.request.user)
+        search = self.request.query_params.get("search", "").strip()
+        if search:
+            # SearchFilter (below) already narrows the queryset to name/brand_name
+            # matches - this only decides the order those matches come back in, so a
+            # search like "Watermelon" surfaces the exact "Watermelon" item ahead of
+            # "Watermelon Juice"/"Watermelon Ice Cream", and (within a match tier)
+            # plain/generic foods ahead of branded products ahead of this app's own
+            # composite (multi-ingredient) items - a reasonable stand-in for "single
+            # ingredient" given every USDA-imported row is kind=single regardless of
+            # whether it's a whole food or a branded product (see
+            # import_usda_bulk_csv.py), so brand_name presence is the only signal in
+            # the data that actually distinguishes them.
+            queryset = queryset.annotate(
+                match_rank=Case(
+                    When(name__iexact=search, then=Value(0)),
+                    When(name__istartswith=search, then=Value(1)),
+                    default=Value(2),
+                    output_field=IntegerField(),
+                ),
+                specificity_rank=Case(
+                    When(kind=FoodItem.Kind.COMPOSITE, then=Value(2)),
+                    When(Q(brand_name__isnull=True) | Q(brand_name=""), then=Value(0)),
+                    default=Value(1),
+                    output_field=IntegerField(),
+                ),
+            ).order_by("match_rank", "specificity_rank", "name")
+        else:
+            queryset = queryset.order_by("name")
         barcode = self.request.query_params.get("barcode")
         if barcode:
             normalized = normalize_barcode(barcode)
