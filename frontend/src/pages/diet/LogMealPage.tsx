@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Info, Plus, ScanBarcode, Search, X } from 'lucide-react'
+import { ArrowLeft, Check, Info, Plus, ScanBarcode, Search, X } from 'lucide-react'
 import { ApiError } from '@/api/client'
 import { getDietPlan, listDietPlans } from '@/api/dietPlan'
 import { getFoodItem, listFoodItems } from '@/api/foodItems'
@@ -722,8 +722,14 @@ function BrowseListItem({
           <Info className="size-4" />
         </button>
       )}
-      <Button type="button" size="sm" variant={added ? 'secondary' : 'outline'} onClick={onToggle}>
-        {added ? 'Added' : (addLabel ?? 'Add')}
+      <Button
+        type="button"
+        size="icon-sm"
+        variant={added ? 'secondary' : 'outline'}
+        onClick={onToggle}
+        aria-label={`${added ? 'Remove' : (addLabel ?? 'Add')} ${name}`}
+      >
+        {added ? <Check className="size-3.5" /> : <Plus className="size-3.5" />}
       </Button>
     </li>
   )
