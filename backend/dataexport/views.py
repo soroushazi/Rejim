@@ -25,6 +25,8 @@ def _csv_response(filename):
 
 
 def _food_log_item_name(log):
+    if log.custom_name:
+        return log.custom_name
     if log.reference_meal_item_id:
         return log.reference_meal_item.food_item.name
     if log.food_item_id:

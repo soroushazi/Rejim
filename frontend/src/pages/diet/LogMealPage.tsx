@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Check, Info, Plus, Search, X } from 'lucide-react'
+import { ArrowLeft, Check, Info, Plus, Search, Utensils, X } from 'lucide-react'
 import { ApiError } from '@/api/client'
 import { getDietPlan, listDietPlans } from '@/api/dietPlan'
 import { getFoodItem, listFoodItems } from '@/api/foodItems'
@@ -11,6 +11,7 @@ import type {
   FoodItem,
   LoggedMeal,
   NewLoggedMealItem,
+  NewQuickLogItem,
   Nutrients,
   QuickLogItem,
   ReferenceMealDetail,
@@ -25,6 +26,7 @@ import { availableUnits, gramsForQuantity } from '@/lib/servingUnits'
 import { nutrientsForWeight, scaleNutrients, sumNutrients } from '@/lib/nutrients'
 import { cn, round } from '@/lib/utils'
 import { toDateKey } from '@/lib/date'
+import AddCustomMealDialog from './AddCustomMealDialog'
 import AddFoodItemDialog from './AddFoodItemDialog'
 import AddQuickLogItemDialog from './AddQuickLogItemDialog'
 import NutritionFactsDialog from './NutritionFactsDialog'
@@ -49,7 +51,10 @@ type PlanCartItem = {
 }
 type FoodCartItem = { kind: 'food'; key: string; foodItem: FoodItem; unit: string; quantity: string }
 type QuickCartItem = { kind: 'quick'; key: string; quickLogItem: QuickLogItem }
-type CartItem = PlanCartItem | FoodCartItem | QuickCartItem
+// A one-time, typed-in estimate (see AddCustomMealDialog) - fixed nutrients,
+// same as a quick-log item, but never saved anywhere beyond this one log.
+type CustomCartItem = { kind: 'custom'; key: string; name: string; nutrients: Nutrients }
+type CartItem = PlanCartItem | FoodCartItem | QuickCartItem | CustomCartItem
 
 function planCartItem(item: ReferenceMealItemDetail, quantity?: string): PlanCartItem {
   return {
@@ -73,6 +78,10 @@ function quickCartItem(quickLogItem: QuickLogItem): QuickCartItem {
   return { kind: 'quick', key: `quick-${quickLogItem.id}-${Math.random().toString(36).slice(2)}`, quickLogItem }
 }
 
+function customCartItem(name: string, nutrients: Nutrients): CustomCartItem {
+  return { kind: 'custom', key: `custom-${Math.random().toString(36).slice(2)}`, name, nutrients }
+}
+
 /** Fixed per-serving values, not scaled by weight - mirrors the backend's
  * FoodLog._compute_nutrients for source=quick. */
 function quickLogNutrients(q: QuickLogItem): Nutrients {
@@ -84,11 +93,11 @@ function quickLogNutrients(q: QuickLogItem): Nutrients {
     fiber_g: q.fiber_g !== null ? Number(q.fiber_g) : null,
     sugar_g: q.sugar_g !== null ? Number(q.sugar_g) : null,
     sodium_mg: q.sodium_mg !== null ? Number(q.sodium_mg) : null,
-    potassium_mg: null,
-    calcium_mg: null,
-    iron_mg: null,
-    vitamin_c_mg: null,
-    vitamin_a_mcg: null,
+    potassium_mg: q.potassium_mg !== null ? Number(q.potassium_mg) : null,
+    calcium_mg: q.calcium_mg !== null ? Number(q.calcium_mg) : null,
+    iron_mg: q.iron_mg !== null ? Number(q.iron_mg) : null,
+    vitamin_c_mg: q.vitamin_c_mg !== null ? Number(q.vitamin_c_mg) : null,
+    vitamin_a_mcg: q.vitamin_a_mcg !== null ? Number(q.vitamin_a_mcg) : null,
   }
 }
 
@@ -101,12 +110,14 @@ function cartItemNutrients(row: CartItem): Nutrients {
     const grams = gramsForQuantity(row.foodItem, row.unit, row.quantity)
     return grams !== null ? nutrientsForWeight(row.foodItem, grams) : sumNutrients([])
   }
+  if (row.kind === 'custom') return row.nutrients
   return quickLogNutrients(row.quickLogItem)
 }
 
 function cartItemName(row: CartItem): string {
   if (row.kind === 'plan') return row.name
   if (row.kind === 'food') return row.foodItem.name
+  if (row.kind === 'custom') return row.name
   return row.quickLogItem.name
 }
 
@@ -139,6 +150,8 @@ export default function LogMealPage() {
   const [bankLoadingMore, setBankLoadingMore] = useState(false)
   const [addFoodOpen, setAddFoodOpen] = useState(false)
   const [addQuickOpen, setAddQuickOpen] = useState(false)
+  const [addQuickInitial, setAddQuickInitial] = useState<Partial<NewQuickLogItem> | undefined>(undefined)
+  const [addCustomOpen, setAddCustomOpen] = useState(false)
   const [detailRow, setDetailRow] = useState<{ name: string; caption: string; nutrients: Nutrients } | null>(null)
   const [removeAllOpen, setRemoveAllOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -208,6 +221,11 @@ export default function LogMealPage() {
             fiber_g: n.fiber_g !== null ? String(n.fiber_g) : null,
             sugar_g: n.sugar_g !== null ? String(n.sugar_g) : null,
             sodium_mg: n.sodium_mg !== null ? String(n.sodium_mg) : null,
+            potassium_mg: n.potassium_mg !== null ? String(n.potassium_mg) : null,
+            calcium_mg: n.calcium_mg !== null ? String(n.calcium_mg) : null,
+            iron_mg: n.iron_mg !== null ? String(n.iron_mg) : null,
+            vitamin_c_mg: n.vitamin_c_mg !== null ? String(n.vitamin_c_mg) : null,
+            vitamin_a_mcg: n.vitamin_a_mcg !== null ? String(n.vitamin_a_mcg) : null,
             created_at: '',
           })
         }
@@ -215,6 +233,7 @@ export default function LogMealPage() {
           const foodItem = await getFoodItem(item.food_item)
           return foodCartItem(foodItem, item.actual_weight_grams ?? '')
         }
+        if (item.custom_name) return customCartItem(item.custom_name, item.actual_nutrients)
         return null
       }),
     ).then((rows) => setCart(rows.filter((r): r is CartItem => r !== null)))
@@ -290,6 +309,19 @@ export default function LogMealPage() {
     setCart((prev) => [...prev, quickCartItem(item)])
   }
 
+  function addCustomItem(name: string, nutrients: Nutrients) {
+    setCart((prev) => [...prev, customCartItem(name, nutrients)])
+  }
+
+  // AddCustomMealDialog's "head to my meals" link - swap it for
+  // AddQuickLogItemDialog, pre-filled with whatever was already typed, so
+  // saving it as a reusable shortcut doesn't mean starting over.
+  function handleMoveToQuickLog(draft: NewQuickLogItem) {
+    setAddCustomOpen(false)
+    setAddQuickInitial(draft)
+    setAddQuickOpen(true)
+  }
+
   function showPlanItemInfo(item: ReferenceMealItemDetail) {
     setDetailRow({
       name: item.food_item_name,
@@ -312,7 +344,7 @@ export default function LogMealPage() {
 
   function updateCartQuantity(key: string, patch: { unit?: string; quantity?: string }) {
     setCart((prev) =>
-      prev.map((r) => (r.key === key && r.kind !== 'quick' ? { ...r, ...patch } : r)) as CartItem[],
+      prev.map((r) => (r.key === key && (r.kind === 'plan' || r.kind === 'food') ? { ...r, ...patch } : r)) as CartItem[],
     )
   }
 
@@ -352,6 +384,25 @@ export default function LogMealPage() {
     for (const row of cart) {
       if (row.kind === 'quick') {
         items.push({ quick_log_item: row.quickLogItem.id })
+        continue
+      }
+      if (row.kind === 'custom') {
+        const n = row.nutrients
+        items.push({
+          custom_name: row.name,
+          calories: String(n.calories ?? 0),
+          protein_g: n.protein_g !== null ? String(n.protein_g) : null,
+          carbs_g: n.carbs_g !== null ? String(n.carbs_g) : null,
+          fat_g: n.fat_g !== null ? String(n.fat_g) : null,
+          fiber_g: n.fiber_g !== null ? String(n.fiber_g) : null,
+          sugar_g: n.sugar_g !== null ? String(n.sugar_g) : null,
+          sodium_mg: n.sodium_mg !== null ? String(n.sodium_mg) : null,
+          potassium_mg: n.potassium_mg !== null ? String(n.potassium_mg) : null,
+          calcium_mg: n.calcium_mg !== null ? String(n.calcium_mg) : null,
+          iron_mg: n.iron_mg !== null ? String(n.iron_mg) : null,
+          vitamin_c_mg: n.vitamin_c_mg !== null ? String(n.vitamin_c_mg) : null,
+          vitamin_a_mcg: n.vitamin_a_mcg !== null ? String(n.vitamin_a_mcg) : null,
+        })
         continue
       }
       const grams =
@@ -445,12 +496,12 @@ export default function LogMealPage() {
                   <div key={row.key} className="flex items-center gap-2 rounded-lg border border-border bg-background p-2">
                     <div className="flex min-w-0 flex-1 flex-col gap-1">
                       <div className="flex items-center gap-1.5">
-                        <Badge variant={row.kind === 'quick' ? 'secondary' : 'outline'} className="shrink-0">
-                          {row.kind === 'plan' ? 'Plan' : row.kind === 'quick' ? 'My meal' : 'Food bank'}
+                        <Badge variant={row.kind === 'plan' || row.kind === 'food' ? 'outline' : 'secondary'} className="shrink-0">
+                          {row.kind === 'plan' ? 'Plan' : row.kind === 'food' ? 'Food bank' : row.kind === 'quick' ? 'My meal' : 'Custom'}
                         </Badge>
                         <span className="min-w-0 flex-1 truncate text-sm font-medium">{cartItemName(row)}</span>
                       </div>
-                      {row.kind !== 'quick' ? (
+                      {row.kind === 'plan' || row.kind === 'food' ? (
                         <div className="flex items-center gap-2">
                           <Input
                             type="number"
@@ -479,7 +530,8 @@ export default function LogMealPage() {
                         </div>
                       ) : (
                         <span className="text-xs text-muted-foreground">
-                          1 serving · {nutrients.calories !== null ? `${round(nutrients.calories)} kcal` : '—'}
+                          {row.kind === 'custom' ? 'One-time estimate' : '1 serving'} ·{' '}
+                          {nutrients.calories !== null ? `${round(nutrients.calories)} kcal` : '—'}
                         </span>
                       )}
                     </div>
@@ -692,13 +744,36 @@ export default function LogMealPage() {
         )}
       </div>
 
+      <Button
+        type="button"
+        className="fixed z-15 gap-1.5 rounded-full shadow-lg"
+        style={{ right: 16, bottom: 'calc(var(--nav-height) + env(safe-area-inset-bottom) + 16px)' }}
+        onClick={() => setAddCustomOpen(true)}
+      >
+        <Utensils className="size-4" /> Add custom meal
+      </Button>
+
       <AddFoodItemDialog
         open={addFoodOpen}
         onOpenChange={setAddFoodOpen}
         onCreated={(item) => toggleFoodItem(item)}
         initialName={trimmedQuery}
       />
-      <AddQuickLogItemDialog open={addQuickOpen} onOpenChange={setAddQuickOpen} onCreated={(item) => { setQuickItems((prev) => [item, ...prev]); addQuickItem(item) }} initialName={trimmedQuery} />
+      <AddQuickLogItemDialog
+        open={addQuickOpen}
+        onOpenChange={(next) => {
+          setAddQuickOpen(next)
+          if (!next) setAddQuickInitial(undefined)
+        }}
+        onCreated={(item) => { setQuickItems((prev) => [item, ...prev]); addQuickItem(item) }}
+        initialValues={addQuickInitial ?? { name: trimmedQuery }}
+      />
+      <AddCustomMealDialog
+        open={addCustomOpen}
+        onOpenChange={setAddCustomOpen}
+        onAdd={addCustomItem}
+        onMoveToQuickLog={handleMoveToQuickLog}
+      />
       <NutritionFactsDialog
         open={detailRow !== null}
         onOpenChange={(next) => !next && setDetailRow(null)}

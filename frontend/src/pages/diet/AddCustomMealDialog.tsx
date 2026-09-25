@@ -1,0 +1,250 @@
+import { ChevronDown } from 'lucide-react'
+import { useEffect, useState, type FormEvent } from 'react'
+import type { NewQuickLogItem, Nutrients } from '@/api/types'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { nutrientsForWeight, sumNutrients } from '@/lib/nutrients'
+import { cn, round } from '@/lib/utils'
+import IngredientPicker, { type DraftComponent } from './IngredientPicker'
+
+type Props = {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onAdd: (name: string, nutrients: Nutrients) => void
+  // Fires when the trainee picks "head to my meals" instead - hands over
+  // whatever's currently typed here so it isn't lost, and this dialog closes
+  // in favor of AddQuickLogItemDialog (see LogMealPage's handleMoveToQuickLog).
+  onMoveToQuickLog: (draft: NewQuickLogItem) => void
+}
+
+const MACRO_FIELDS: { key: keyof Nutrients; label: string }[] = [
+  { key: 'protein_g', label: 'Protein (g)' },
+  { key: 'carbs_g', label: 'Carbs (g)' },
+  { key: 'fat_g', label: 'Fat (g)' },
+]
+
+const MICRO_FIELDS: { key: keyof Nutrients; label: string }[] = [
+  { key: 'fiber_g', label: 'Fiber (g)' },
+  { key: 'sugar_g', label: 'Sugar (g)' },
+  { key: 'sodium_mg', label: 'Sodium (mg)' },
+  { key: 'potassium_mg', label: 'Potassium (mg)' },
+  { key: 'calcium_mg', label: 'Calcium (mg)' },
+  { key: 'iron_mg', label: 'Iron (mg)' },
+  { key: 'vitamin_c_mg', label: 'Vitamin C (mg)' },
+  { key: 'vitamin_a_mcg', label: 'Vitamin A (mcg)' },
+]
+
+const EMPTY_VALUES = Object.fromEntries(
+  [...MACRO_FIELDS, ...MICRO_FIELDS].map(({ key }) => [key, '']),
+) as Record<string, string>
+
+/** Sums whichever ingredient rows already have a resolvable weight (IngredientPicker
+ * itself keeps weight_grams in sync with each row's own unit/quantity) - a row added
+ * but not yet given an amount just doesn't count yet, rather than blowing the
+ * running total away. */
+function ingredientsTotal(ingredients: DraftComponent[]): Nutrients | null {
+  const rows = ingredients
+    .filter((c) => c.food_item && Number(c.weight_grams) > 0)
+    .map((c) => nutrientsForWeight(c.food_item!, Number(c.weight_grams)))
+  return rows.length > 0 ? sumNutrients(rows) : null
+}
+
+/** A one-time, typed-in estimate for something eaten today that has no
+ * sensible backing item - e.g. "Stew" at a party, where a rough guess is all
+ * that's possible and the same dish could get a totally different estimate
+ * next time. Unlike a QuickLogItem ("my protein shake"), nothing here is
+ * saved for reuse - this just appends one row straight to the cart with
+ * whatever values were typed in (or computed from ingredients, below). See
+ * backend FoodLog.custom_name.
+ *
+ * The optional "Enter ingredients" card is a calculator, not a second source
+ * of truth: picking single-ingredient amounts (e.g. 100g ground beef, 50g
+ * tomato) from the Food Bank auto-fills the calorie/macro/micro fields above
+ * via IngredientPicker + nutrientsForWeight/sumNutrients (same math the
+ * cart's own totals use), and those fields stay directly editable afterward
+ * for a manual nudge - re-editing the ingredient list recomputes and
+ * overwrites them again. */
+export default function AddCustomMealDialog({ open, onOpenChange, onAdd, onMoveToQuickLog }: Props) {
+  const [name, setName] = useState('')
+  const [calories, setCalories] = useState('')
+  const [values, setValues] = useState(EMPTY_VALUES)
+  const [ingredients, setIngredients] = useState<DraftComponent[]>([])
+  const [ingredientsOpen, setIngredientsOpen] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  function reset() {
+    setName('')
+    setCalories('')
+    setValues(EMPTY_VALUES)
+    setIngredients([])
+    setIngredientsOpen(false)
+    setError(null)
+  }
+
+  useEffect(() => {
+    if (open) reset()
+  }, [open])
+
+  // Recompute from the ingredient list whenever it changes - see
+  // ingredientsTotal's doc comment for why it's a calculator, not a merge.
+  useEffect(() => {
+    const total = ingredientsTotal(ingredients)
+    if (!total) return
+    setCalories(total.calories !== null ? String(round(total.calories)) : '')
+    setValues((v) => {
+      const next = { ...v }
+      for (const { key } of [...MACRO_FIELDS, ...MICRO_FIELDS]) {
+        const value = total[key]
+        next[key] = value !== null ? String(round(value)) : ''
+      }
+      return next
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ingredients])
+
+  function handleOpenChange(next: boolean) {
+    if (!next) reset()
+    onOpenChange(next)
+  }
+
+  function currentNutrients(): Nutrients {
+    return {
+      calories: calories.trim() ? Number(calories) : null,
+      protein_g: values.protein_g.trim() ? Number(values.protein_g) : null,
+      carbs_g: values.carbs_g.trim() ? Number(values.carbs_g) : null,
+      fat_g: values.fat_g.trim() ? Number(values.fat_g) : null,
+      fiber_g: values.fiber_g.trim() ? Number(values.fiber_g) : null,
+      sugar_g: values.sugar_g.trim() ? Number(values.sugar_g) : null,
+      sodium_mg: values.sodium_mg.trim() ? Number(values.sodium_mg) : null,
+      potassium_mg: values.potassium_mg.trim() ? Number(values.potassium_mg) : null,
+      calcium_mg: values.calcium_mg.trim() ? Number(values.calcium_mg) : null,
+      iron_mg: values.iron_mg.trim() ? Number(values.iron_mg) : null,
+      vitamin_c_mg: values.vitamin_c_mg.trim() ? Number(values.vitamin_c_mg) : null,
+      vitamin_a_mcg: values.vitamin_a_mcg.trim() ? Number(values.vitamin_a_mcg) : null,
+    }
+  }
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+    if (!name.trim() || !calories.trim() || !values.protein_g.trim() || !values.carbs_g.trim() || !values.fat_g.trim()) {
+      setError('Name, calories, and macros (protein/carbs/fat) are required - only the micronutrients are optional.')
+      return
+    }
+    onAdd(name.trim(), currentNutrients())
+    handleOpenChange(false)
+  }
+
+  function handleMoveToQuickLog() {
+    onMoveToQuickLog({
+      name: name.trim(),
+      calories: calories.trim(),
+      ...Object.fromEntries([...MACRO_FIELDS, ...MICRO_FIELDS].map(({ key }) => [key, values[key]?.trim() || null])),
+    })
+    handleOpenChange(false)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="max-h-[85svh] overflow-y-auto sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Add custom meal</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">
+            A one-time estimate for something you can't look up precisely (e.g. "Stew" at a party) - added to
+            today's log only.
+          </p>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="custom-meal-name">Name</Label>
+            <Input id="custom-meal-name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="custom-meal-calories">Calories (kcal)</Label>
+            <Input
+              id="custom-meal-calories"
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.1"
+              value={calories}
+              onChange={(e) => setCalories(e.target.value)}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {MACRO_FIELDS.map(({ key, label }) => (
+              <div key={key} className="flex flex-col gap-1.5">
+                <Label htmlFor={`custom-meal-${key}`}>{label}</Label>
+                <Input
+                  id={`custom-meal-${key}`}
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.1"
+                  value={values[key]}
+                  onChange={(e) => setValues((v) => ({ ...v, [key]: e.target.value }))}
+                />
+              </div>
+            ))}
+          </div>
+          <p className="text-xs font-semibold text-muted-foreground">Micronutrients (optional)</p>
+          <div className="grid grid-cols-2 gap-3">
+            {MICRO_FIELDS.map(({ key, label }) => (
+              <div key={key} className="flex flex-col gap-1.5">
+                <Label htmlFor={`custom-meal-${key}`}>{label}</Label>
+                <Input
+                  id={`custom-meal-${key}`}
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.1"
+                  value={values[key]}
+                  onChange={(e) => setValues((v) => ({ ...v, [key]: e.target.value }))}
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="overflow-hidden rounded-lg border border-border">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between gap-2 px-3 py-2 text-sm font-medium"
+              onClick={() => setIngredientsOpen((o) => !o)}
+              aria-expanded={ingredientsOpen}
+            >
+              Enter ingredients (optional)
+              <ChevronDown className={cn('size-4 text-muted-foreground transition-transform', ingredientsOpen && 'rotate-180')} />
+            </button>
+            {ingredientsOpen && (
+              <div className="flex flex-col gap-3 border-t border-border p-3">
+                <p className="text-xs text-muted-foreground">
+                  Know roughly what went into it? Add each ingredient's amount and the fields above fill in
+                  automatically (still yours to adjust after).
+                </p>
+                <IngredientPicker value={ingredients} onChange={setIngredients} />
+              </div>
+            )}
+          </div>
+
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => handleOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" size="sm">
+              Add
+            </Button>
+          </div>
+          <p className="text-center text-xs text-muted-foreground">
+            This will be logged just this once. For something you'll want to log again later, head to{' '}
+            <button type="button" onClick={handleMoveToQuickLog} className="font-medium text-primary hover:underline">
+              My meals
+            </button>{' '}
+            instead.
+          </p>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}

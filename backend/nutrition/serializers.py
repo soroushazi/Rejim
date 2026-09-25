@@ -219,6 +219,11 @@ class QuickLogItemSerializer(serializers.ModelSerializer):
             "fiber_g",
             "sugar_g",
             "sodium_mg",
+            "potassium_mg",
+            "calcium_mg",
+            "iron_mg",
+            "vitamin_c_mg",
+            "vitamin_a_mcg",
             "created_at",
         ]
         read_only_fields = ["trainee", "created_at"]
@@ -352,6 +357,7 @@ class FoodLogSerializer(serializers.ModelSerializer):
             "reference_meal_item",
             "food_item",
             "quick_log_item",
+            "custom_name",
             "actual_weight_grams",
             "logged_at",
             "calories",
@@ -367,21 +373,13 @@ class FoodLogSerializer(serializers.ModelSerializer):
             "vitamin_c_mg",
             "vitamin_a_mcg",
         ]
-        read_only_fields = [
-            "trainee",
-            "calories",
-            "protein_g",
-            "carbs_g",
-            "fat_g",
-            "fiber_g",
-            "sugar_g",
-            "sodium_mg",
-            "potassium_mg",
-            "calcium_mg",
-            "iron_mg",
-            "vitamin_c_mg",
-            "vitamin_a_mcg",
-        ]
+        # calories/macros/micros are read-only for every source *except*
+        # custom, where the trainee's typed-in values are all there is - but
+        # DRF's read_only_fields is all-or-nothing per field, so that's
+        # enforced in validate() instead; whatever gets submitted for a non-
+        # custom source is silently overwritten anyway by FoodLog.save()'s
+        # own _compute_nutrients(), so accepting the input here is harmless.
+        read_only_fields = ["trainee"]
         extra_kwargs = {"source": {"required": True}}
 
     def __init__(self, *args, **kwargs):
@@ -397,12 +395,24 @@ class FoodLogSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         source = attrs.get("source")
         linked = [attrs.get("reference_meal_item"), attrs.get("food_item"), attrs.get("quick_log_item")]
-        if sum(bool(x) for x in linked) != 1:
+        if source == FoodLog.Source.CUSTOM:
+            if any(linked):
+                raise serializers.ValidationError(
+                    "A custom log can't also reference a reference_meal_item, food_item, or quick_log_item."
+                )
+            if not attrs.get("custom_name"):
+                raise serializers.ValidationError("custom_name is required when source is 'custom'.")
+            if any(attrs.get(f) is None for f in ("calories", "protein_g", "carbs_g", "fat_g")):
+                raise serializers.ValidationError(
+                    "calories, protein_g, carbs_g, and fat_g are all required when source is 'custom' "
+                    "(only the micros stay optional)."
+                )
+        elif sum(bool(x) for x in linked) != 1:
             raise serializers.ValidationError(
                 "Exactly one of reference_meal_item, food_item, or quick_log_item must be set."
             )
-        if source != FoodLog.Source.QUICK and attrs.get("actual_weight_grams") is None:
-            raise serializers.ValidationError("actual_weight_grams is required unless source is 'quick'.")
+        if source not in (FoodLog.Source.QUICK, FoodLog.Source.CUSTOM) and attrs.get("actual_weight_grams") is None:
+            raise serializers.ValidationError("actual_weight_grams is required unless source is 'quick' or 'custom'.")
         return attrs
 
 
@@ -424,14 +434,43 @@ class LoggedMealItemSerializer(serializers.ModelSerializer):
             "reference_meal_item",
             "food_item",
             "quick_log_item",
+            "custom_name",
             "food_item_name",
             "actual_weight_grams",
             "actual_nutrients",
+            "calories",
+            "protein_g",
+            "carbs_g",
+            "fat_g",
+            "fiber_g",
+            "sugar_g",
+            "sodium_mg",
+            "potassium_mg",
+            "calcium_mg",
+            "iron_mg",
+            "vitamin_c_mg",
+            "vitamin_a_mcg",
         ]
         extra_kwargs = {
             "reference_meal_item": {"required": False},
             "food_item": {"required": False},
             "quick_log_item": {"required": False},
+            "custom_name": {"required": False},
+            # Only meaningful for a custom item (see validate()) - write-only
+            # since actual_nutrients (above) already carries the same values
+            # back out, snapshotted, for every item kind.
+            "calories": {"required": False, "write_only": True},
+            "protein_g": {"required": False, "write_only": True},
+            "carbs_g": {"required": False, "write_only": True},
+            "fat_g": {"required": False, "write_only": True},
+            "fiber_g": {"required": False, "write_only": True},
+            "sugar_g": {"required": False, "write_only": True},
+            "sodium_mg": {"required": False, "write_only": True},
+            "potassium_mg": {"required": False, "write_only": True},
+            "calcium_mg": {"required": False, "write_only": True},
+            "iron_mg": {"required": False, "write_only": True},
+            "vitamin_c_mg": {"required": False, "write_only": True},
+            "vitamin_a_mcg": {"required": False, "write_only": True},
         }
 
     def __init__(self, *args, **kwargs):
@@ -446,15 +485,28 @@ class LoggedMealItemSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         linked = [attrs.get("reference_meal_item"), attrs.get("food_item"), attrs.get("quick_log_item")]
-        if sum(bool(x) for x in linked) != 1:
+        is_custom = bool(attrs.get("custom_name"))
+        if is_custom:
+            if any(linked):
+                raise serializers.ValidationError(
+                    "A custom item can't also reference a plan, food-bank, or quick-log item."
+                )
+            if any(attrs.get(f) is None for f in ("calories", "protein_g", "carbs_g", "fat_g")):
+                raise serializers.ValidationError(
+                    "calories, protein_g, carbs_g, and fat_g are all required for a custom item "
+                    "(only the micros stay optional)."
+                )
+        elif sum(bool(x) for x in linked) != 1:
             raise serializers.ValidationError(
                 "Exactly one of reference_meal_item, food_item, or quick_log_item must be set."
             )
-        if attrs.get("quick_log_item") is None and attrs.get("actual_weight_grams") is None:
+        if not is_custom and attrs.get("quick_log_item") is None and attrs.get("actual_weight_grams") is None:
             raise serializers.ValidationError("actual_weight_grams is required unless logging a quick-log item.")
         return attrs
 
     def get_food_item_name(self, obj):
+        if obj.custom_name:
+            return obj.custom_name
         if obj.food_item_id:
             return obj.food_item.name
         if obj.reference_meal_item_id:
@@ -530,6 +582,8 @@ class LoggedMealSerializer(serializers.ModelSerializer):
             return FoodLog.Source.PLAN
         if item.get("quick_log_item"):
             return FoodLog.Source.QUICK
+        if item.get("custom_name"):
+            return FoodLog.Source.CUSTOM
         return FoodLog.Source.FOOD_ITEM
 
     def _upsert(self, validated_data):
@@ -561,5 +615,22 @@ class LoggedMealSerializer(serializers.ModelSerializer):
                 food_item=item.get("food_item"),
                 quick_log_item=item.get("quick_log_item"),
                 actual_weight_grams=item.get("actual_weight_grams"),
+                custom_name=item.get("custom_name"),
+                # Only meaningful for a source=custom item - FoodLog.save()'s
+                # _compute_nutrients() derives (and overwrites) these from the
+                # linked item for every other source, so passing them through
+                # unconditionally here is harmless.
+                calories=item.get("calories"),
+                protein_g=item.get("protein_g"),
+                carbs_g=item.get("carbs_g"),
+                fat_g=item.get("fat_g"),
+                fiber_g=item.get("fiber_g"),
+                sugar_g=item.get("sugar_g"),
+                sodium_mg=item.get("sodium_mg"),
+                potassium_mg=item.get("potassium_mg"),
+                calcium_mg=item.get("calcium_mg"),
+                iron_mg=item.get("iron_mg"),
+                vitamin_c_mg=item.get("vitamin_c_mg"),
+                vitamin_a_mcg=item.get("vitamin_a_mcg"),
             )
         return logged_meal

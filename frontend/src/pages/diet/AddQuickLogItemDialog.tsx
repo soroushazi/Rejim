@@ -10,41 +10,60 @@ type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
   onCreated: (item: QuickLogItem) => void
-  initialName?: string
+  // Seeds every field when opening - either just a searched name (the empty-
+  // Food-Bank-search "Add..." link) or a full draft handed over from
+  // AddCustomMealDialog's "head to my meals" link, which carries over
+  // whatever the trainee had already typed there.
+  initialValues?: Partial<NewQuickLogItem>
 }
 
-const OPTIONAL_FIELDS: { key: keyof NewQuickLogItem; label: string }[] = [
+const MACRO_FIELDS: { key: keyof NewQuickLogItem; label: string }[] = [
   { key: 'protein_g', label: 'Protein (g)' },
   { key: 'carbs_g', label: 'Carbs (g)' },
   { key: 'fat_g', label: 'Fat (g)' },
+]
+
+const MICRO_FIELDS: { key: keyof NewQuickLogItem; label: string }[] = [
   { key: 'fiber_g', label: 'Fiber (g)' },
   { key: 'sugar_g', label: 'Sugar (g)' },
   { key: 'sodium_mg', label: 'Sodium (mg)' },
+  { key: 'potassium_mg', label: 'Potassium (mg)' },
+  { key: 'calcium_mg', label: 'Calcium (mg)' },
+  { key: 'iron_mg', label: 'Iron (mg)' },
+  { key: 'vitamin_c_mg', label: 'Vitamin C (mg)' },
+  { key: 'vitamin_a_mcg', label: 'Vitamin A (mcg)' },
 ]
 
-const EMPTY_VALUES = Object.fromEntries(OPTIONAL_FIELDS.map(({ key }) => [key, ''])) as Record<string, string>
+const VALUE_FIELDS = [...MACRO_FIELDS, ...MICRO_FIELDS]
+
+function valuesFrom(initialValues: Partial<NewQuickLogItem> | undefined): Record<string, string> {
+  return Object.fromEntries(VALUE_FIELDS.map(({ key }) => [key, initialValues?.[key] ?? ''])) as Record<
+    string,
+    string
+  >
+}
 
 /** A trainee's shortcut for something with fixed nutrition per serving (e.g. "my
  * protein shake") - logged as a single fixed-value item, no weight/amount entry.
  * See nutrition/models.py::QuickLogItem. */
-export default function AddQuickLogItemDialog({ open, onOpenChange, onCreated, initialName }: Props) {
-  const [name, setName] = useState(initialName ?? '')
-  const [calories, setCalories] = useState('')
-  const [values, setValues] = useState(EMPTY_VALUES)
+export default function AddQuickLogItemDialog({ open, onOpenChange, onCreated, initialValues }: Props) {
+  const [name, setName] = useState(initialValues?.name ?? '')
+  const [calories, setCalories] = useState(initialValues?.calories ?? '')
+  const [values, setValues] = useState(valuesFrom(initialValues))
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   function reset() {
-    setName(initialName ?? '')
-    setCalories('')
-    setValues(EMPTY_VALUES)
+    setName(initialValues?.name ?? '')
+    setCalories(initialValues?.calories ?? '')
+    setValues(valuesFrom(initialValues))
     setError(null)
   }
 
   useEffect(() => {
     if (open) reset()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialName])
+  }, [open, initialValues])
 
   function handleOpenChange(next: boolean) {
     if (!next) reset()
@@ -63,7 +82,7 @@ export default function AddQuickLogItemDialog({ open, onOpenChange, onCreated, i
       const created = await createQuickLogItem({
         name: name.trim(),
         calories: calories.trim(),
-        ...Object.fromEntries(OPTIONAL_FIELDS.map(({ key }) => [key, values[key]?.trim() || null])),
+        ...Object.fromEntries(VALUE_FIELDS.map(({ key }) => [key, values[key]?.trim() || null])),
       })
       onCreated(created)
       handleOpenChange(false)
@@ -76,7 +95,7 @@ export default function AddQuickLogItemDialog({ open, onOpenChange, onCreated, i
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent className="max-h-[85svh] overflow-y-auto sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>New quick-log shortcut</DialogTitle>
         </DialogHeader>
@@ -102,7 +121,24 @@ export default function AddQuickLogItemDialog({ open, onOpenChange, onCreated, i
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            {OPTIONAL_FIELDS.map(({ key, label }) => (
+            {MACRO_FIELDS.map(({ key, label }) => (
+              <div key={key} className="flex flex-col gap-1.5">
+                <Label htmlFor={`quick-log-${key}`}>{label}</Label>
+                <Input
+                  id={`quick-log-${key}`}
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.1"
+                  value={values[key]}
+                  onChange={(e) => setValues((v) => ({ ...v, [key]: e.target.value }))}
+                />
+              </div>
+            ))}
+          </div>
+          <p className="text-xs font-semibold text-muted-foreground">Micronutrients (optional)</p>
+          <div className="grid grid-cols-2 gap-3">
+            {MICRO_FIELDS.map(({ key, label }) => (
               <div key={key} className="flex flex-col gap-1.5">
                 <Label htmlFor={`quick-log-${key}`}>{label}</Label>
                 <Input

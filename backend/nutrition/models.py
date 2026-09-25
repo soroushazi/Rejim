@@ -261,6 +261,14 @@ class QuickLogItem(models.Model):
     fiber_g = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
     sugar_g = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
     sodium_mg = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
+    # Added so a custom-meal entry (LogMealPage's "Add custom meal", which does
+    # carry these) loses nothing when moved here via "head to my meals" - see
+    # FoodLog.custom_name.
+    potassium_mg = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
+    calcium_mg = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
+    iron_mg = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
+    vitamin_c_mg = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
+    vitamin_a_mcg = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -372,6 +380,7 @@ class FoodLog(models.Model):
         PLAN = "plan", "Planned meal item"
         FOOD_ITEM = "food_item", "Food bank item (barcode/manual)"
         QUICK = "quick", "Quick-log item"
+        CUSTOM = "custom", "One-time custom entry"
 
     trainee = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -390,6 +399,12 @@ class FoodLog(models.Model):
     quick_log_item = models.ForeignKey(
         QuickLogItem, on_delete=models.PROTECT, related_name="logs", null=True, blank=True
     )
+    # Set (and reference_meal_item/food_item/quick_log_item all left null) for a
+    # source=custom row: a one-time, typed-in estimate for something with no
+    # sensible backing item (e.g. "Stew" at a party) - unlike QuickLogItem, this
+    # isn't saved anywhere for reuse, since the whole point is that the same
+    # dish might get a totally different estimate next time. See clean().
+    custom_name = models.CharField(max_length=255, null=True, blank=True)
     # Set when this row is one ingredient of a structured meal-slot log (the Log tab);
     # left null for ad hoc logs (barcode/manual/quick) that aren't tied to a meal slot.
     logged_meal = models.ForeignKey(
@@ -421,16 +436,34 @@ class FoodLog(models.Model):
 
     def clean(self):
         linked = [self.reference_meal_item_id, self.food_item_id, self.quick_log_item_id]
-        if sum(bool(x) for x in linked) != 1:
+        if self.source == self.Source.CUSTOM:
+            if any(linked):
+                raise ValidationError(
+                    "A custom log can't also reference a reference_meal_item, food_item, or quick_log_item."
+                )
+            if not self.custom_name:
+                raise ValidationError("custom_name is required when source is 'custom'.")
+            if self.calories is None or self.protein_g is None or self.carbs_g is None or self.fat_g is None:
+                raise ValidationError(
+                    "calories, protein_g, carbs_g, and fat_g are all required when source is 'custom' "
+                    "(only the micros stay optional)."
+                )
+        elif sum(bool(x) for x in linked) != 1:
             raise ValidationError("Exactly one of reference_meal_item, food_item, or quick_log_item must be set.")
-        if self.source != self.Source.QUICK and self.actual_weight_grams is None:
-            raise ValidationError("actual_weight_grams is required unless source is 'quick'.")
+        if self.source not in (self.Source.QUICK, self.Source.CUSTOM) and self.actual_weight_grams is None:
+            raise ValidationError("actual_weight_grams is required unless source is 'quick' or 'custom'.")
 
     def _compute_nutrients(self):
         if self.source == self.Source.PLAN:
             return self.reference_meal_item.food_item.nutrients_for_weight(self.actual_weight_grams)
         if self.source == self.Source.FOOD_ITEM:
             return self.food_item.nutrients_for_weight(self.actual_weight_grams)
+        if self.source == self.Source.CUSTOM:
+            # No backing item to derive from - the trainee typed these values
+            # in directly (validated by clean()), so just keep what's already
+            # on the instance. Same "snapshot at save time" spirit as the
+            # other sources, there's just nothing else to snapshot from.
+            return self.actual_nutrients()
         return {
             "calories": self.quick_log_item.calories,
             "protein_g": self.quick_log_item.protein_g,
@@ -439,11 +472,11 @@ class FoodLog(models.Model):
             "fiber_g": self.quick_log_item.fiber_g,
             "sugar_g": self.quick_log_item.sugar_g,
             "sodium_mg": self.quick_log_item.sodium_mg,
-            "potassium_mg": None,
-            "calcium_mg": None,
-            "iron_mg": None,
-            "vitamin_c_mg": None,
-            "vitamin_a_mcg": None,
+            "potassium_mg": self.quick_log_item.potassium_mg,
+            "calcium_mg": self.quick_log_item.calcium_mg,
+            "iron_mg": self.quick_log_item.iron_mg,
+            "vitamin_c_mg": self.quick_log_item.vitamin_c_mg,
+            "vitamin_a_mcg": self.quick_log_item.vitamin_a_mcg,
         }
 
     def save(self, *args, **kwargs):

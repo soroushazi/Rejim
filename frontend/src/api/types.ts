@@ -191,6 +191,11 @@ export type LoggedMealItem = {
   reference_meal_item: number | null
   food_item: number | null
   quick_log_item: number | null
+  /** Set (with the other three null) for a one-time custom entry - see
+   * backend nutrition/models.py::FoodLog.custom_name. Also already folded
+   * into food_item_name below, so most call sites can ignore this field and
+   * just read that one generically. */
+  custom_name: string | null
   food_item_name: string
   actual_weight_grams: string | null
   actual_nutrients: Nutrients
@@ -208,13 +213,35 @@ export type LoggedMeal = {
   total_nutrients: Nutrients
 }
 
+/** A one-time, typed-in estimate (e.g. "Stew" at a party) - unlike
+ * quick_log_item, nothing is saved for reuse, since the same dish might get a
+ * totally different estimate next time. Only calories is required; every
+ * other value (including the five micros) is optional. */
+export type NewCustomLoggedMealItem = {
+  custom_name: string
+  calories: string
+  protein_g?: string | null
+  carbs_g?: string | null
+  fat_g?: string | null
+  fiber_g?: string | null
+  sugar_g?: string | null
+  sodium_mg?: string | null
+  potassium_mg?: string | null
+  calcium_mg?: string | null
+  iron_mg?: string | null
+  vitamin_c_mg?: string | null
+  vitamin_a_mcg?: string | null
+}
+
 /** `source` is intentionally absent - the backend derives the meal's overall
  * source from the mix of item types (LoggedMealSerializer._upsert), since a
- * single log can now freely combine plan, food-bank, and quick-log items. */
+ * single log can now freely combine plan, food-bank, quick-log, and custom
+ * items. */
 export type NewLoggedMealItem =
   | { reference_meal_item: number; actual_weight_grams: string }
   | { food_item: number; actual_weight_grams: string }
   | { quick_log_item: number }
+  | NewCustomLoggedMealItem
 
 export type NewLoggedMeal = {
   reference_meal: number
@@ -235,6 +262,11 @@ export type QuickLogItem = {
   fiber_g: string | null
   sugar_g: string | null
   sodium_mg: string | null
+  potassium_mg: string | null
+  calcium_mg: string | null
+  iron_mg: string | null
+  vitamin_c_mg: string | null
+  vitamin_a_mcg: string | null
   created_at: string
 }
 
@@ -247,6 +279,11 @@ export type NewQuickLogItem = {
   fiber_g?: string | null
   sugar_g?: string | null
   sodium_mg?: string | null
+  potassium_mg?: string | null
+  calcium_mg?: string | null
+  iron_mg?: string | null
+  vitamin_c_mg?: string | null
+  vitamin_a_mcg?: string | null
 }
 
 export type NewFoodItemComponent = {
