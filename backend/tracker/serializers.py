@@ -14,6 +14,7 @@ class DailyMetricSerializer(serializers.ModelSerializer):
             "weight_unit",
             "steps",
             "sleep_hours",
+            "bedtime",
             "sleep_quality",
             "readiness",
             "water_intake_ml",

@@ -19,6 +19,12 @@ class DailyMetric(models.Model):
     weight_unit = models.CharField(max_length=2, choices=WeightUnit.choices, default=WeightUnit.KG)
     steps = models.PositiveIntegerField(null=True, blank=True)
     sleep_hours = models.DecimalField(max_digits=4, decimal_places=2, null=True, blank=True)
+    # Time of day only (no date) - a bedtime naturally falls on "the previous
+    # evening" relative to the DailyMetric's own date, but nothing here needs
+    # that distinction since it's only ever used relative to itself (see
+    # frontend lib/bedtime.ts's 8pm-based display scale for the Daily
+    # Tracker/Recovery dashboard).
+    bedtime = models.TimeField(null=True, blank=True)
     sleep_quality = models.PositiveSmallIntegerField(
         null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(5)]
     )

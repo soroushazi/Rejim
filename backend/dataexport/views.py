@@ -159,6 +159,7 @@ class DailyMetricsExportView(APIView):
                 "weight_unit",
                 "steps",
                 "sleep_hours",
+                "bedtime",
                 "sleep_quality",
                 "readiness",
                 "water_intake_ml",
@@ -177,6 +178,7 @@ class DailyMetricsExportView(APIView):
                     m.weight_unit,
                     m.steps,
                     m.sleep_hours,
+                    m.bedtime,
                     m.sleep_quality,
                     m.readiness,
                     m.water_intake_ml,
@@ -192,6 +194,6 @@ class DailyMetricsExportView(APIView):
             .order_by("date")
         ):
             writer.writerow(
-                ["activity", a.date, "", "", "", "", "", "", "", a.activity_met.name, a.duration_minutes, a.calories_burned, a.notes]
+                ["activity", a.date, "", "", "", "", "", "", "", "", a.activity_met.name, a.duration_minutes, a.calories_burned, a.notes]
             )
         return response

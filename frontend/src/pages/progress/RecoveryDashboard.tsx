@@ -6,6 +6,7 @@ import ZoomableChart, { ChartEmptyState } from '@/components/charts/ZoomableChar
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { RATING_LABELS } from '@/lib/ratings'
+import { bedtimeToScale, formatBedtime, scaleToClockLabel } from '@/lib/bedtime'
 
 const W = 600
 const H = 220
@@ -201,6 +202,149 @@ function RecoveryChart({ days }: { days: ProgressRecoveryDay[] }) {
   )
 }
 
+// At least through 6am (10 hours after 8pm) so the axis isn't cramped when
+// every bedtime clusters close together; otherwise hugs the latest bedtime in
+// range, rounded up to a clean 2-hour tick - same "hug the data, with a
+// sensible floor" spirit as OverviewChart's weight axis.
+function computeBedtimeAxisMax(values: number[]): number {
+  return Math.ceil(Math.max(10, ...values) / 2) * 2
+}
+
+type BedtimePoint = { date: string; bedtime: string; scale: number; rating: number }
+
+/** One day per point: bedtime (as hours-after-8pm, see lib/bedtime.ts) on the
+ * x-axis, a 1-5 rating on the y-axis - reuses the same RATING_LABELS y-axis
+ * and left padding as the trend chart above, so the two read as one family. */
+function BedtimeScatterChart({
+  title,
+  label,
+  metricKey,
+  cssVar,
+  days,
+}: {
+  title: string
+  label: string
+  metricKey: 'sleep_quality' | 'readiness'
+  cssVar: string
+  days: ProgressRecoveryDay[]
+}) {
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+
+  const points: BedtimePoint[] = days
+    .filter((d) => d.bedtime !== null && d[metricKey] !== null)
+    .map((d) => ({
+      date: d.date,
+      bedtime: d.bedtime as string,
+      scale: bedtimeToScale(d.bedtime as string),
+      rating: d[metricKey] as number,
+    }))
+
+  if (points.length === 0) {
+    return <ChartEmptyState title={title} message="No days with both bedtime and this logged yet." />
+  }
+
+  const axisMax = computeBedtimeAxisMax(points.map((p) => p.scale))
+  const xTicks: number[] = []
+  for (let v = 0; v <= axisMax; v += 2) xTicks.push(v)
+
+  const selected = selectedDate !== null ? (points.find((p) => p.date === selectedDate) ?? null) : null
+
+  return (
+    <ZoomableChart title={title}>
+      {(zoomed) => {
+        const tickFontSize = zoomed ? 14 : 9
+        const thinStroke = zoomed ? 1.5 : 1
+        const pointRadius = zoomed ? 6 : 4
+
+        const PAD = padFor(zoomed)
+        const PLOT_W = W - PAD.left - PAD.right
+        const PLOT_H = H - PAD.top - PAD.bottom
+
+        function x(scale: number) {
+          return PAD.left + (scale / axisMax) * PLOT_W
+        }
+        function y(rating: number) {
+          return PAD.top + PLOT_H - ((rating - 1) / 4) * PLOT_H
+        }
+
+        return (
+          <div className={cn('flex flex-col gap-2', zoomed && 'h-full min-h-0')}>
+            <div className={cn('relative', zoomed && 'min-h-0 flex-1')}>
+              <svg
+                viewBox={`0 0 ${W} ${H}`}
+                className={cn('w-full select-none', zoomed && 'h-full')}
+                role="img"
+                aria-label={`${title}, one point per day`}
+              >
+                {[1, 2, 3, 4, 5].map((t) => (
+                  <g key={t}>
+                    <line x1={PAD.left} x2={W - PAD.right} y1={y(t)} y2={y(t)} stroke="var(--border)" strokeWidth={thinStroke} />
+                    <text x={PAD.left - 6} y={y(t)} textAnchor="end" dominantBaseline="middle" className="fill-muted-foreground" fontSize={tickFontSize}>
+                      {RATING_LABELS[t]}
+                    </text>
+                  </g>
+                ))}
+                {xTicks.map((t) => (
+                  <g key={t}>
+                    <line x1={x(t)} x2={x(t)} y1={PAD.top} y2={H - PAD.bottom} stroke="var(--border)" strokeWidth={thinStroke} opacity={0.4} />
+                    <text x={x(t)} y={H - PAD.bottom + 16} textAnchor="middle" className="fill-muted-foreground" fontSize={tickFontSize}>
+                      {scaleToClockLabel(t)}
+                    </text>
+                  </g>
+                ))}
+                {points.map((p) => (
+                  <circle
+                    key={p.date}
+                    cx={x(p.scale)}
+                    cy={y(p.rating)}
+                    r={p.date === selectedDate ? pointRadius + 2 : pointRadius}
+                    fill={`var(${cssVar})`}
+                    fillOpacity={p.date === selectedDate ? 1 : 0.65}
+                    stroke="var(--card)"
+                    strokeWidth={1.5}
+                    className="cursor-pointer"
+                    onClick={() => setSelectedDate((cur) => (cur === p.date ? null : p.date))}
+                  />
+                ))}
+              </svg>
+
+              {selected && (
+                <div
+                  className={cn(
+                    'absolute top-1 z-10 flex -translate-x-1/2 flex-col gap-1 rounded-lg border border-border bg-popover px-3 py-2 shadow-lg',
+                    zoomed ? 'text-sm' : 'text-xs',
+                  )}
+                  style={{ left: `${Math.min(88, Math.max(12, (x(selected.scale) / W) * 100))}%` }}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="font-semibold">{formatDateFull(selected.date)}</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDate(null)}
+                      aria-label="Close"
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-1.5 whitespace-nowrap">
+                    <span className="text-muted-foreground">Bedtime:</span>
+                    <span className="font-medium">{formatBedtime(selected.bedtime)}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 whitespace-nowrap">
+                    <span className="text-muted-foreground">{label}:</span>
+                    <span className="font-medium">{RATING_LABELS[selected.rating]}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      }}
+    </ZoomableChart>
+  )
+}
+
 type Props = {
   range: { start: string; end: string }
   traineeId?: number
@@ -230,10 +374,44 @@ export default function RecoveryDashboard({ range, traineeId }: Props) {
   }, [range.start, range.end, traineeId])
 
   return (
-    <Card>
-      <CardContent>
-        {loading ? <ChartEmptyState title="Recovery" message="Loading…" /> : <RecoveryChart days={days} />}
-      </CardContent>
-    </Card>
+    <div className="flex flex-col gap-3">
+      <Card>
+        <CardContent>
+          {loading ? <ChartEmptyState title="Recovery" message="Loading…" /> : <RecoveryChart days={days} />}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent>
+          {loading ? (
+            <ChartEmptyState title="Bedtime vs. sleep quality" message="Loading…" />
+          ) : (
+            <BedtimeScatterChart
+              title="Bedtime vs. sleep quality"
+              label="Sleep quality"
+              metricKey="sleep_quality"
+              cssVar="--chart-1"
+              days={days}
+            />
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent>
+          {loading ? (
+            <ChartEmptyState title="Bedtime vs. readiness" message="Loading…" />
+          ) : (
+            <BedtimeScatterChart
+              title="Bedtime vs. readiness"
+              label="Readiness"
+              metricKey="readiness"
+              cssVar="--chart-2"
+              days={days}
+            />
+          )}
+        </CardContent>
+      </Card>
+    </div>
   )
 }

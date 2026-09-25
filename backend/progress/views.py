@@ -209,8 +209,11 @@ class ProgressNutritionView(APIView):
 
 
 class ProgressRecoveryView(APIView):
-    """Daily sleep quality / readiness (both 1-5) for the Recovery dashboard -
-    sleep hours itself already lives in the overview chart."""
+    """Daily sleep quality / readiness (both 1-5) plus bedtime for the Recovery
+    dashboard - sleep hours itself already lives in the overview chart. Bedtime
+    is returned as a plain "HH:MM:SS" time (DRF's default time serialization);
+    the 8pm-based display scale used to plot it alongside the 1-5 ratings is a
+    client-side-only concern - see frontend lib/bedtime.ts."""
 
     permission_classes = [IsAuthenticated]
 
@@ -219,10 +222,10 @@ class ProgressRecoveryView(APIView):
         start, end = _resolve_range(request)
 
         rows = DailyMetric.objects.filter(trainee=trainee, date__range=(start, end)).exclude(
-            sleep_quality__isnull=True, readiness__isnull=True
+            sleep_quality__isnull=True, readiness__isnull=True, bedtime__isnull=True
         )
         days = [
-            {"date": m.date, "sleep_quality": m.sleep_quality, "readiness": m.readiness}
+            {"date": m.date, "sleep_quality": m.sleep_quality, "readiness": m.readiness, "bedtime": m.bedtime}
             for m in rows.order_by("date")
         ]
 

@@ -510,6 +510,9 @@ export type DailyMetric = {
   weight_unit: WeightUnit
   steps: number | null
   sleep_hours: string | null
+  // "HH:MM:SS" (DRF's default TimeField serialization) or null - see
+  // lib/bedtime.ts for the 8pm-based display scale used to chart it.
+  bedtime: string | null
   sleep_quality: number | null
   readiness: number | null
   water_intake_ml: number | null
@@ -522,6 +525,7 @@ export type NewDailyMetric = {
   weight_unit: WeightUnit
   steps: number | null
   sleep_hours: string | null
+  bedtime: string | null
   sleep_quality: number | null
   readiness: number | null
   water_intake_ml: number | null
@@ -739,6 +743,7 @@ export type ProgressRecoveryDay = {
   date: string
   sleep_quality: number | null
   readiness: number | null
+  bedtime: string | null
 }
 
 export type ProgressRecoveryResponse = {

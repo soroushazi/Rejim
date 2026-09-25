@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { RATING_OPTIONS } from '@/lib/ratings'
+import { usePreferredWeightUnit } from '@/lib/usePreferredWeightUnit'
 
 type Props = {
   date: string
@@ -19,6 +20,7 @@ type FormState = {
   weight_unit: WeightUnit
   steps: string
   sleep_hours: string
+  bedtime: string
   sleep_quality: string
   readiness: string
   water_intake_ml: string
@@ -30,19 +32,23 @@ const EMPTY: FormState = {
   weight_unit: 'kg',
   steps: '',
   sleep_hours: '',
+  bedtime: '',
   sleep_quality: '',
   readiness: '',
   water_intake_ml: '',
   notes: '',
 }
 
-function toFormState(metric: DailyMetric | null): FormState {
-  if (!metric) return EMPTY
+function toFormState(metric: DailyMetric | null, preferredUnit: WeightUnit): FormState {
+  if (!metric) return { ...EMPTY, weight_unit: preferredUnit }
   return {
     weight: metric.weight ?? '',
     weight_unit: metric.weight_unit,
     steps: metric.steps !== null ? String(metric.steps) : '',
     sleep_hours: metric.sleep_hours ?? '',
+    // <input type="time">'s own value format is "HH:MM" - drop a stored ":SS"
+    // (DRF's default TimeField serialization) rather than showing it.
+    bedtime: metric.bedtime ? metric.bedtime.slice(0, 5) : '',
     sleep_quality: metric.sleep_quality !== null ? String(metric.sleep_quality) : '',
     readiness: metric.readiness !== null ? String(metric.readiness) : '',
     water_intake_ml: metric.water_intake_ml !== null ? String(metric.water_intake_ml) : '',
@@ -80,6 +86,10 @@ function RatingSelect({
 }
 
 export default function DailyMetricForm({ date, canLog }: Props) {
+  // Always the current user's own preference here - the Daily Tracker tab
+  // only ever logs your own metrics (canLog gates on is_trainee, never a
+  // viewed trainee), so no trainee arg needed - see usePreferredWeightUnit.
+  const preferredUnit = usePreferredWeightUnit()
   const [form, setForm] = useState<FormState>(EMPTY)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -93,10 +103,10 @@ export default function DailyMetricForm({ date, canLog }: Props) {
     setError(null)
     listDailyMetrics(date)
       .then((rows) => {
-        if (!cancelled) setForm(toFormState(rows[0] ?? null))
+        if (!cancelled) setForm(toFormState(rows[0] ?? null, preferredUnit))
       })
       .catch(() => {
-        if (!cancelled) setForm(EMPTY)
+        if (!cancelled) setForm({ ...EMPTY, weight_unit: preferredUnit })
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -104,7 +114,11 @@ export default function DailyMetricForm({ date, canLog }: Props) {
     return () => {
       cancelled = true
     }
-  }, [date])
+    // preferredUnit resolves asynchronously (starts at 'kg' until the
+    // preferences fetch lands) - re-running once it settles is what makes a
+    // brand-new day's weight field default to the right unit instead of
+    // always 'kg'.
+  }, [date, preferredUnit])
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -121,6 +135,7 @@ export default function DailyMetricForm({ date, canLog }: Props) {
         weight_unit: form.weight_unit,
         steps: form.steps.trim() ? Number(form.steps) : null,
         sleep_hours: form.sleep_hours.trim() ? form.sleep_hours.trim() : null,
+        bedtime: form.bedtime || null,
         sleep_quality: form.sleep_quality ? Number(form.sleep_quality) : null,
         readiness: form.readiness ? Number(form.readiness) : null,
         water_intake_ml: form.water_intake_ml.trim() ? Number(form.water_intake_ml) : null,
@@ -156,6 +171,16 @@ export default function DailyMetricForm({ date, canLog }: Props) {
             disabled={!canLog}
             value={form.sleep_hours}
             onChange={(e) => update('sleep_hours', e.target.value)}
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="daily-bedtime">Bedtime</Label>
+          <Input
+            id="daily-bedtime"
+            type="time"
+            disabled={!canLog}
+            value={form.bedtime}
+            onChange={(e) => update('bedtime', e.target.value)}
           />
         </div>
         <div className="flex flex-col gap-1">
