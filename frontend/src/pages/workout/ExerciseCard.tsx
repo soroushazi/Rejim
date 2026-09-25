@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ExternalLink } from 'lucide-react'
 import type { Exercise, ExerciseEditRequest, MuscleGroup } from '@/api/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -63,6 +64,17 @@ export default function ExerciseCard({
       {expanded && (
         <div className="flex flex-col gap-3 border-t border-border px-3.5 py-3">
           {exercise.description && <p className="text-sm text-muted-foreground">{exercise.description}</p>}
+
+          {exercise.video_url && (
+            <a
+              href={exercise.video_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+            >
+              Watch video <ExternalLink className="size-3.5" />
+            </a>
+          )}
 
           {secondaryNames.length > 0 && (
             <div className="flex flex-col gap-1.5">
