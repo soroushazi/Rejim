@@ -1,4 +1,4 @@
-import { Maximize2, X } from 'lucide-react'
+import { Info, Maximize2, X } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
@@ -35,10 +35,19 @@ export default function ZoomableChart({
   title,
   children,
   className,
+  onInfoClick,
+  infoLabel,
 }: {
   title?: string
   children: ReactNode | ((zoomed: boolean) => ReactNode)
   className?: string
+  /** Renders an (i) info icon in the title row, right after the title text -
+   * for a chart that wants a "what am I looking at" explanation (e.g.
+   * OverviewChart's weight-vs-average-weight distinction), same convention
+   * as the RPE/Calories-Out info icons elsewhere in the app. Only shown in
+   * the un-zoomed header, since the zoomed view already drops the title. */
+  onInfoClick?: () => void
+  infoLabel?: string
 }) {
   const [zoomed, setZoomed] = useState(false)
 
@@ -75,6 +84,16 @@ export default function ZoomableChart({
     <div className={cn('flex flex-col gap-2', className)}>
       <div className="flex items-center gap-2">
         {title && <span className="font-heading text-base font-medium">{title}</span>}
+        {onInfoClick && (
+          <button
+            type="button"
+            onClick={onInfoClick}
+            aria-label={infoLabel ?? 'More information'}
+            className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
+          >
+            <Info className="size-3.5" />
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setZoomed(true)}
@@ -91,11 +110,35 @@ export default function ZoomableChart({
 
 /** Same title styling as ZoomableChart's own header, for a chart's "no data
  * yet" early-return - so the title doesn't disappear just because there's
- * nothing to zoom into. */
-export function ChartEmptyState({ title, message }: { title?: string; message: string }) {
+ * nothing to zoom into. Takes the same optional info-icon props for the same
+ * reason - a chart's "what am I looking at" explanation is just as relevant
+ * before any data's been logged. */
+export function ChartEmptyState({
+  title,
+  message,
+  onInfoClick,
+  infoLabel,
+}: {
+  title?: string
+  message: string
+  onInfoClick?: () => void
+  infoLabel?: string
+}) {
   return (
     <div className="flex flex-col gap-1.5">
-      {title && <span className="font-heading text-base font-medium">{title}</span>}
+      <div className="flex items-center gap-2">
+        {title && <span className="font-heading text-base font-medium">{title}</span>}
+        {onInfoClick && (
+          <button
+            type="button"
+            onClick={onInfoClick}
+            aria-label={infoLabel ?? 'More information'}
+            className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
+          >
+            <Info className="size-3.5" />
+          </button>
+        )}
+      </div>
       <p className="py-6 text-center text-sm text-muted-foreground">{message}</p>
     </div>
   )

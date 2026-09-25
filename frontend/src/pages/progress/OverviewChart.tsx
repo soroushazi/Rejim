@@ -5,8 +5,11 @@ import ZoomableChart, { ChartEmptyState } from '@/components/charts/ZoomableChar
 import { cn } from '@/lib/utils'
 import { fromKg, toKg } from '@/lib/weightUnits'
 import { usePreferredWeightUnit } from '@/lib/usePreferredWeightUnit'
+import OverviewInfoDialog from './OverviewInfoDialog'
 
 type SeriesKey = 'weight' | 'netCalories' | 'sleepHours' | 'steps' | 'water'
+type NonWeightKey = Exclude<SeriesKey, 'weight'>
+const NON_WEIGHT_KEYS: NonWeightKey[] = ['netCalories', 'sleepHours', 'steps', 'water']
 
 const W = 600
 const H = 240
@@ -66,7 +69,10 @@ const WEIGHT_AXIS_PAD_LB = 10
  * itself so progress toward it is visible from the start, and the opposite side
  * padded 10lb beyond the actual recorded extreme. No goal at all just pads both
  * actual extremes by 10lb. Ticks are nice round numbers *within* that exact range,
- * not bounds rounded outward, so the padding stays exactly 10lb. */
+ * not bounds rounded outward, so the padding stays exactly 10lb. Bounded off the raw
+ * daily readings only, not the moving average - mathematically an average can never
+ * fall outside the range of the values it averages, so this already covers both
+ * lines regardless of which is currently toggled on. */
 function computeWeightAxis(values: number[], goal: number | undefined, weightUnit: WeightUnit) {
   const pad = fromKg(toKg(WEIGHT_AXIS_PAD_LB, 'lb'), weightUnit)
   const maxActual = values.length ? Math.max(...values) : (goal ?? 0)
@@ -133,22 +139,44 @@ export default function OverviewChart({
   /** The trainee being viewed, when in trainer view mode - see usePreferredWeightUnit. */
   trainee?: User | null
 }) {
-  const [visible, setVisible] = useState<Record<SeriesKey, boolean>>({
-    weight: true,
+  const [visible, setVisible] = useState<Record<NonWeightKey, boolean>>({
     netCalories: true,
     sleepHours: true,
     steps: false,
     water: false,
   })
+  // Weight is plotted as two independent, peer lines rather than one series
+  // with a sub-toggle - see OverviewInfoDialog for why each is useful on its
+  // own. Both default on to match the chart's original (non-toggleable)
+  // behavior.
+  const [showWeight, setShowWeight] = useState(true)
+  const [showWeightAvg, setShowWeightAvg] = useState(true)
+  const [infoOpen, setInfoOpen] = useState(false)
   // Stored by date (not index) so it naturally clears itself if the
   // underlying data changes (different range) instead of pointing at a
   // now-unrelated day - same idiom as ExerciseHistoryChart's selectedDate.
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const weightUnit = usePreferredWeightUnit(trainee)
 
+  // The weight *axis* (ticks, margin column, goal line) is shown whenever
+  // either weight line is - it's one shared scale, not two.
+  function isVisible(key: SeriesKey): boolean {
+    return key === 'weight' ? showWeight || showWeightAvg : visible[key]
+  }
+
   const n = days.length
   if (n === 0) {
-    return <ChartEmptyState title="Overview" message="No data in this range yet." />
+    return (
+      <>
+        <ChartEmptyState
+          title="Overview"
+          message="No data in this range yet."
+          onInfoClick={() => setInfoOpen(true)}
+          infoLabel="About this chart"
+        />
+        <OverviewInfoDialog open={infoOpen} onOpenChange={setInfoOpen} />
+      </>
+    )
   }
 
   const rawValues: Record<SeriesKey, (number | null)[]> = {
@@ -161,8 +189,8 @@ export default function OverviewChart({
   const weightMA = movingAverage(rawValues.weight, 7)
   const weightGoal = weightGoalKg !== undefined ? fromKg(weightGoalKg, weightUnit) : undefined
 
-  const leftVisible = LEFT_ORDER.filter((k) => visible[k])
-  const rightVisible = RIGHT_ORDER.filter((k) => visible[k])
+  const leftVisible = LEFT_ORDER.filter((k) => isVisible(k))
+  const rightVisible = RIGHT_ORDER.filter((k) => isVisible(k))
   const padLeft = leftVisible.length === 0 ? BASE_MARGIN : AXIS_MARGIN + AXIS_STEP * (leftVisible.length - 1)
   const padRight = rightVisible.length === 0 ? BASE_MARGIN : AXIS_MARGIN + AXIS_STEP * (rightVisible.length - 1)
   const plotW = W - padLeft - padRight
@@ -215,18 +243,47 @@ export default function OverviewChart({
   const hitSlot = n > 1 ? plotW / (n - 1) : plotW
 
   return (
-    <ZoomableChart title="Overview">
+    <>
+    <ZoomableChart title="Overview" onInfoClick={() => setInfoOpen(true)} infoLabel="About this chart">
       {(zoomed) => {
         const tickFontSize = zoomed ? 13 : 8
         const dateFontSize = zoomed ? 14 : 9
         const goalFontSize = zoomed ? 12 : 8
         const thickStroke = zoomed ? 3 : 2
         const thinStroke = zoomed ? 1.5 : 1
+        const hoverRadius = zoomed ? 5 : 3.5
+
+        const weightAtSelected = selectedIndex !== -1 ? rawValues.weight[selectedIndex] : null
+        const weightAvgAtSelected = selectedIndex !== -1 ? weightMA[selectedIndex] : null
 
         return (
           <div className={cn('flex flex-col gap-2', zoomed && 'h-full min-h-0')}>
             <div className={cn('flex flex-wrap gap-1.5', zoomed && 'justify-center gap-3')}>
-              {(Object.keys(SERIES) as SeriesKey[]).map((key) => (
+              <button
+                type="button"
+                onClick={() => setShowWeight((v) => !v)}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-full border font-medium transition-opacity',
+                  zoomed ? 'px-3.5 py-2.5 text-sm' : 'px-2.5 py-1 text-xs',
+                  showWeight ? 'border-border text-foreground' : 'border-border text-muted-foreground opacity-50',
+                )}
+              >
+                <span className="size-2 rounded-full opacity-35" style={{ backgroundColor: 'var(--chart-1)' }} aria-hidden="true" />
+                {`Weight (${weightUnit})`}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowWeightAvg((v) => !v)}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-full border font-medium transition-opacity',
+                  zoomed ? 'px-3.5 py-2.5 text-sm' : 'px-2.5 py-1 text-xs',
+                  showWeightAvg ? 'border-border text-foreground' : 'border-border text-muted-foreground opacity-50',
+                )}
+              >
+                <span className="size-2 rounded-full" style={{ backgroundColor: 'var(--chart-1)' }} aria-hidden="true" />
+                Average weight
+              </button>
+              {NON_WEIGHT_KEYS.map((key) => (
                 <button
                   key={key}
                   type="button"
@@ -238,7 +295,7 @@ export default function OverviewChart({
                   )}
                 >
                   <span className="size-2 rounded-full" style={{ backgroundColor: `var(${SERIES[key].cssVar})` }} aria-hidden="true" />
-                  {key === 'weight' ? `${SERIES[key].label} (${weightUnit})` : SERIES[key].label}
+                  {SERIES[key].label}
                 </button>
               ))}
             </div>
@@ -252,7 +309,7 @@ export default function OverviewChart({
             >
               {(Object.keys(SERIES) as SeriesKey[]).map(
                 (key) =>
-                  visible[key] &&
+                  isVisible(key) &&
                   axes[key].ticks.map((t) => (
                     <text
                       key={`${key}-${t}`}
@@ -278,13 +335,13 @@ export default function OverviewChart({
                 ) : null,
               )}
 
-              {visible.weight && (
-                <g>
-                  <path d={pathFor('weight', rawValues.weight)} fill="none" stroke="var(--chart-1)" strokeWidth={thinStroke} strokeLinecap="round" strokeLinejoin="round" opacity={0.35} />
-                  <path d={pathFor('weight', weightMA)} fill="none" stroke="var(--chart-1)" strokeWidth={thickStroke} strokeLinecap="round" strokeLinejoin="round" />
-                </g>
+              {showWeight && (
+                <path d={pathFor('weight', rawValues.weight)} fill="none" stroke="var(--chart-1)" strokeWidth={thinStroke} strokeLinecap="round" strokeLinejoin="round" opacity={0.35} />
               )}
-              {visible.weight && weightGoal !== undefined && (
+              {showWeightAvg && (
+                <path d={pathFor('weight', weightMA)} fill="none" stroke="var(--chart-1)" strokeWidth={thickStroke} strokeLinecap="round" strokeLinejoin="round" />
+              )}
+              {isVisible('weight') && weightGoal !== undefined && (
                 <g>
                   <line
                     x1={padLeft}
@@ -300,7 +357,7 @@ export default function OverviewChart({
                   </text>
                 </g>
               )}
-              {(['netCalories', 'sleepHours', 'steps', 'water'] as SeriesKey[]).map(
+              {NON_WEIGHT_KEYS.map(
                 (key) =>
                   visible[key] && (
                     <path
@@ -326,7 +383,28 @@ export default function OverviewChart({
                     strokeOpacity={0.15}
                     strokeWidth={thinStroke}
                   />
-                  {(Object.keys(SERIES) as SeriesKey[]).map((key) => {
+                  {showWeight && weightAtSelected !== null && (
+                    <circle
+                      cx={x(selectedIndex)}
+                      cy={y('weight', weightAtSelected)}
+                      r={hoverRadius}
+                      fill="var(--chart-1)"
+                      fillOpacity={0.5}
+                      stroke="var(--card)"
+                      strokeWidth={1.5}
+                    />
+                  )}
+                  {showWeightAvg && weightAvgAtSelected !== null && (
+                    <circle
+                      cx={x(selectedIndex)}
+                      cy={y('weight', weightAvgAtSelected)}
+                      r={hoverRadius}
+                      fill="var(--chart-1)"
+                      stroke="var(--card)"
+                      strokeWidth={1.5}
+                    />
+                  )}
+                  {NON_WEIGHT_KEYS.map((key) => {
                     if (!visible[key]) return null
                     const value = rawValues[key][selectedIndex]
                     if (value === null) return null
@@ -335,7 +413,7 @@ export default function OverviewChart({
                         key={key}
                         cx={x(selectedIndex)}
                         cy={y(key, value)}
-                        r={zoomed ? 5 : 3.5}
+                        r={hoverRadius}
                         fill={`var(${SERIES[key].cssVar})`}
                         stroke="var(--card)"
                         strokeWidth={1.5}
@@ -378,7 +456,21 @@ export default function OverviewChart({
                     <X className="size-3" />
                   </button>
                 </div>
-                {(Object.keys(SERIES) as SeriesKey[]).map((key) => {
+                {showWeight && weightAtSelected !== null && (
+                  <div className="flex items-center gap-1.5 whitespace-nowrap">
+                    <span className="size-1.5 shrink-0 rounded-full opacity-35" style={{ backgroundColor: 'var(--chart-1)' }} aria-hidden="true" />
+                    <span className="text-muted-foreground">Weight:</span>
+                    <span className="font-medium">{formatSeriesValue('weight', weightAtSelected, weightUnit)}</span>
+                  </div>
+                )}
+                {showWeightAvg && weightAvgAtSelected !== null && (
+                  <div className="flex items-center gap-1.5 whitespace-nowrap">
+                    <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: 'var(--chart-1)' }} aria-hidden="true" />
+                    <span className="text-muted-foreground">Average weight:</span>
+                    <span className="font-medium">{formatSeriesValue('weight', weightAvgAtSelected, weightUnit)}</span>
+                  </div>
+                )}
+                {NON_WEIGHT_KEYS.map((key) => {
                   if (!visible[key]) return null
                   const value = rawValues[key][selectedIndex]
                   if (value === null) return null
@@ -397,5 +489,7 @@ export default function OverviewChart({
         )
       }}
     </ZoomableChart>
+    <OverviewInfoDialog open={infoOpen} onOpenChange={setInfoOpen} />
+    </>
   )
 }
