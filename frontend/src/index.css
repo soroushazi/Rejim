@@ -183,7 +183,14 @@ body {
   .chart-zoom-card {
     width: 80dvh;
     height: 100dvw;
-    transform: rotate(90deg);
+    /* translateZ(0) forces this onto its own GPU compositing layer, which is
+       the standard mitigation for a known class of WebKit bugs where a tap's
+       coordinates on content inside a CSS-`transform`'d (especially rotated)
+       element get mismapped against its visual position - promoting the
+       layer makes the compositor (not a slower software hit-test path) own
+       the rotated geometry a touch is resolved against. Cheap and harmless
+       even if that's not what's happening on a given device. */
+    transform: rotate(90deg) translateZ(0);
   }
 }
 

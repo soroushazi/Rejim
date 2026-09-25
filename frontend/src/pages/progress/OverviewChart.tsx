@@ -225,15 +225,15 @@ export default function OverviewChart({
 
         return (
           <div className={cn('flex flex-col gap-2', zoomed && 'h-full min-h-0')}>
-            <div className={cn('flex flex-wrap gap-1.5', zoomed && 'justify-center')}>
+            <div className={cn('flex flex-wrap gap-1.5', zoomed && 'justify-center gap-3')}>
               {(Object.keys(SERIES) as SeriesKey[]).map((key) => (
                 <button
                   key={key}
                   type="button"
                   onClick={() => setVisible((v) => ({ ...v, [key]: !v[key] }))}
                   className={cn(
-                    'flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-medium transition-opacity',
-                    zoomed ? 'text-sm' : 'text-xs',
+                    'flex items-center gap-1.5 rounded-full border font-medium transition-opacity',
+                    zoomed ? 'px-3.5 py-2.5 text-sm' : 'px-2.5 py-1 text-xs',
                     visible[key] ? 'border-border text-foreground' : 'border-border text-muted-foreground opacity-50',
                   )}
                 >
