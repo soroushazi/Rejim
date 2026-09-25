@@ -157,7 +157,7 @@ export default function IngredientPicker({ value, onChange, autoFocusSearch }: I
                     type="number"
                     inputMode="decimal"
                     min="0"
-                    step="0.1"
+                    step="0.01"
                     placeholder={`Amount (${component.unit ?? 'g'})`}
                     value={component.quantity ?? ''}
                     onChange={(e) => updateMeasurement(component.ingredient, { quantity: e.target.value })}

@@ -507,7 +507,7 @@ export default function LogMealPage() {
                             type="number"
                             inputMode="decimal"
                             min="0"
-                            step="0.1"
+                            step="0.01"
                             className="h-8 w-20"
                             value={row.quantity}
                             onChange={(e) => updateCartQuantity(row.key, { quantity: e.target.value })}
