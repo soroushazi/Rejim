@@ -15,7 +15,7 @@ from workouts.models import WorkoutSession
 
 from .models import ActivityLog, ActivityMET, DailyMetric
 from .serializers import ActivityLogSerializer, ActivityMETSerializer, DailyMetricSerializer
-from .services import calculate_tdee
+from .services import calculate_tdee, estimate_minimum_protein_g
 
 
 def _resolve_trainee(request):
@@ -143,12 +143,22 @@ class DailySummaryView(APIView):
         diet_plan = trainee.diet_plans.first()
         planned = diet_plan.average_daily_nutrients() if diet_plan else None
 
+        # A trainer-set protein target (planned.protein_g) always wins; falls
+        # back to the 1g/lb-bodyweight estimate only when the plan doesn't
+        # have one - protein only ever needs this one minimum to flag
+        # against, never a full plan.
+        planned_protein = planned["protein_g"] if planned else None
+        protein_minimum_is_estimate = planned_protein is None
+        protein_minimum_g = planned_protein if planned_protein is not None else estimate_minimum_protein_g(trainee, target_date)
+
         return Response(
             {
                 "date": target_date,
                 "trainee": trainee.id,
                 "consumed": consumed,
                 "planned": planned,
+                "protein_minimum_g": protein_minimum_g,
+                "protein_minimum_is_estimate": protein_minimum_is_estimate,
                 "calories_burned": calories_burned,
                 "calories_burned_breakdown": calories_out,
                 "net_calories": net_calories,

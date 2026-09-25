@@ -46,8 +46,10 @@ export default function DailySummaryCard({ date, refreshKey }: Props) {
   const calStatus = plannedCalories ? caloriesStatus(consumedCalories, plannedCalories) : 'neutral'
 
   const consumedProtein = summary.consumed.protein_g ?? 0
-  const plannedProtein = summary.planned?.protein_g ?? null
-  const proteinStat = plannedProtein ? proteinStatus(consumedProtein, plannedProtein) : 'neutral'
+  // Falls back to a 1g/lb-bodyweight estimate server-side when the diet plan
+  // doesn't set its own protein target - see DailySummary.protein_minimum_g.
+  const proteinMinimum = summary.protein_minimum_g
+  const proteinStat = proteinMinimum ? proteinStatus(consumedProtein, proteinMinimum) : 'neutral'
 
   const profileIncomplete = summary.calories_burned_breakdown.bmr === null
 
@@ -85,7 +87,10 @@ export default function DailySummaryCard({ date, refreshKey }: Props) {
       </div>
       <div className="flex gap-3 text-sm">
         <span className={proteinStat === 'bad' ? STATUS_TEXT_CLASS.bad : undefined}>
-          P {round(consumedProtein)}g{plannedProtein !== null ? ` / ${round(plannedProtein)}g` : ''}
+          P {round(consumedProtein)}g
+          {proteinMinimum !== null
+            ? ` / ${summary.protein_minimum_is_estimate ? '≈' : ''}${round(proteinMinimum)}g`
+            : ''}
         </span>
         <span className="text-muted-foreground">
           C {round(summary.consumed.carbs_g ?? 0)}g

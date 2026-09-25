@@ -20,6 +20,27 @@ WORKOUT_MET_MODERATE = Decimal("3.5")
 WORKOUT_MET_VIGOROUS = Decimal("6.0")
 RPE_VIGOROUS_THRESHOLD = 7
 
+# A common baseline (1g protein per lb of body weight) - only used when the
+# trainee's diet plan doesn't set its own protein target (see
+# DailySummaryView.get). Protein only ever needs a *minimum* to flag against
+# (unlike calories, which wants a tight range) - see nutrition/dietStatus
+# on the frontend for the actual under-target check.
+PROTEIN_MINIMUM_G_PER_LB = Decimal("1")
+
+
+def estimate_minimum_protein_g(trainee, target_date):
+    """1g of protein per lb of body weight, as of `target_date` (same weight
+    resolution TDEE/BMR use, so a past day doesn't use a weight logged after
+    it) - None if no weight can be resolved at all (no DailyMetric weight
+    ever logged and no onboarding starting_weight)."""
+    from accounts.services import resolve_weight_kg_as_of
+    from progress.services import LB_TO_KG
+
+    weight_kg = resolve_weight_kg_as_of(trainee, target_date)
+    if weight_kg is None:
+        return None
+    return round(weight_kg / LB_TO_KG * PROTEIN_MINIMUM_G_PER_LB, 1)
+
 TEF_RATE = Decimal("0.10")
 
 

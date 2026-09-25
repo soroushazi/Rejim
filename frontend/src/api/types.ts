@@ -568,6 +568,14 @@ export type DailySummary = {
   trainee: number
   consumed: Nutrients
   planned: Nutrients | null
+  // The protein target to flag against: planned.protein_g when the trainer's
+  // diet plan sets one, else a 1g-per-lb-bodyweight estimate (null if even
+  // that can't be resolved - no weight ever logged). Protein only ever needs
+  // this one minimum, unlike calories' tighter range - see lib/dietStatus.ts.
+  protein_minimum_g: number | null
+  // True when protein_minimum_g came from the bodyweight estimate rather
+  // than an actual trainer-set target.
+  protein_minimum_is_estimate: boolean
   calories_burned: number
   calories_burned_breakdown: CaloriesBurnedBreakdown
   net_calories: number
