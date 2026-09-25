@@ -1,5 +1,5 @@
 import { ArrowLeft } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ApiError } from '@/api/client'
 import { listExercises, listMuscleGroups } from '@/api/exercises'
@@ -26,14 +26,13 @@ import {
   type ExerciseOverrideMap,
 } from '@/lib/exerciseOverrides'
 import { cn } from '@/lib/utils'
+import { clearWorkoutDraft, loadWorkoutDraft, saveWorkoutDraft, type ExerciseDrafts } from '@/lib/workoutDraft'
 import ExerciseLogBlock, { type DraftSet } from './ExerciseLogBlock'
 import ExerciseLogListRow from './ExerciseLogListRow'
 import OffProgramDialog from './OffProgramDialog'
 import { newDraftSet } from './SetRows'
 import SupersetLogBlock, { type ExerciseLogEntry } from './SupersetLogBlock'
 import SupersetLogListRow from './SupersetLogListRow'
-
-type ExerciseDrafts = { warmup: DraftSet[]; working: DraftSet[] }
 
 type LogBlock = { type: 'single'; peId: number } | { type: 'pair'; peId: number; partnerId: number }
 
@@ -154,6 +153,20 @@ export default function SessionLogForm({
   const [muscleGroups, setMuscleGroups] = useState<MuscleGroup[]>([])
   const [overrides, setOverrides] = useState<ExerciseOverrideMap>({})
   const [offProgramOpen, setOffProgramOpen] = useState(false)
+  const [restoredFromDraft, setRestoredFromDraft] = useState(false)
+  // Bumped by the restoration effect below every time it (re)populates
+  // exerciseOrder/drafts/etc from a draft, an existing log, or blank - lets
+  // the persistence effect recognize "this render's data is still exactly
+  // what was just mechanically restored, not a fresh edit" and skip writing
+  // it back out. State (not a ref) specifically because React batches this
+  // together with the other setState calls in that same effect run, so it
+  // always lands in the very same render as the data it's meant to gate -
+  // unlike a plain one-shot ref flag, which a mount's extra, mandatory first
+  // effect pass (before that batched data has actually landed) would
+  // consume one render too early. See the persistence effect for the other
+  // half of this.
+  const [restoreGeneration, setRestoreGeneration] = useState(0)
+  const skippedGenerationRef = useRef(-1)
 
   useEffect(() => {
     listExercises().then(setExercises).catch(() => setExercises([]))
@@ -169,61 +182,119 @@ export default function SessionLogForm({
     setReordering(false)
     setFocusedPeId(null)
 
-    if (existingLog) {
-      const byPlanExercise = new Map(existingLog.logged_exercises.map((le) => [le.plan_exercise, le]))
-      const nextDrafts: Record<number, ExerciseDrafts> = {}
-      let unit: WeightUnit = 'lb'
-      const order = [...existingLog.logged_exercises].sort((a, b) => a.order - b.order).map((le) => le.plan_exercise)
+    let nextOrder: number[]
+    let nextDrafts: Record<number, ExerciseDrafts>
+    let nextOverrides: ExerciseOverrideMap
+    let nextWeightUnit: WeightUnit
+    let nextNotes: string
+    let nextDurationMinutes: string
+
+    // A local draft (unsaved edits from before the app was closed/killed)
+    // always wins over both a blank form and an already-saved log - it only
+    // ever exists because the trainee was actively editing this exact
+    // session+date more recently than whatever's on the server, including
+    // the case of re-opening an already-saved log to tweak it further. It's
+    // cleared as soon as a save actually succeeds (see handleSave), so under
+    // normal use the two never disagree.
+    const draft = loadWorkoutDraft(session.id, date)
+    if (draft) {
+      nextOrder = [...draft.exerciseOrder]
+      nextDrafts = { ...draft.drafts }
       for (const pe of session.exercises) {
-        if (!order.includes(pe.id)) order.push(pe.id)
-        const logged = byPlanExercise.get(pe.id)
-        if (logged && logged.sets.length > 0) {
-          unit = logged.sets[0].weight_unit
-          const toDraft = (s: (typeof logged.sets)[number]): DraftSet => ({
-            ...newDraftSet(s.is_warmup),
-            weight: s.weight ?? '',
-            reps_done: s.reps_done !== null ? String(s.reps_done) : '',
-            rpe: s.rpe !== null ? String(s.rpe) : '',
-            weight_left: s.weight_left ?? '',
-            weight_right: s.weight_right ?? '',
-            reps_done_left: s.reps_done_left !== null ? String(s.reps_done_left) : '',
-            reps_done_right: s.reps_done_right !== null ? String(s.reps_done_right) : '',
-            rpe_left: s.rpe_left !== null ? String(s.rpe_left) : '',
-            rpe_right: s.rpe_right !== null ? String(s.rpe_right) : '',
-            confirmed: true,
-          })
-          nextDrafts[pe.id] = {
-            warmup: logged.sets.filter((s) => s.is_warmup).map(toDraft),
-            working: logged.sets.filter((s) => !s.is_warmup).map(toDraft),
+        if (!nextOrder.includes(pe.id)) nextOrder.push(pe.id)
+        if (!nextDrafts[pe.id]) nextDrafts[pe.id] = { warmup: [], working: [newDraftSet(false)] }
+      }
+      nextOverrides = draft.overrides
+      nextWeightUnit = draft.weightUnit
+      nextNotes = draft.notes
+      nextDurationMinutes = draft.durationMinutes
+      setRestoredFromDraft(true)
+    } else {
+      setRestoredFromDraft(false)
+      if (existingLog) {
+        const byPlanExercise = new Map(existingLog.logged_exercises.map((le) => [le.plan_exercise, le]))
+        nextDrafts = {}
+        nextWeightUnit = 'lb'
+        nextOrder = [...existingLog.logged_exercises].sort((a, b) => a.order - b.order).map((le) => le.plan_exercise)
+        for (const pe of session.exercises) {
+          if (!nextOrder.includes(pe.id)) nextOrder.push(pe.id)
+          const logged = byPlanExercise.get(pe.id)
+          if (logged && logged.sets.length > 0) {
+            nextWeightUnit = logged.sets[0].weight_unit
+            const toDraft = (s: (typeof logged.sets)[number]): DraftSet => ({
+              ...newDraftSet(s.is_warmup),
+              weight: s.weight ?? '',
+              reps_done: s.reps_done !== null ? String(s.reps_done) : '',
+              rpe: s.rpe !== null ? String(s.rpe) : '',
+              weight_left: s.weight_left ?? '',
+              weight_right: s.weight_right ?? '',
+              reps_done_left: s.reps_done_left !== null ? String(s.reps_done_left) : '',
+              reps_done_right: s.reps_done_right !== null ? String(s.reps_done_right) : '',
+              rpe_left: s.rpe_left !== null ? String(s.rpe_left) : '',
+              rpe_right: s.rpe_right !== null ? String(s.rpe_right) : '',
+              confirmed: true,
+            })
+            nextDrafts[pe.id] = {
+              warmup: logged.sets.filter((s) => s.is_warmup).map(toDraft),
+              working: logged.sets.filter((s) => !s.is_warmup).map(toDraft),
+            }
+          } else {
+            nextDrafts[pe.id] = { warmup: [], working: [newDraftSet(false)] }
           }
-        } else {
+        }
+        nextOverrides = {}
+        for (const le of existingLog.logged_exercises) {
+          if (le.substituted_exercise !== null || le.superset_partner !== null) {
+            nextOverrides[le.plan_exercise] = { substitutedExercise: le.substituted_exercise, supersetPartner: le.superset_partner }
+          }
+        }
+        nextNotes = existingLog.notes
+        nextDurationMinutes = existingLog.duration_minutes !== null ? String(existingLog.duration_minutes) : ''
+      } else {
+        nextDrafts = {}
+        for (const pe of session.exercises) {
           nextDrafts[pe.id] = { warmup: [], working: [newDraftSet(false)] }
         }
+        nextOrder = session.exercises.map((pe) => pe.id)
+        nextOverrides = {}
+        nextWeightUnit = 'lb'
+        nextNotes = ''
+        nextDurationMinutes = ''
       }
-      const nextOverrides: ExerciseOverrideMap = {}
-      for (const le of existingLog.logged_exercises) {
-        if (le.substituted_exercise !== null || le.superset_partner !== null) {
-          nextOverrides[le.plan_exercise] = { substitutedExercise: le.substituted_exercise, supersetPartner: le.superset_partner }
-        }
-      }
-      setExerciseOrder(order)
-      setDrafts(nextDrafts)
-      setOverrides(nextOverrides)
-      setWeightUnit(unit)
-      setNotes(existingLog.notes)
-      setDurationMinutes(existingLog.duration_minutes !== null ? String(existingLog.duration_minutes) : '')
-    } else {
-      const nextDrafts: Record<number, ExerciseDrafts> = {}
-      for (const pe of session.exercises) {
-        nextDrafts[pe.id] = { warmup: [], working: [newDraftSet(false)] }
-      }
-      setExerciseOrder(session.exercises.map((pe) => pe.id))
-      setDrafts(nextDrafts)
-      setOverrides({})
-      setNotes('')
-      setDurationMinutes('')
     }
-  }, [session, existingLog])
+
+    setExerciseOrder(nextOrder)
+    setDrafts(nextDrafts)
+    setOverrides(nextOverrides)
+    setWeightUnit(nextWeightUnit)
+    setNotes(nextNotes)
+    setDurationMinutes(nextDurationMinutes)
+    setRestoreGeneration((g) => g + 1)
+  }, [session, existingLog, date])
+
+  // Mirrors the in-progress session into localStorage on every change, so it
+  // survives the app being closed/killed before "Save log" - see
+  // lib/workoutDraft.ts. Skips writing once per restoreGeneration bump (see
+  // that state's own comment) - i.e. the first time this effect sees a given
+  // generation, that render's data is still exactly the mechanical
+  // restore/reset the effect above just did, not a fresh edit, so it's
+  // skipped; every run after that for the *same* generation is a genuine
+  // change and gets persisted normally. Without this, the write here would
+  // immediately recreate a draft that effect just intentionally left
+  // untouched or, worse, one handleSave just cleared (saving successfully
+  // feeds the new log back in as `existingLog`, which re-runs that same
+  // restoration effect and would otherwise re-persist the very data that was
+  // just safely saved - comparing the data's own content isn't reliable
+  // here since the backend can echo it back reformatted, e.g. "135" ->
+  // "135.00").
+  useEffect(() => {
+    if (!session) return
+    if (skippedGenerationRef.current !== restoreGeneration) {
+      skippedGenerationRef.current = restoreGeneration
+      return
+    }
+    saveWorkoutDraft(session.id, date, { exerciseOrder, drafts, overrides, weightUnit, notes, durationMinutes })
+  }, [session, date, restoreGeneration, exerciseOrder, drafts, overrides, weightUnit, notes, durationMinutes])
 
   if (!session) {
     return <p className="text-sm text-muted-foreground">This plan has no sessions yet.</p>
@@ -318,6 +389,8 @@ export default function SessionLogForm({
     setSaving(true)
     try {
       const savedLog = await saveWorkoutSession(payload)
+      clearWorkoutDraft(session.id, date)
+      setRestoredFromDraft(false)
       onSaved(savedLog)
       setSaved(true)
     } catch (err) {
@@ -338,6 +411,8 @@ export default function SessionLogForm({
     setError(null)
     try {
       await deleteWorkoutSession(existingLog.id)
+      clearWorkoutDraft(session.id, date)
+      setRestoredFromDraft(false)
       onDeleted()
     } catch {
       setError('Could not remove this log.')
@@ -468,6 +543,9 @@ export default function SessionLogForm({
 
       {existingLog && (
         <p className="text-xs text-muted-foreground">Already logged — editing your existing entry.</p>
+      )}
+      {restoredFromDraft && (
+        <p className="text-xs text-muted-foreground">Restored your unsaved changes from before.</p>
       )}
 
       <ul className="flex flex-col gap-2">
