@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Check, Info, Plus, ScanBarcode, Search, X } from 'lucide-react'
+import { ArrowLeft, Check, Info, Plus, Search, X } from 'lucide-react'
 import { ApiError } from '@/api/client'
 import { getDietPlan, listDietPlans } from '@/api/dietPlan'
 import { getFoodItem, listFoodItems } from '@/api/foodItems'
@@ -18,6 +18,7 @@ import type {
 } from '@/api/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { availableUnits, gramsForQuantity } from '@/lib/servingUnits'
@@ -26,10 +27,14 @@ import { cn, round } from '@/lib/utils'
 import { toDateKey } from '@/lib/date'
 import AddFoodItemDialog from './AddFoodItemDialog'
 import AddQuickLogItemDialog from './AddQuickLogItemDialog'
-import BarcodeScannerDialog from './BarcodeScannerDialog'
 import NutritionFactsDialog from './NutritionFactsDialog'
 
 type Tab = 'plan' | 'mine' | 'bank'
+
+// Food Bank search results page size for this page's typeahead - kept small since
+// this is a quick-pick list inline in the logging flow, not the full-browse
+// FoodBankPage; "Load more" (handleBankLoadMore) fetches further pages of this size.
+const BANK_PAGE_SIZE = 20
 
 type PlanCartItem = {
   kind: 'plan'
@@ -129,11 +134,13 @@ export default function LogMealPage() {
   const [selectedOptionId, setSelectedOptionId] = useState<number | undefined>(undefined)
   const [query, setQuery] = useState('')
   const [bankResults, setBankResults] = useState<FoodItem[]>([])
+  const [bankPage, setBankPage] = useState(1)
+  const [bankHasMore, setBankHasMore] = useState(false)
+  const [bankLoadingMore, setBankLoadingMore] = useState(false)
   const [addFoodOpen, setAddFoodOpen] = useState(false)
   const [addQuickOpen, setAddQuickOpen] = useState(false)
-  const [scannerOpen, setScannerOpen] = useState(false)
-  const [scannedBarcode, setScannedBarcode] = useState('')
   const [detailRow, setDetailRow] = useState<{ name: string; caption: string; nutrients: Nutrients } | null>(null)
+  const [removeAllOpen, setRemoveAllOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -218,15 +225,22 @@ export default function LogMealPage() {
   // covering USDA's full catalog (millions of items), an eager empty-search
   // "default list" would just be a meaningless alphabetical wall of branded
   // products, not something worth browsing. Matches IngredientPicker's pattern.
+  // Still capped to one page at a time (not the full match set) - a "Load more"
+  // button (handleBankLoadMore below) fetches further pages on demand.
   useEffect(() => {
     if (!query.trim()) {
       setBankResults([])
+      setBankHasMore(false)
       return
     }
     let cancelled = false
     const timer = setTimeout(() => {
-      listFoodItems({ search: query, pageSize: 20 }).then((data) => {
-        if (!cancelled) setBankResults(data.results)
+      listFoodItems({ search: query, pageSize: BANK_PAGE_SIZE }).then((data) => {
+        if (!cancelled) {
+          setBankResults(data.results)
+          setBankPage(1)
+          setBankHasMore(data.next !== null)
+        }
       })
     }, 250)
     return () => {
@@ -234,6 +248,18 @@ export default function LogMealPage() {
       clearTimeout(timer)
     }
   }, [query])
+
+  function handleBankLoadMore() {
+    const nextPage = bankPage + 1
+    setBankLoadingMore(true)
+    listFoodItems({ search: query, pageSize: BANK_PAGE_SIZE, page: nextPage })
+      .then((data) => {
+        setBankResults((prev) => [...prev, ...data.results])
+        setBankPage(nextPage)
+        setBankHasMore(data.next !== null)
+      })
+      .finally(() => setBankLoadingMore(false))
+  }
 
   const cartHasPlan = (id: number) => cart.some((r) => r.kind === 'plan' && r.referenceMealItemId === id)
   const cartHasFood = (id: number) => cart.some((r) => r.kind === 'food' && r.foodItem.id === id)
@@ -244,6 +270,14 @@ export default function LogMealPage() {
         ? prev.filter((r) => !(r.kind === 'plan' && r.referenceMealItemId === item.id))
         : [...prev, planCartItem(item)],
     )
+  }
+
+  function addAllPlanItems(items: ReferenceMealItemDetail[]) {
+    setCart((prev) => {
+      const existingIds = new Set(prev.filter((r) => r.kind === 'plan').map((r) => r.referenceMealItemId))
+      const additions = items.filter((item) => !existingIds.has(item.id)).map((item) => planCartItem(item))
+      return additions.length ? [...prev, ...additions] : prev
+    })
   }
 
   function toggleFoodItem(item: FoodItem) {
@@ -392,7 +426,18 @@ export default function LogMealPage() {
 
         {cart.length > 0 && (
           <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/30 p-2.5">
-            <span className="text-xs font-semibold text-muted-foreground">Added so far</span>
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-muted-foreground">Added so far</span>
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                className="h-auto px-0 text-xs text-destructive"
+                onClick={() => setRemoveAllOpen(true)}
+              >
+                Remove all
+              </Button>
+            </div>
             <div className="flex flex-col gap-2">
               {cart.map((row) => {
                 const nutrients = cartItemNutrients(row)
@@ -525,6 +570,11 @@ export default function LogMealPage() {
                 ))}
               </BrowseSection>
             )}
+            {bankResults.length > 0 && bankHasMore && (
+              <Button type="button" variant="outline" size="sm" disabled={bankLoadingMore} onClick={handleBankLoadMore}>
+                {bankLoadingMore ? 'Loading…' : 'Load more'}
+              </Button>
+            )}
             {matchingPlanItems.length === 0 && matchingQuickItems.length === 0 && bankResults.length === 0 && (
               <p className="py-4 text-center text-sm text-muted-foreground">No matches for "{trimmedQuery}".</p>
             )}
@@ -550,6 +600,19 @@ export default function LogMealPage() {
                         {String.fromCharCode(65 + index)}) {option.label}
                       </button>
                     ))}
+                  </div>
+                )}
+                {selectedOption && selectedOption.items.length > 0 && (
+                  <div className="flex items-center justify-end">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={selectedOption.items.every((item) => cartHasPlan(item.id))}
+                      onClick={() => addAllPlanItems(selectedOption.items)}
+                    >
+                      Add all
+                    </Button>
                   </div>
                 )}
                 {selectedOption && (
@@ -610,6 +673,11 @@ export default function LogMealPage() {
                     ))}
                   </ul>
                 )}
+                {bankResults.length > 0 && bankHasMore && (
+                  <Button type="button" variant="outline" size="sm" disabled={bankLoadingMore} onClick={handleBankLoadMore}>
+                    {bankLoadingMore ? 'Loading…' : 'Load more'}
+                  </Button>
+                )}
                 {bankResults.length === 0 && (
                   <p className="text-sm text-muted-foreground">
                     {query.trim() ? 'No foods found.' : 'Search the food bank…'}
@@ -624,43 +692,28 @@ export default function LogMealPage() {
         )}
       </div>
 
-      <Button
-        type="button"
-        size="icon-lg"
-        className="fixed z-15 rounded-full shadow-lg"
-        style={{ right: 16, bottom: 'calc(var(--nav-height) + env(safe-area-inset-bottom) + 16px)' }}
-        onClick={() => setScannerOpen(true)}
-        aria-label="Scan a barcode"
-      >
-        <ScanBarcode className="size-6" />
-      </Button>
-
       <AddFoodItemDialog
         open={addFoodOpen}
-        onOpenChange={(next) => {
-          setAddFoodOpen(next)
-          if (!next) setScannedBarcode('')
-        }}
+        onOpenChange={setAddFoodOpen}
         onCreated={(item) => toggleFoodItem(item)}
-        initialName={scannedBarcode ? '' : trimmedQuery}
-        initialBarcode={scannedBarcode || undefined}
+        initialName={trimmedQuery}
       />
       <AddQuickLogItemDialog open={addQuickOpen} onOpenChange={setAddQuickOpen} onCreated={(item) => { setQuickItems((prev) => [item, ...prev]); addQuickItem(item) }} initialName={trimmedQuery} />
-      <BarcodeScannerDialog
-        open={scannerOpen}
-        onOpenChange={setScannerOpen}
-        onFound={(item) => toggleFoodItem(item)}
-        onNotFound={(barcode) => {
-          setScannedBarcode(barcode)
-          setAddFoodOpen(true)
-        }}
-      />
       <NutritionFactsDialog
         open={detailRow !== null}
         onOpenChange={(next) => !next && setDetailRow(null)}
         name={detailRow?.name ?? ''}
         caption={detailRow?.caption ?? ''}
         nutrients={detailRow?.nutrients ?? sumNutrients([])}
+      />
+      <ConfirmDialog
+        open={removeAllOpen}
+        onOpenChange={setRemoveAllOpen}
+        title="Remove all added items?"
+        description="This clears everything you've added so far for this meal."
+        confirmLabel="Remove all"
+        confirmingLabel="Removing…"
+        onConfirm={() => setCart([])}
       />
     </div>
   )
