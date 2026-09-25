@@ -18,6 +18,7 @@ __all__ = [
     "get_food",
     "parse_food_nutrients",
     "missing_required_fields",
+    "normalize_usda_name",
 ]
 
 
@@ -39,6 +40,16 @@ def _get(path, api_key, params=None):
     if not response.ok:
         raise USDAClientError(f"USDA request failed: {response.status_code} {response.text[:300]}")
     return response.json()
+
+
+def normalize_usda_name(name):
+    """USDA's Branded Foods descriptions are typically ALL CAPS (as printed on
+    packaging); Foundation/SR Legacy descriptions already read fine in USDA's own
+    mixed case. Only reformats a name that's actually all-caps, to Title Case -
+    leaves anything already mixed-case alone. Mirrors import_usda_bulk_csv.py's SQL
+    (INITCAP, gated the same way) and the titleize_usda_food_names backfill command,
+    so a name reads the same regardless of which import path produced it."""
+    return name.title() if name.isupper() else name
 
 
 def search_foods(query, api_key, page_size=10, data_types=None):

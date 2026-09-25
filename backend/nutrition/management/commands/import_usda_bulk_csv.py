@@ -283,7 +283,19 @@ class Command(BaseCommand):
                         calories_per_100g, {nutrient_field_list}
                     )
                     SELECT
-                        COALESCE(LEFT(e.description, 255), 'USDA food ' || e.fdc_id::text),
+                        -- USDA's Branded Foods descriptions are typically ALL CAPS (as printed
+                        -- on packaging); Foundation/SR Legacy descriptions already read fine in
+                        -- USDA's own mixed case. Only reformat a name that's actually all-caps, to
+                        -- Title Case via INITCAP - mirrors usda_client.normalize_usda_name (same
+                        -- gate) and titleize_usda_food_names.py's backfill for rows imported before
+                        -- this existed.
+                        COALESCE(
+                            CASE WHEN e.description = UPPER(e.description)
+                                 THEN INITCAP(LEFT(e.description, 255))
+                                 ELSE LEFT(e.description, 255)
+                            END,
+                            'USDA food ' || e.fdc_id::text
+                        ),
                         LEFT(COALESCE(NULLIF(e.brand_name, ''), e.brand_owner, ''), 255),
                         e.resolved_barcode,
                         e.fdc_id, 'usda', 'single', 'public', 'approved',

@@ -6,6 +6,7 @@ from nutrition.usda_client import (
     USDAClientError,
     get_food,
     missing_required_fields,
+    normalize_usda_name,
     parse_food_nutrients,
     search_foods,
 )
@@ -61,7 +62,7 @@ class Command(BaseCommand):
                 f"nutrient data for: {', '.join(missing)}. Not importing."
             )
 
-        name = options["name"] or detail.get("description") or f"USDA food {fdc_id}"
+        name = options["name"] or normalize_usda_name(detail.get("description") or f"USDA food {fdc_id}")
 
         self.stdout.write(f"\n{name}  (fdc_id={fdc_id}, dataType={detail.get('dataType')})")
         for field, value in fields.items():
