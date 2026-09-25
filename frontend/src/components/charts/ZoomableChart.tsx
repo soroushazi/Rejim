@@ -1,11 +1,14 @@
 import { Maximize2, X } from 'lucide-react'
-import { type MouseEvent, type ReactNode, useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 
 /** Wraps a chart (any of the hand-rolled inline-SVG charts under pages/**)
- * with a zoom button on the far right of its own title row, plus tap-to-zoom
- * on the figure itself. Zooming opens the chart in a centered modal card
+ * with a zoom button on the far right of its own title row - the only way to
+ * zoom in (tapping the figure itself used to zoom too, but that made
+ * interacting with the chart's own legend/series-toggle buttons and data
+ * points feel accident-prone, so it's icon-only now). Zooming opens the
+ * chart in a centered modal card
  * sized to the figure's full height but not its full width (a full-bleed
  * overlay reads as clumsy on a small screen); on a phone (whose viewport is
  * portrait-shaped regardless of a physical "Portrait Orientation Lock"
@@ -38,13 +41,6 @@ export default function ZoomableChart({
   className?: string
 }) {
   const [zoomed, setZoomed] = useState(false)
-
-  function handleFigureClick(e: MouseEvent<HTMLDivElement>) {
-    // Legend/series-toggle buttons live inside `children` too - let their own
-    // onClick do its thing without also blowing the chart up to full-screen.
-    if ((e.target as HTMLElement).closest('button')) return
-    setZoomed(true)
-  }
 
   if (zoomed) {
     return createPortal(
@@ -88,9 +84,7 @@ export default function ZoomableChart({
           <Maximize2 className="size-3.5" />
         </button>
       </div>
-      <div onClick={handleFigureClick} className="cursor-zoom-in">
-        {typeof children === 'function' ? children(false) : children}
-      </div>
+      <div>{typeof children === 'function' ? children(false) : children}</div>
     </div>
   )
 }
