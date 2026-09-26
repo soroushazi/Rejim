@@ -14,6 +14,9 @@ export type DraftSet = {
   weight: string
   reps_done: string
   is_warmup: boolean
+  /** A set taken after all working sets, at a reduced weight - see
+   * newDraftSet. Never true at the same time as is_warmup. */
+  is_dropset: boolean
   rpe: string
   /** Per-side values, used instead of the plain fields above when the
    * exercise is unilateral (Exercise.is_unilateral, e.g. Single-Arm Dumbbell
@@ -31,14 +34,22 @@ export type DraftSet = {
   confirmed: boolean
 }
 
-export function newDraftSet(isWarmup: boolean): DraftSet {
+/** `previous` is whichever set immediately precedes this new one in the
+ * exercise's logging order (e.g. the last warm-up when starting the first
+ * working set, or the prior working set otherwise) - its weight is carried
+ * over as this new set's starting default, since reps/RPE vary per set but
+ * the weight often doesn't. Only a default: the trainee can always change
+ * it. The very first set of an exercise has no `previous`, so it stays
+ * blank for the trainee to pick. */
+export function newDraftSet(isWarmup: boolean, isDropset = false, previous?: DraftSet): DraftSet {
   return {
-    weight: '',
+    weight: previous?.weight ?? '',
     reps_done: '',
     is_warmup: isWarmup,
+    is_dropset: isDropset,
     rpe: '',
-    weight_left: '',
-    weight_right: '',
+    weight_left: previous?.weight_left ?? '',
+    weight_right: previous?.weight_right ?? '',
     reps_done_left: '',
     reps_done_right: '',
     rpe_left: '',

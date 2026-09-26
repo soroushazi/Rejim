@@ -12,18 +12,19 @@ function hasBilateralValues(s: ExerciseHistorySet): s is MeasuredSet {
   return s.weight !== null && s.reps_done !== null
 }
 
-/** Checks a newly-entered working set against prior (non-warmup) history for
- * this exercise: a new all-time max weight, or - at a weight already tried
- * before - a new max reps at that weight. Warm-up sets never trigger a PR and
- * are excluded from the comparison set, per spec. */
+/** Checks a newly-entered working set against prior (non-warmup, non-dropset)
+ * history for this exercise: a new all-time max weight, or - at a weight
+ * already tried before - a new max reps at that weight. Warm-up and drop
+ * sets never trigger a PR and are excluded from the comparison set, per spec. */
 export function checkPersonalRecord(
   history: ExerciseHistorySet[],
   weight: number,
   reps: number,
   isWarmup: boolean,
+  isDropset: boolean,
 ): PersonalRecordKind {
-  if (isWarmup || !Number.isFinite(weight) || !Number.isFinite(reps)) return null
-  const working = history.filter((s) => !s.is_warmup).filter(hasBilateralValues)
+  if (isWarmup || isDropset || !Number.isFinite(weight) || !Number.isFinite(reps)) return null
+  const working = history.filter((s) => !s.is_warmup && !s.is_dropset).filter(hasBilateralValues)
   if (working.length === 0) return null
 
   const maxWeight = Math.max(...working.map((s) => Number(s.weight)))
@@ -47,7 +48,7 @@ export type PrEvent = { date: string; kind: 'weight' | 'reps'; weight: number; r
  * history so earlier PRs aren't missed and later sets aren't misflagged. */
 export function computePrTimeline(history: ExerciseHistorySet[]): PrEvent[] {
   const working = history
-    .filter((s) => !s.is_warmup)
+    .filter((s) => !s.is_warmup && !s.is_dropset)
     .filter(hasBilateralValues)
     .slice()
     .sort((a, b) => a.session_date.localeCompare(b.session_date) || a.set_number - b.set_number)
@@ -56,7 +57,7 @@ export function computePrTimeline(history: ExerciseHistorySet[]): PrEvent[] {
   const seenSoFar: MeasuredSet[] = []
   for (const set of working) {
     const weight = Number(set.weight)
-    const kind = checkPersonalRecord(seenSoFar, weight, set.reps_done, false)
+    const kind = checkPersonalRecord(seenSoFar, weight, set.reps_done, false, false)
     if (kind) {
       events.push({ date: set.session_date, kind, weight, reps: set.reps_done })
     }

@@ -183,6 +183,7 @@ class LoggedSetNestedSerializer(serializers.ModelSerializer):
             "reps_done_right",
             "rest_seconds",
             "is_warmup",
+            "is_dropset",
             "rpe",
             "rpe_left",
             "rpe_right",
@@ -207,9 +208,13 @@ class LoggedExerciseNestedSerializer(serializers.ModelSerializer):
         # Reflects the off-program substitution when one was logged, so
         # anything reading this field (history browsers, etc.) shows what was
         # actually performed without needing to know about substitution.
+        # `planned_exercise` (not plan_exercise.exercise) so this keeps
+        # working even if the plan_exercise it was logged against has since
+        # been deleted (e.g. the trainer reshaped the plan) - see the model's
+        # own comment on why plan_exercise is SET_NULL, not CASCADE.
         if obj.substituted_exercise_id:
             return obj.substituted_exercise.name
-        return obj.plan_exercise.exercise.name
+        return obj.planned_exercise.name if obj.planned_exercise_id else "Deleted exercise"
 
 
 class WorkoutSessionSerializer(serializers.ModelSerializer):
@@ -220,7 +225,7 @@ class WorkoutSessionSerializer(serializers.ModelSerializer):
     unique_together (re-logging the same session/day replaces it)."""
 
     logged_exercises = LoggedExerciseNestedSerializer(many=True)
-    plan_session_label = serializers.CharField(source="plan_session.label", read_only=True)
+    plan_session_label = serializers.CharField(read_only=True)
 
     class Meta:
         model = WorkoutSession
@@ -232,6 +237,7 @@ class WorkoutSessionSerializer(serializers.ModelSerializer):
             "date",
             "notes",
             "duration_minutes",
+            "calories_burned",
             "logged_exercises",
         ]
         read_only_fields = ["trainee"]
@@ -293,9 +299,22 @@ class WorkoutSessionSerializer(serializers.ModelSerializer):
             defaults={
                 "notes": validated_data.get("notes", ""),
                 "duration_minutes": validated_data.get("duration_minutes"),
+                "calories_burned": validated_data.get("calories_burned"),
+                # Snapshotted so history/exports still have a label once
+                # plan_session itself is gone (SET_NULL, not CASCADE - see
+                # the model's own comment) - refreshed on every re-save while
+                # it's still live, same as every other field here.
+                "plan_session_label": validated_data["plan_session"].label,
             },
         )
-        session.logged_exercises.all().delete()
+        # Only replaces logged_exercises the frontend can actually re-submit
+        # (it always POSTs the complete current state - see this class's
+        # docstring) - one whose plan_exercise has since been deleted (e.g.
+        # the trainer swapped it out, see the model's own comment) can't be
+        # represented in that live-plan-driven form at all, so its absence
+        # from this request means "wasn't editable," not "trainee removed
+        # it." Left untouched rather than wiped.
+        session.logged_exercises.filter(plan_exercise__isnull=False).delete()
         for order, logged_exercise_data in enumerate(logged_exercises_data):
             sets_data = logged_exercise_data.pop("sets")
             substituted_exercise = logged_exercise_data.get("substituted_exercise")
@@ -304,6 +323,7 @@ class WorkoutSessionSerializer(serializers.ModelSerializer):
             logged_exercise = LoggedExercise.objects.create(
                 session=session,
                 plan_exercise=plan_exercise,
+                planned_exercise=plan_exercise.exercise,
                 substituted_exercise=substituted_exercise,
                 superset_partner=logged_exercise_data.get("superset_partner"),
                 order=order,
@@ -318,6 +338,7 @@ class WorkoutSessionSerializer(serializers.ModelSerializer):
                     "weight_unit": set_data["weight_unit"],
                     "rest_seconds": set_data.get("rest_seconds"),
                     "is_warmup": set_data.get("is_warmup", False),
+                    "is_dropset": set_data.get("is_dropset", False),
                 }
                 if effective_exercise.is_unilateral:
                     LoggedSet.objects.create(
@@ -365,8 +386,11 @@ class LoggedSetSerializer(serializers.ModelSerializer):
     def get_exercise(self, obj):
         # Off-program substitutions attribute history/PR-detection to the
         # exercise actually performed, not the one the plan called for.
+        # `planned_exercise_id` (not plan_exercise.exercise_id) so this keeps
+        # resolving correctly even after the plan_exercise it was logged
+        # against has been deleted - see the model's own comment.
         le = obj.logged_exercise
-        return le.substituted_exercise_id or le.plan_exercise.exercise_id
+        return le.substituted_exercise_id or le.planned_exercise_id
 
     class Meta:
         model = LoggedSet
@@ -383,6 +407,7 @@ class LoggedSetSerializer(serializers.ModelSerializer):
             "reps_done_right",
             "rest_seconds",
             "is_warmup",
+            "is_dropset",
             "rpe",
             "rpe_left",
             "rpe_right",

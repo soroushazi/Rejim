@@ -164,22 +164,48 @@ class WorkoutSession(models.Model):
         limit_choices_to={"is_trainee": True},
         related_name="workout_sessions",
     )
-    plan_session = models.ForeignKey(PlanSession, on_delete=models.CASCADE, related_name="logged_sessions")
+    # SET_NULL (not CASCADE): a trainer reshaping a trainee's plan (deleting a
+    # PlanSession to replace it with something different) must never destroy
+    # what the trainee already logged against it - this is a historical
+    # record of what actually happened, not a view onto the live plan.
+    # `plan_session_label` snapshots the label at save time (see
+    # WorkoutSessionSerializer._upsert) specifically so history/exports still
+    # have something to show once plan_session itself is gone.
+    plan_session = models.ForeignKey(
+        PlanSession, on_delete=models.SET_NULL, null=True, blank=True, related_name="logged_sessions"
+    )
+    plan_session_label = models.CharField(max_length=100, blank=True)
     date = models.DateField()
     notes = models.TextField(blank=True)
     duration_minutes = models.PositiveSmallIntegerField(null=True, blank=True)
+    # Optional device-reported calories for this session (e.g. an Apple
+    # Watch's heart-rate-based reading) - a per-session detail only, same
+    # trust model as ActivityLog.calories_burned; not summed into the daily
+    # "calories out" total (see tracker/services.py::calculate_tdee), which
+    # uses the trainee's own daily Active Energy total instead.
+    calories_burned = models.PositiveSmallIntegerField(null=True, blank=True)
 
     class Meta:
         ordering = ["-date"]
         unique_together = ("trainee", "plan_session", "date")
 
     def __str__(self):
-        return f"{self.trainee} - {self.plan_session.label} - {self.date}"
+        return f"{self.trainee} - {self.plan_session_label} - {self.date}"
 
 
 class LoggedExercise(models.Model):
     session = models.ForeignKey(WorkoutSession, on_delete=models.CASCADE, related_name="logged_exercises")
-    plan_exercise = models.ForeignKey(PlanExercise, on_delete=models.CASCADE, related_name="logged_instances")
+    # SET_NULL (not CASCADE) for the same reason as WorkoutSession.plan_session
+    # above - deleting a PlanExercise (e.g. the trainer swapped it out for a
+    # different exercise) must never destroy what was already logged against
+    # it. `planned_exercise` snapshots plan_exercise.exercise at save time so
+    # exercise_name/history/PR lookups never depend on plan_exercise still
+    # existing - it's the "what was actually planned that day" counterpart to
+    # substituted_exercise below (which is "what they actually did instead").
+    plan_exercise = models.ForeignKey(
+        PlanExercise, on_delete=models.SET_NULL, null=True, blank=True, related_name="logged_instances"
+    )
+    planned_exercise = models.ForeignKey(Exercise, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
     order = models.PositiveSmallIntegerField(default=0)
     # Off-program substitution: the trainee did a different exercise than the
     # plan calls for (e.g. their usual equipment was unavailable), while
@@ -204,7 +230,8 @@ class LoggedExercise(models.Model):
         ordering = ["order"]
 
     def __str__(self):
-        return f"{self.session} - {self.plan_exercise.exercise.name}"
+        exercise = self.substituted_exercise or self.planned_exercise
+        return f"{self.session} - {exercise.name if exercise else 'deleted exercise'}"
 
 
 class LoggedSet(models.Model):
@@ -230,6 +257,10 @@ class LoggedSet(models.Model):
     # Excluded from avg-reps-per-set (weight suggestions) and the Progress
     # strength score, so warming up doesn't skew either.
     is_warmup = models.BooleanField(default=False)
+    # A set taken after all working sets are done, at a reduced weight -
+    # excluded from PR detection/weight suggestions for the same reason as
+    # is_warmup (never both True on the same set).
+    is_dropset = models.BooleanField(default=False)
     # Rate of perceived exertion, 1-10. Optional - richer tracking for users
     # who want it, never required to complete a log.
     rpe = models.PositiveSmallIntegerField(

@@ -2,7 +2,7 @@ import type { WeightUnit } from '@/api/types'
 import type { DraftSet } from '@/pages/workout/ExerciseLogBlock'
 import type { ExerciseOverrideMap } from './exerciseOverrides'
 
-export type ExerciseDrafts = { warmup: DraftSet[]; working: DraftSet[] }
+export type ExerciseDrafts = { warmup: DraftSet[]; working: DraftSet[]; dropset: DraftSet[] }
 
 export type WorkoutDraft = {
   savedAt: number
@@ -12,6 +12,16 @@ export type WorkoutDraft = {
   weightUnit: WeightUnit
   notes: string
   durationMinutes: string
+  /** Optional, defensively defaulted to '' when reading a draft saved by an
+   * older version of this page, before this field existed. */
+  caloriesBurned?: string
+  /** Epoch ms when the "Start session" timer was started, or null/absent if
+   * it isn't running - persisted (rather than just kept in a setInterval) so
+   * elapsed time is always computed against real wall-clock time and
+   * survives the app being closed/killed mid-session, same rationale as
+   * every other field here. Optional for a draft saved before this field
+   * existed. */
+  timerStartedAt?: number | null
 }
 
 function draftKey(planSessionId: number, date: string): string {
@@ -40,11 +50,15 @@ function hasAnyEntry(sets: DraftSet[]): boolean {
  * `SessionLogForm` seeds a brand-new session with otherwise look,
  * content-wise, exactly like "the trainee has unsaved changes here". */
 function isEmpty(draft: Omit<WorkoutDraft, 'savedAt'>): boolean {
-  const hasSetData = Object.values(draft.drafts).some((d) => hasAnyEntry(d.warmup) || hasAnyEntry(d.working))
+  const hasSetData = Object.values(draft.drafts).some(
+    (d) => hasAnyEntry(d.warmup) || hasAnyEntry(d.working) || hasAnyEntry(d.dropset ?? []),
+  )
   return (
     !hasSetData &&
     draft.notes.trim() === '' &&
     draft.durationMinutes.trim() === '' &&
+    !(draft.caloriesBurned ?? '').trim() &&
+    (draft.timerStartedAt ?? null) === null &&
     Object.keys(draft.overrides).length === 0
   )
 }

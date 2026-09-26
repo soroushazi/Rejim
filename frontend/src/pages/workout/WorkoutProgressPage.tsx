@@ -102,6 +102,7 @@ export default function WorkoutProgressPage() {
     const seen = new Map<number, string>()
     for (const session of sessions) {
       for (const le of session.logged_exercises) {
+        if (le.plan_exercise === null) continue
         const info = planExerciseInfo.get(le.plan_exercise)
         if (info) seen.set(info.exerciseId, info.exerciseName)
       }

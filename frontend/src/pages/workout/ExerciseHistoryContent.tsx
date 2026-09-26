@@ -125,7 +125,7 @@ export default function ExerciseHistoryContent({
                   <li key={s.id} className="flex items-center justify-between gap-2 text-muted-foreground">
                     <span>
                       Set {s.set_number}
-                      {s.is_warmup ? ' · warm-up' : ''}
+                      {s.is_warmup ? ' · warm-up' : s.is_dropset ? ' · drop set' : ''}
                     </span>
                     <span>
                       {s.weight === null ? (

@@ -38,6 +38,10 @@ export function computeTopMovers(
 
   for (const session of sessions) {
     for (const logged of session.logged_exercises) {
+      // A logged exercise whose plan_exercise has since been deleted (e.g.
+      // the trainer swapped it out) can't be attributed to a current plan
+      // slot at all - excluded here, same as any other "not found" case.
+      if (logged.plan_exercise === null) continue
       const info = planExerciseInfo.get(logged.plan_exercise)
       if (!info) continue
       const score = sessionScore(logged)

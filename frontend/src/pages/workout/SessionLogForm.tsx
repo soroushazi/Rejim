@@ -26,6 +26,8 @@ import {
   type ExerciseOverrideMap,
 } from '@/lib/exerciseOverrides'
 import { cn } from '@/lib/utils'
+import { formatElapsed, minutesElapsed } from '@/lib/elapsed'
+import { usePreferredWeightUnit } from '@/lib/usePreferredWeightUnit'
 import { clearWorkoutDraft, loadWorkoutDraft, saveWorkoutDraft, type ExerciseDrafts } from '@/lib/workoutDraft'
 import ExerciseLogBlock, { type DraftSet } from './ExerciseLogBlock'
 import ExerciseLogListRow from './ExerciseLogListRow'
@@ -82,6 +84,9 @@ type Props = {
   existingLog: WorkoutSessionLog | null
   onSaved: (log: WorkoutSessionLog) => void
   onDeleted: () => void
+  /** True until the trainee has ever saved a single WorkoutSession - gates
+   * the Weight unit banner below, which only needs to be seen once. */
+  isFirstLog: boolean
 }
 
 function draftSetsToPayload(
@@ -107,6 +112,7 @@ function draftSetsToPayload(
         reps_done_left: Number(s.reps_done_left),
         reps_done_right: Number(s.reps_done_right),
         is_warmup: s.is_warmup,
+        is_dropset: s.is_dropset,
         rpe_left: s.rpe_left.trim() ? Number(s.rpe_left) : null,
         rpe_right: s.rpe_right.trim() ? Number(s.rpe_right) : null,
       }))
@@ -119,6 +125,7 @@ function draftSetsToPayload(
       weight_unit: weightUnit,
       reps_done: Number(s.reps_done),
       is_warmup: s.is_warmup,
+      is_dropset: s.is_dropset,
       rpe: s.rpe.trim() ? Number(s.rpe) : null,
     }))
 }
@@ -132,8 +139,10 @@ export default function SessionLogForm({
   existingLog,
   onSaved,
   onDeleted,
+  isFirstLog,
 }: Props) {
   const session = sessions.find((s) => s.id === selectedSessionId) ?? sessions[0]
+  const preferredUnit = usePreferredWeightUnit()
   const [exerciseOrder, setExerciseOrder] = useState<number[]>([])
   const [drafts, setDrafts] = useState<Record<number, ExerciseDrafts>>({})
   // Which block (by its first plan_exercise id) is currently open in the
@@ -145,6 +154,11 @@ export default function SessionLogForm({
   const [weightUnit, setWeightUnit] = useState<WeightUnit>('lb')
   const [notes, setNotes] = useState('')
   const [durationMinutes, setDurationMinutes] = useState('')
+  const [caloriesBurned, setCaloriesBurned] = useState('')
+  // Epoch ms, or null when the timer isn't running - see lib/workoutDraft.ts
+  // for why this is persisted rather than just tracked in a setInterval.
+  const [timerStartedAt, setTimerStartedAt] = useState<number | null>(null)
+  const [nowTick, setNowTick] = useState(() => Date.now())
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -173,6 +187,26 @@ export default function SessionLogForm({
     listMuscleGroups().then(setMuscleGroups).catch(() => setMuscleGroups([]))
   }, [])
 
+  // Ticks once a second while the timer's running, purely to keep the live
+  // "elapsed" readout below moving - the persisted value is just
+  // timerStartedAt itself (a timestamp), not a running counter, so this
+  // interval is free to be recreated on every mount/reload without losing
+  // anything.
+  useEffect(() => {
+    if (timerStartedAt === null) return
+    const interval = setInterval(() => setNowTick(Date.now()), 1000)
+    return () => clearInterval(interval)
+  }, [timerStartedAt])
+
+  // Keeps durationMinutes in sync with the running timer, so it's already
+  // correct by the time of a manual edit, Stop, or Save - each of which
+  // stops the timer from that point on (see their own handlers below).
+  useEffect(() => {
+    if (timerStartedAt === null) return
+    const minutes = String(minutesElapsed(timerStartedAt, nowTick))
+    setDurationMinutes((prev) => (prev === minutes ? prev : minutes))
+  }, [timerStartedAt, nowTick])
+
   const exerciseBankById = useMemo(() => new Map(exercises.map((e) => [e.id, e])), [exercises])
 
   useEffect(() => {
@@ -188,6 +222,8 @@ export default function SessionLogForm({
     let nextWeightUnit: WeightUnit
     let nextNotes: string
     let nextDurationMinutes: string
+    let nextCaloriesBurned: string
+    let nextTimerStartedAt: number | null
 
     // A local draft (unsaved edits from before the app was closed/killed)
     // always wins over both a blank form and an already-saved log - it only
@@ -202,27 +238,43 @@ export default function SessionLogForm({
       nextDrafts = { ...draft.drafts }
       for (const pe of session.exercises) {
         if (!nextOrder.includes(pe.id)) nextOrder.push(pe.id)
-        if (!nextDrafts[pe.id]) nextDrafts[pe.id] = { warmup: [], working: [newDraftSet(false)] }
+        // `dropset` defensively defaulted for a draft saved by an older
+        // version of this page, before drop sets existed.
+        const existing = nextDrafts[pe.id]
+        nextDrafts[pe.id] = existing
+          ? { warmup: existing.warmup, working: existing.working, dropset: existing.dropset ?? [] }
+          : { warmup: [], working: [newDraftSet(false)], dropset: [] }
       }
       nextOverrides = draft.overrides
       nextWeightUnit = draft.weightUnit
       nextNotes = draft.notes
       nextDurationMinutes = draft.durationMinutes
+      nextCaloriesBurned = draft.caloriesBurned ?? ''
+      nextTimerStartedAt = draft.timerStartedAt ?? null
       setRestoredFromDraft(true)
     } else {
       setRestoredFromDraft(false)
       if (existingLog) {
-        const byPlanExercise = new Map(existingLog.logged_exercises.map((le) => [le.plan_exercise, le]))
+        // A logged exercise whose plan_exercise has since been deleted (e.g.
+        // the trainer swapped it out) can't be represented in this
+        // live-plan-driven editing UI - it's excluded here, and the backend
+        // separately knows to leave it untouched on save rather than wiping
+        // it as "no longer submitted" (see WorkoutSessionSerializer._upsert).
+        // It's still fully visible in Session History either way.
+        const editableLoggedExercises = existingLog.logged_exercises.filter(
+          (le): le is typeof le & { plan_exercise: number } => le.plan_exercise !== null,
+        )
+        const byPlanExercise = new Map(editableLoggedExercises.map((le) => [le.plan_exercise, le]))
         nextDrafts = {}
-        nextWeightUnit = 'lb'
-        nextOrder = [...existingLog.logged_exercises].sort((a, b) => a.order - b.order).map((le) => le.plan_exercise)
+        nextWeightUnit = preferredUnit
+        nextOrder = [...editableLoggedExercises].sort((a, b) => a.order - b.order).map((le) => le.plan_exercise)
         for (const pe of session.exercises) {
           if (!nextOrder.includes(pe.id)) nextOrder.push(pe.id)
           const logged = byPlanExercise.get(pe.id)
           if (logged && logged.sets.length > 0) {
             nextWeightUnit = logged.sets[0].weight_unit
             const toDraft = (s: (typeof logged.sets)[number]): DraftSet => ({
-              ...newDraftSet(s.is_warmup),
+              ...newDraftSet(s.is_warmup, s.is_dropset),
               weight: s.weight ?? '',
               reps_done: s.reps_done !== null ? String(s.reps_done) : '',
               rpe: s.rpe !== null ? String(s.rpe) : '',
@@ -236,30 +288,35 @@ export default function SessionLogForm({
             })
             nextDrafts[pe.id] = {
               warmup: logged.sets.filter((s) => s.is_warmup).map(toDraft),
-              working: logged.sets.filter((s) => !s.is_warmup).map(toDraft),
+              working: logged.sets.filter((s) => !s.is_warmup && !s.is_dropset).map(toDraft),
+              dropset: logged.sets.filter((s) => s.is_dropset).map(toDraft),
             }
           } else {
-            nextDrafts[pe.id] = { warmup: [], working: [newDraftSet(false)] }
+            nextDrafts[pe.id] = { warmup: [], working: [newDraftSet(false)], dropset: [] }
           }
         }
         nextOverrides = {}
-        for (const le of existingLog.logged_exercises) {
+        for (const le of editableLoggedExercises) {
           if (le.substituted_exercise !== null || le.superset_partner !== null) {
             nextOverrides[le.plan_exercise] = { substitutedExercise: le.substituted_exercise, supersetPartner: le.superset_partner }
           }
         }
         nextNotes = existingLog.notes
         nextDurationMinutes = existingLog.duration_minutes !== null ? String(existingLog.duration_minutes) : ''
+        nextCaloriesBurned = existingLog.calories_burned !== null ? String(existingLog.calories_burned) : ''
+        nextTimerStartedAt = null
       } else {
         nextDrafts = {}
         for (const pe of session.exercises) {
-          nextDrafts[pe.id] = { warmup: [], working: [newDraftSet(false)] }
+          nextDrafts[pe.id] = { warmup: [], working: [newDraftSet(false)], dropset: [] }
         }
         nextOrder = session.exercises.map((pe) => pe.id)
         nextOverrides = {}
-        nextWeightUnit = 'lb'
+        nextWeightUnit = preferredUnit
         nextNotes = ''
         nextDurationMinutes = ''
+        nextCaloriesBurned = ''
+        nextTimerStartedAt = null
       }
     }
 
@@ -269,8 +326,15 @@ export default function SessionLogForm({
     setWeightUnit(nextWeightUnit)
     setNotes(nextNotes)
     setDurationMinutes(nextDurationMinutes)
+    setCaloriesBurned(nextCaloriesBurned)
+    setTimerStartedAt(nextTimerStartedAt)
+    setNowTick(Date.now())
     setRestoreGeneration((g) => g + 1)
-  }, [session, existingLog, date])
+    // preferredUnit resolves asynchronously (starts at 'kg' until the
+    // preferences fetch lands) - re-running once it settles is what makes a
+    // brand-new day's weight unit default to the right one instead of
+    // always 'kg', same pattern as DailyMetricForm's own weight field.
+  }, [session, existingLog, date, preferredUnit])
 
   // Mirrors the in-progress session into localStorage on every change, so it
   // survives the app being closed/killed before "Save log" - see
@@ -293,8 +357,29 @@ export default function SessionLogForm({
       skippedGenerationRef.current = restoreGeneration
       return
     }
-    saveWorkoutDraft(session.id, date, { exerciseOrder, drafts, overrides, weightUnit, notes, durationMinutes })
-  }, [session, date, restoreGeneration, exerciseOrder, drafts, overrides, weightUnit, notes, durationMinutes])
+    saveWorkoutDraft(session.id, date, {
+      exerciseOrder,
+      drafts,
+      overrides,
+      weightUnit,
+      notes,
+      durationMinutes,
+      caloriesBurned,
+      timerStartedAt,
+    })
+  }, [
+    session,
+    date,
+    restoreGeneration,
+    exerciseOrder,
+    drafts,
+    overrides,
+    weightUnit,
+    notes,
+    durationMinutes,
+    caloriesBurned,
+    timerStartedAt,
+  ])
 
   if (!session) {
     return <p className="text-sm text-muted-foreground">This plan has no sessions yet.</p>
@@ -302,6 +387,20 @@ export default function SessionLogForm({
 
   const exercisesById = new Map(session.exercises.map((pe) => [pe.id, pe]))
   const blocks = buildBlocks(exerciseOrder, exercisesById, overrides)
+
+  function handleStartTimer() {
+    setTimerStartedAt(Date.now())
+  }
+
+  // Shared by the Stop button, a manual edit to the duration field, and
+  // Save (if it's still running then) - stopping always means "freeze
+  // durationMinutes at the current elapsed time and hand control back to
+  // the trainee," never "just discard what the timer had."
+  function stopTimer() {
+    if (timerStartedAt === null) return
+    setDurationMinutes(String(minutesElapsed(timerStartedAt, Date.now())))
+    setTimerStartedAt(null)
+  }
 
   function moveBlock(index: number, direction: -1 | 1) {
     setExerciseOrder((order) => {
@@ -319,14 +418,16 @@ export default function SessionLogForm({
     if (!pe) return null
     const effectiveExId = effectiveExerciseId(pe, overrides)
     const displayPe = effectiveExId === pe.exercise ? pe : { ...pe, exercise: effectiveExId, exercise_name: exerciseBankById.get(effectiveExId)?.name ?? pe.exercise_name }
-    const draft = drafts[peId] ?? { warmup: [], working: [] }
+    const draft = drafts[peId] ?? { warmup: [], working: [], dropset: [] }
     return {
       planExercise: displayPe,
       exercise: exerciseBankById.get(effectiveExId) ?? null,
       warmupSets: draft.warmup,
       workingSets: draft.working,
+      dropsetSets: draft.dropset ?? [],
       onWarmupSetsChange: (warmup) => setDrafts((d) => ({ ...d, [peId]: { ...d[peId], warmup } })),
       onWorkingSetsChange: (working) => setDrafts((d) => ({ ...d, [peId]: { ...d[peId], working } })),
+      onDropsetSetsChange: (dropset) => setDrafts((d) => ({ ...d, [peId]: { ...d[peId], dropset } })),
     }
   }
 
@@ -343,22 +444,40 @@ export default function SessionLogForm({
 
   async function handleSave() {
     setError(null)
+    // If the timer's still running, freeze it now rather than trusting
+    // whatever durationMinutes' last periodic tick happened to write - this
+    // computes fresh, right at the moment of saving, and updates state too
+    // (rather than relying on stopTimer(), whose setState wouldn't be
+    // visible until the next render) so the payload below uses the same
+    // value the form will go on to show.
+    const finalDurationMinutes =
+      timerStartedAt !== null ? String(minutesElapsed(timerStartedAt, Date.now())) : durationMinutes
+    if (timerStartedAt !== null) {
+      setDurationMinutes(finalDurationMinutes)
+      setTimerStartedAt(null)
+    }
     const loggedExercises = exerciseOrder
       .map((peId, order) => {
-        const draft = drafts[peId] ?? { warmup: [], working: [] }
+        const draft = drafts[peId] ?? { warmup: [], working: [], dropset: [] }
         const pe = exercisesById.get(peId)
         const isUnilateral = pe
           ? (exerciseBankById.get(effectiveExerciseId(pe, overrides))?.is_unilateral ?? false)
           : false
         const warmupSets = draftSetsToPayload(draft.warmup, weightUnit, 1, isUnilateral)
         const workingSets = draftSetsToPayload(draft.working, weightUnit, warmupSets.length + 1, isUnilateral)
+        const dropsetSets = draftSetsToPayload(
+          draft.dropset ?? [],
+          weightUnit,
+          warmupSets.length + workingSets.length + 1,
+          isUnilateral,
+        )
         const substitutedExercise = overrides[peId]?.substitutedExercise ?? null
         const supersetPartner = pe ? effectiveSupersetPartner(peId, exercisesById, overrides) : null
         return {
           plan_exercise: peId,
           substituted_exercise: substitutedExercise,
           superset_partner: supersetPartner,
-          sets: [...warmupSets, ...workingSets],
+          sets: [...warmupSets, ...workingSets, ...dropsetSets],
           order,
         }
       })
@@ -377,7 +496,8 @@ export default function SessionLogForm({
       plan_session: session.id,
       date,
       notes: notes.trim(),
-      duration_minutes: durationMinutes.trim() ? Number(durationMinutes) : null,
+      duration_minutes: finalDurationMinutes.trim() ? Number(finalDurationMinutes) : null,
+      calories_burned: caloriesBurned.trim() ? Number(caloriesBurned) : null,
       logged_exercises: loggedExercises.map(({ plan_exercise, substituted_exercise, superset_partner, sets }) => ({
         plan_exercise,
         substituted_exercise,
@@ -458,8 +578,10 @@ export default function SessionLogForm({
                 exercise={entryA.exercise}
                 warmupSets={entryA.warmupSets}
                 workingSets={entryA.workingSets}
+                dropsetSets={entryA.dropsetSets}
                 onWarmupSetsChange={entryA.onWarmupSetsChange}
                 onWorkingSetsChange={entryA.onWorkingSetsChange}
+                onDropsetSetsChange={entryA.onDropsetSetsChange}
               />
             </>
           ) : null}
@@ -498,33 +620,56 @@ export default function SessionLogForm({
         </div>
       </div>
 
-      <div className="flex flex-col gap-1.5 rounded-lg border border-border px-3 py-2.5">
-        <div className="flex items-center justify-between gap-2">
-          <Label className="text-xs font-normal text-muted-foreground">Weight unit</Label>
-          <div className="flex gap-1 rounded-full bg-muted p-0.5 text-xs">
-            {(['lb', 'kg'] as const).map((unit) => (
-              <button
-                key={unit}
-                type="button"
-                onClick={() => setWeightUnit(unit)}
-                className={cn(
-                  'rounded-full px-2 py-0.5 font-medium',
-                  weightUnit === unit ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground',
-                )}
-              >
-                {unit}
-              </button>
-            ))}
-          </div>
+      <div className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2.5">
+        <div className="flex flex-col">
+          <span className="text-sm font-medium">Workout timer</span>
+          {timerStartedAt !== null ? (
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {formatElapsed(nowTick - timerStartedAt)} elapsed
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">Fills in duration below automatically</span>
+          )}
         </div>
-        <p className="text-xs text-muted-foreground">
-          Applies to every exercise below. To change your default, go to{' '}
-          <Link to="/preferences" className="underline underline-offset-2">
-            Unit Preferences
-          </Link>
-          .
-        </p>
+        <Button
+          type="button"
+          size="sm"
+          variant={timerStartedAt === null ? 'outline' : 'default'}
+          onClick={timerStartedAt === null ? handleStartTimer : stopTimer}
+        >
+          {timerStartedAt === null ? 'Start session' : 'Stop'}
+        </Button>
       </div>
+
+      {isFirstLog && (
+        <div className="flex flex-col gap-1.5 rounded-lg border border-border px-3 py-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <Label className="text-xs font-normal text-muted-foreground">Weight unit</Label>
+            <div className="flex gap-1 rounded-full bg-muted p-0.5 text-xs">
+              {(['lb', 'kg'] as const).map((unit) => (
+                <button
+                  key={unit}
+                  type="button"
+                  onClick={() => setWeightUnit(unit)}
+                  className={cn(
+                    'rounded-full px-2 py-0.5 font-medium',
+                    weightUnit === unit ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground',
+                  )}
+                >
+                  {unit}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Applies to every exercise below. To change your default, go to{' '}
+            <Link to="/preferences" className="underline underline-offset-2">
+              Unit Preferences
+            </Link>
+            .
+          </p>
+        </div>
+      )}
 
       <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => setReordering((r) => !r)}>
         {reordering ? 'Done reordering' : 'Reorder exercises'}
@@ -620,9 +765,42 @@ export default function SessionLogForm({
           inputMode="numeric"
           min="0"
           value={durationMinutes}
-          onChange={(e) => setDurationMinutes(e.target.value)}
-          className="w-28"
+          onChange={(e) => {
+            setDurationMinutes(e.target.value)
+            // A manual edit takes over from the timer immediately, same as
+            // Stop - it's the trainee's number now, not the timer's.
+            if (timerStartedAt !== null) setTimerStartedAt(null)
+          }}
+          className="ml-auto w-28"
         />
+      </div>
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-2">
+          <Label htmlFor="log-calories" className="shrink-0">
+            Calories burned (optional)
+          </Label>
+          <Input
+            id="log-calories"
+            type="number"
+            inputMode="numeric"
+            min="0"
+            placeholder="from watch"
+            value={caloriesBurned}
+            onChange={(e) => setCaloriesBurned(e.target.value)}
+            className="ml-auto w-28"
+          />
+        </div>
+        <p className="text-justify text-xs text-muted-foreground">
+          For a more precise daily total, add your day's total in{' '}
+          <Link
+            to="/tracker"
+            state={{ scrollTo: 'daily-active-energy-field' }}
+            className="underline underline-offset-2"
+          >
+            Daily → Active energy (kcal)
+          </Link>{' '}
+          instead — this is still useful for your own history either way.
+        </p>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}

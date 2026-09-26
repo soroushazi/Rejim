@@ -88,7 +88,7 @@ class WorkoutLogExportView(APIView):
                 logged_exercise__session__trainee=request.user,
                 logged_exercise__session__date__range=(start, end),
             )
-            .select_related("logged_exercise__session__plan_session", "logged_exercise__plan_exercise__exercise")
+            .select_related("logged_exercise__planned_exercise", "logged_exercise__substituted_exercise")
             .order_by("logged_exercise__session__date", "logged_exercise__order", "set_number")
         )
 
@@ -109,6 +109,7 @@ class WorkoutLogExportView(APIView):
                 "reps_done_right",
                 "rest_seconds",
                 "is_warmup",
+                "is_dropset",
                 "rpe",
                 "rpe_left",
                 "rpe_right",
@@ -116,11 +117,21 @@ class WorkoutLogExportView(APIView):
         )
         for s in sets:
             session = s.logged_exercise.session
+            le = s.logged_exercise
+            # Resolved the same way as the JSON API (substitution wins, else
+            # the snapshotted planned exercise) - both `plan_session_label`
+            # and `planned_exercise` survive the underlying plan_session/
+            # plan_exercise being deleted later (SET_NULL, not CASCADE - see
+            # the model's own comment), so this export keeps working for old
+            # logs even after a trainer reshapes the plan.
+            exercise_name = le.substituted_exercise.name if le.substituted_exercise_id else (
+                le.planned_exercise.name if le.planned_exercise_id else "Deleted exercise"
+            )
             writer.writerow(
                 [
                     session.date,
-                    session.plan_session.label,
-                    s.logged_exercise.plan_exercise.exercise.name,
+                    session.plan_session_label,
+                    exercise_name,
                     s.set_number,
                     s.weight,
                     s.weight_unit,
@@ -131,6 +142,7 @@ class WorkoutLogExportView(APIView):
                     s.reps_done_right,
                     s.rest_seconds,
                     s.is_warmup,
+                    s.is_dropset,
                     s.rpe,
                     s.rpe_left,
                     s.rpe_right,
@@ -158,6 +170,7 @@ class DailyMetricsExportView(APIView):
                 "weight",
                 "weight_unit",
                 "steps",
+                "active_energy_kcal",
                 "sleep_hours",
                 "bedtime",
                 "sleep_quality",
@@ -177,6 +190,7 @@ class DailyMetricsExportView(APIView):
                     m.weight,
                     m.weight_unit,
                     m.steps,
+                    m.active_energy_kcal,
                     m.sleep_hours,
                     m.bedtime,
                     m.sleep_quality,
@@ -194,6 +208,6 @@ class DailyMetricsExportView(APIView):
             .order_by("date")
         ):
             writer.writerow(
-                ["activity", a.date, "", "", "", "", "", "", "", "", a.activity_met.name, a.duration_minutes, a.calories_burned, a.notes]
+                ["activity", a.date, "", "", "", "", "", "", "", "", "", a.activity_met.name, a.duration_minutes, a.calories_burned, a.notes]
             )
         return response

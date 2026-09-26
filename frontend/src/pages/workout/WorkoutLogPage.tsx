@@ -78,6 +78,7 @@ export default function WorkoutLogPage() {
       existingLog={existingLog}
       onSaved={handleSaved}
       onDeleted={handleDeleted}
+      isFirstLog={sessions.length === 0}
     />
   )
 }

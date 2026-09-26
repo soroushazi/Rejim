@@ -28,6 +28,7 @@ export default function SessionHistoryRow({ session }: { session: WorkoutSession
         <span className="whitespace-nowrap text-xs text-muted-foreground">
           {exerciseCount} exercise{exerciseCount === 1 ? '' : 's'} · {setCount} set{setCount === 1 ? '' : 's'}
           {session.duration_minutes !== null ? ` · ${session.duration_minutes} min` : ''}
+          {session.calories_burned !== null ? ` · ${session.calories_burned} kcal` : ''}
         </span>
       </button>
 
@@ -49,7 +50,7 @@ export default function SessionHistoryRow({ session }: { session: WorkoutSession
                         <li key={s.id} className="flex items-center justify-between gap-2 text-muted-foreground">
                           <span>
                             Set {s.set_number}
-                            {s.is_warmup ? ' · warm-up' : ''}
+                            {s.is_warmup ? ' · warm-up' : s.is_dropset ? ' · drop set' : ''}
                           </span>
                           <span>
                             {s.weight === null ? (

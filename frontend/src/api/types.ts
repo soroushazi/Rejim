@@ -436,6 +436,7 @@ export type LoggedSetEntry = {
   reps_done_right: number | null
   rest_seconds: number | null
   is_warmup: boolean
+  is_dropset: boolean
   rpe: number | null
   rpe_left: number | null
   rpe_right: number | null
@@ -443,7 +444,11 @@ export type LoggedSetEntry = {
 
 export type LoggedExerciseEntry = {
   id: number
-  plan_exercise: number
+  /** Null if the PlanExercise this was originally logged against has since
+   * been deleted (e.g. the trainer swapped it out) - the log itself is
+   * never destroyed by that; `exercise_name` keeps resolving from a
+   * snapshot taken at save time regardless. */
+  plan_exercise: number | null
   /** Reflects an off-program substitution when one was logged (see
    * substituted_exercise) - always the exercise actually performed. */
   exercise_name: string
@@ -461,11 +466,19 @@ export type LoggedExerciseEntry = {
 export type WorkoutSessionLog = {
   id: number
   trainee: number
-  plan_session: number
+  /** Null if the plan_session this was originally logged against has since
+   * been deleted (e.g. the trainer reshaped the plan) - the log itself is
+   * never destroyed by that. `plan_session_label` is a snapshot taken at
+   * save time specifically so this case still has a label to show. */
+  plan_session: number | null
   plan_session_label: string
   date: string
   notes: string
   duration_minutes: number | null
+  /** Optional device-reported calories for this session (e.g. an Apple
+   * Watch reading) - a per-session detail only, not summed into the Daily
+   * tab's "calories out" total (see CaloriesBurnedBreakdown). */
+  calories_burned: number | null
   logged_exercises: LoggedExerciseEntry[]
 }
 
@@ -482,6 +495,7 @@ export type NewLoggedSet = {
   reps_done_right?: number
   rest_seconds?: number | null
   is_warmup?: boolean
+  is_dropset?: boolean
   rpe?: number | null
   rpe_left?: number | null
   rpe_right?: number | null
@@ -499,6 +513,7 @@ export type NewWorkoutSessionLog = {
   date: string
   notes?: string
   duration_minutes?: number | null
+  calories_burned?: number | null
   logged_exercises: NewLoggedExercise[]
 }
 
@@ -508,7 +523,13 @@ export type DailyMetric = {
   date: string
   weight: string | null
   weight_unit: WeightUnit
+  // Movement metric only - never converted to calories, see
+  // CaloriesBurnedBreakdown/active_energy_kcal below.
   steps: number | null
+  // The trainee's own device-reported daily Active Energy total (e.g. Apple
+  // Watch's "Active Calories") - feeds the "calories out" total directly,
+  // replacing our own now-removed step/workout-based estimate.
+  active_energy_kcal: number | null
   sleep_hours: string | null
   // "HH:MM:SS" (DRF's default TimeField serialization) or null - see
   // lib/bedtime.ts for the 8pm-based display scale used to chart it.
@@ -524,6 +545,7 @@ export type NewDailyMetric = {
   weight: string | null
   weight_unit: WeightUnit
   steps: number | null
+  active_energy_kcal: number | null
   sleep_hours: string | null
   bedtime: string | null
   sleep_quality: number | null
@@ -536,6 +558,10 @@ export type ActivityMET = {
   id: number
   name: string
   met_value: string
+  /** Approximate walking/running-gait cadence for this activity type, or
+   * null if it doesn't generate steps (cycling, swimming, lifting, ...) -
+   * see CaloriesBurnedBreakdown's Tier 2. */
+  steps_per_minute: string | null
 }
 
 export type ActivityLogEntry = {
@@ -559,8 +585,8 @@ export type NewActivityLogEntry = {
 
 /** Read-side rollup from GET /tracker/daily-summary/?date= - calories/macros
  * consumed (Diet logs), calories burned (an estimated TDEE from the
- * trainee's body stats, plus logged workouts and ActivityLog entries - see
- * tracker/services.py::calculate_tdee), net balance, and the diet
+ * trainee's body stats plus whichever movement-energy tier applies for that
+ * day - see tracker/services.py::calculate_tdee), net balance, and the diet
  * plan's target for a planned-vs-actual comparison (null if no plan exists
  * yet). */
 export type DailySummary = {
@@ -581,21 +607,34 @@ export type DailySummary = {
   net_calories: number
 }
 
-/** TDEE = bmr + neat + (workout_calories + activity_calories) + tef - see
- * tdee-calculation-spec.md at the repo root and tracker/services.py::calculate_tdee. */
+/** TDEE = bmr + movement energy + tef - see tdee-calculation-spec.md at the
+ * repo root (including its two revision notes) and
+ * tracker/services.py::calculate_tdee for the full tier waterfall. Movement
+ * energy comes from exactly one of three tiers, decided per day by what
+ * data actually exists that day - `tier` says which, and only that tier's
+ * field(s) below are non-null:
+ *   1. `active_energy` - a daily device-reported total was entered. Any
+ *      logged workout/activity calories that day are informational only.
+ *   2. `logged_activity_calories` (device-reported, summed across the
+ *      day's logged workouts/activities) + `neat` (from whatever steps
+ *      weren't already attributed to a step-generating logged activity).
+ *   3. `neat` only, from the full day's steps - no per-session calories
+ *      were logged at all, so this is a lower-confidence, partial-data
+ *      estimate (flag it in the UI rather than presenting it like 1/2). */
 export type CaloriesBurnedBreakdown = {
   /** Basal metabolic rate (Mifflin-St Jeor), or null if the trainee's
    * profile lacks height/age/a resolvable weight. */
   bmr: number | null
-  /** Non-exercise activity thermogenesis, from that day's step count - 0 if no
-   * steps logged (or bmr's weight is unresolvable), never a bucketed guess. */
-  neat: number
-  /** MET-based estimate for logged WorkoutSessions that day (intensity inferred
-   * from average logged RPE across working sets - see calculate_tdee). */
-  workout_calories: number
-  /** MET-based estimate for logged ActivityLog entries that day, or each
-   * entry's own manually-entered calories_burned when present. */
-  activity_calories: number
+  tier: 1 | 2 | 3
+  /** Tier 1 only: the trainee's own device-reported Active Energy for the
+   * day (DailyMetric.active_energy_kcal). */
+  active_energy: number | null
+  /** Tier 2 only: sum of that day's WorkoutSession/ActivityLog entries that
+   * have their own device-reported calories_burned. */
+  logged_activity_calories: number | null
+  /** Tier 2 (from steps not attributable to a step-generating logged
+   * activity) or Tier 3 (from the full day's steps) - null in Tier 1. */
+  neat: number | null
   /** Thermic effect of food: 10% of that day's logged food calories. */
   tef: number
   total: number
@@ -678,6 +717,7 @@ export type ExerciseHistorySet = {
   reps_done_right: number | null
   rest_seconds: number | null
   is_warmup: boolean
+  is_dropset: boolean
   rpe: number | null
   rpe_left: number | null
   rpe_right: number | null

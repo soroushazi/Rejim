@@ -204,11 +204,15 @@ class LoggedSetViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
         exercise_id = self.request.query_params.get("exercise")
         if exercise_id:
             # An off-program substitution moves a set's "true" exercise away
-            # from its plan_exercise default - match sets substituted *to*
-            # this exercise, or un-substituted sets whose plan default *is*
+            # from its planned default - match sets substituted *to* this
+            # exercise, or un-substituted sets whose planned default *is*
             # this exercise (mirrors LoggedSetSerializer.get_exercise).
+            # `planned_exercise_id` (not plan_exercise__exercise_id) so a
+            # deleted plan_exercise doesn't silently drop that history out of
+            # this filter - see the model's own comment on why plan_exercise
+            # is SET_NULL, not CASCADE.
             queryset = queryset.filter(
                 Q(logged_exercise__substituted_exercise_id=exercise_id)
-                | (Q(logged_exercise__substituted_exercise__isnull=True) & Q(logged_exercise__plan_exercise__exercise_id=exercise_id))
+                | (Q(logged_exercise__substituted_exercise__isnull=True) & Q(logged_exercise__planned_exercise_id=exercise_id))
             )
         return queryset

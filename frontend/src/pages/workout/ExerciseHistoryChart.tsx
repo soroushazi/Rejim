@@ -85,7 +85,7 @@ export default function ExerciseHistoryChart({
   // altogether once every row for an exercise is shaped this way).
   const working = history.filter(
     (s): s is ExerciseHistorySet & { weight: string; reps_done: number } =>
-      !s.is_warmup && s.weight !== null && s.reps_done !== null,
+      !s.is_warmup && !s.is_dropset && s.weight !== null && s.reps_done !== null,
   )
   const byDate = new Map<string, typeof working>()
   for (const s of working) {

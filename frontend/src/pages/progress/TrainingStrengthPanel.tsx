@@ -77,7 +77,7 @@ export default function TrainingStrengthPanel({ range, traineeId }: Props) {
         // excluded rather than coerced into a misleading "PR: 0".
         const working = history.filter(
           (s): s is typeof s & { weight: string; reps_done: number } =>
-            !s.is_warmup && s.weight !== null && s.reps_done !== null,
+            !s.is_warmup && !s.is_dropset && s.weight !== null && s.reps_done !== null,
         )
         if (working.length === 0) {
           setCurrentPr(null)

@@ -18,8 +18,10 @@ export type ExerciseLogEntry = {
   exercise: Exercise | null
   warmupSets: DraftSet[]
   workingSets: DraftSet[]
+  dropsetSets: DraftSet[]
   onWarmupSetsChange: (sets: DraftSet[]) => void
   onWorkingSetsChange: (sets: DraftSet[]) => void
+  onDropsetSetsChange: (sets: DraftSet[]) => void
 }
 
 function useHistory(exerciseId: number) {
@@ -45,12 +47,25 @@ function useHistory(exerciseId: number) {
  * side (see the `flex-col` wrapper below), not side by side - a 2-column
  * grid squeezed each set-editor row too tight on a phone. */
 function WarmupColumn({ entry }: { entry: ExerciseLogEntry }) {
-  const { planExercise, exercise, warmupSets, onWarmupSetsChange } = entry
+  const { planExercise, exercise, warmupSets, workingSets, onWarmupSetsChange, onWorkingSetsChange } = entry
   const isUnilateral = exercise?.is_unilateral ?? false
   const hasActive = warmupSets.some((s) => !s.confirmed)
 
   function update(index: number, patch: Partial<DraftSet>) {
-    onWarmupSetsChange(warmupSets.map((s, i) => (i === index ? { ...s, ...patch } : s)))
+    const nextWarmup = warmupSets.map((s, i) => (i === index ? { ...s, ...patch } : s))
+    onWarmupSetsChange(nextWarmup)
+    // Backfills the pre-seeded-blank first round set for this exercise, same
+    // rationale as ExerciseLogBlock's updateWarmup.
+    if (patch.confirmed && workingSets.length > 0 && !workingSets[0].confirmed && workingSets[0].weight === '') {
+      const confirmedWarmup = nextWarmup[index]
+      onWorkingSetsChange(
+        workingSets.map((s, i) =>
+          i === 0
+            ? { ...s, weight: confirmedWarmup.weight, weight_left: confirmedWarmup.weight_left, weight_right: confirmedWarmup.weight_right }
+            : s,
+        ),
+      )
+    }
   }
   function remove(index: number) {
     onWarmupSetsChange(warmupSets.filter((_, i) => i !== index))
@@ -88,9 +103,73 @@ function WarmupColumn({ entry }: { entry: ExerciseLogEntry }) {
           variant="outline"
           size="sm"
           className="self-start"
-          onClick={() => onWarmupSetsChange([...warmupSets, newDraftSet(true)])}
+          onClick={() => onWarmupSetsChange([...warmupSets, newDraftSet(true, false, warmupSets[warmupSets.length - 1])])}
         >
           + Add warm-up set
+        </Button>
+      )}
+    </div>
+  )
+}
+
+/** One side's drop-set section - independent per exercise, same rationale as
+ * WarmupColumn, but only enabled (its "+ Add drop set" button shown) once
+ * every round for both exercises is confirmed, since a drop set follows an
+ * exercise's own last working set. Kept mounted (rather than unmounted) once
+ * it has entries even if `enabled` later goes false, so editing an already-
+ * confirmed round back open doesn't hide already-entered drop sets. */
+function DropsetColumn({ entry, enabled }: { entry: ExerciseLogEntry; enabled: boolean }) {
+  const { planExercise, exercise, warmupSets, workingSets, dropsetSets, onDropsetSetsChange } = entry
+  const isUnilateral = exercise?.is_unilateral ?? false
+  const hasActive = dropsetSets.some((s) => !s.confirmed)
+
+  function update(index: number, patch: Partial<DraftSet>) {
+    onDropsetSetsChange(dropsetSets.map((s, i) => (i === index ? { ...s, ...patch } : s)))
+  }
+  function remove(index: number) {
+    onDropsetSetsChange(dropsetSets.filter((_, i) => i !== index))
+  }
+
+  if (!enabled && dropsetSets.length === 0) return null
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className="text-sm font-medium">{planExercise.exercise_name}</p>
+      {dropsetSets.map((set, i) =>
+        set.confirmed ? (
+          <SetSummaryRow
+            key={i}
+            label={`Drop set ${i + 1}`}
+            set={set}
+            isPr={null}
+            isUnilateral={isUnilateral}
+            onEdit={() => update(i, { confirmed: false })}
+            onRemove={() => remove(i)}
+          />
+        ) : (
+          <SetEditorRow
+            key={i}
+            label={`Drop set ${i + 1}`}
+            set={set}
+            isUnilateral={isUnilateral}
+            onChange={(patch) => update(i, patch)}
+            onConfirm={() => update(i, { confirmed: true })}
+            onRemove={() => remove(i)}
+          />
+        ),
+      )}
+      {enabled && !hasActive && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="self-start"
+          onClick={() => {
+            const previous = dropsetSets[dropsetSets.length - 1] ?? workingSets[workingSets.length - 1] ?? warmupSets[warmupSets.length - 1]
+            onDropsetSetsChange([...dropsetSets, newDraftSet(false, true, previous)])
+          }}
+        >
+          + Add drop set
         </Button>
       )}
     </div>
@@ -149,8 +228,8 @@ export default function SupersetLogBlock({ entries }: Props) {
     const nextA = Array.from({ length: roundCount }, (_, j) => (j === i ? { ...roundsAt(j)[0], confirmed: true } : roundsAt(j)[0]))
     const nextB = Array.from({ length: roundCount }, (_, j) => (j === i ? { ...roundsAt(j)[1], confirmed: true } : roundsAt(j)[1]))
     if (i === roundCount - 1 && roundCount < targetRounds) {
-      nextA.push(newDraftSet(false))
-      nextB.push(newDraftSet(false))
+      nextA.push(newDraftSet(false, false, nextA[i]))
+      nextB.push(newDraftSet(false, false, nextB[i]))
     }
     a.onWorkingSetsChange(nextA)
     b.onWorkingSetsChange(nextB)
@@ -162,8 +241,10 @@ export default function SupersetLogBlock({ entries }: Props) {
   }
 
   function addRound() {
-    a.onWorkingSetsChange([...Array.from({ length: roundCount }, (_, j) => roundsAt(j)[0]), newDraftSet(false)])
-    b.onWorkingSetsChange([...Array.from({ length: roundCount }, (_, j) => roundsAt(j)[1]), newDraftSet(false)])
+    const lastA = a.workingSets[a.workingSets.length - 1] ?? a.warmupSets[a.warmupSets.length - 1]
+    const lastB = b.workingSets[b.workingSets.length - 1] ?? b.warmupSets[b.warmupSets.length - 1]
+    a.onWorkingSetsChange([...Array.from({ length: roundCount }, (_, j) => roundsAt(j)[0]), newDraftSet(false, false, lastA)])
+    b.onWorkingSetsChange([...Array.from({ length: roundCount }, (_, j) => roundsAt(j)[1]), newDraftSet(false, false, lastB)])
   }
 
   const restSeconds = Math.max(a.planExercise.default_rest_seconds, b.planExercise.default_rest_seconds)
@@ -211,10 +292,10 @@ export default function SupersetLogBlock({ entries }: Props) {
           if (bothConfirmed) {
             const prA = isUnilateralA
               ? null
-              : checkPersonalRecord(historyA, Number(setA.weight), Number(setA.reps_done), setA.is_warmup)
+              : checkPersonalRecord(historyA, Number(setA.weight), Number(setA.reps_done), setA.is_warmup, setA.is_dropset)
             const prB = isUnilateralB
               ? null
-              : checkPersonalRecord(historyB, Number(setB.weight), Number(setB.reps_done), setB.is_warmup)
+              : checkPersonalRecord(historyB, Number(setB.weight), Number(setB.reps_done), setB.is_warmup, setB.is_dropset)
             return (
               <div key={i} className="flex items-center gap-2 rounded-md bg-muted px-2.5 py-1.5 text-sm">
                 <button
@@ -287,6 +368,14 @@ export default function SupersetLogBlock({ entries }: Props) {
           </Button>
         )}
       </div>
+
+      {(allRoundsConfirmed || a.dropsetSets.length > 0 || b.dropsetSets.length > 0) && (
+        <div className="flex flex-col gap-3">
+          <p className="text-xs font-semibold text-muted-foreground">Drop sets</p>
+          <DropsetColumn entry={a} enabled={allRoundsConfirmed} />
+          <DropsetColumn entry={b} enabled={allRoundsConfirmed} />
+        </div>
+      )}
 
       <RestTimer defaultSeconds={restSeconds} />
     </div>
