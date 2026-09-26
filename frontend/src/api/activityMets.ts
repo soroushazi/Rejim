@@ -7,7 +7,11 @@ export function listActivityMets(): Promise<ActivityMET[]> {
   return apiFetch<ActivityMET[]>('/tracker/activity-mets/')
 }
 
-export function createActivityMet(data: { name: string; met_value: string }): Promise<ActivityMET> {
+export function createActivityMet(data: {
+  name: string
+  met_value: string
+  steps_per_minute?: string | null
+}): Promise<ActivityMET> {
   return apiFetch<ActivityMET>('/tracker/activity-mets/', {
     method: 'POST',
     body: JSON.stringify(data),

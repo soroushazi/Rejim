@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import SearchableSelect from '@/components/SearchableSelect'
 
@@ -29,6 +30,9 @@ const EMPTY_DRAFT: DraftState = { activity_met: null, duration_minutes: '', calo
 // A brand-new activity type gets this MET until someone corrects it (Django admin) -
 // same "moderate effort" ballpark as most of the seeded table's own entries.
 const DEFAULT_NEW_ACTIVITY_MET = '4.0'
+// Defaulted once "Generates steps" is toggled on - a moderate walking cadence, same
+// "reasonable starting point, editable" spirit as DEFAULT_NEW_ACTIVITY_MET.
+const DEFAULT_NEW_ACTIVITY_STEPS_PER_MINUTE = '110'
 
 function toDraft(entry: ActivityLogEntry): DraftState {
   return {
@@ -104,6 +108,19 @@ function DraftFields({
           />
         </div>
       </div>
+      <p className="text-justify text-xs text-muted-foreground">
+        For a more precise daily total, add your day's total in{' '}
+        <button
+          type="button"
+          className="underline underline-offset-2"
+          onClick={() =>
+            document.getElementById('daily-active-energy-field')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          }
+        >
+          Active energy (kcal)
+        </button>{' '}
+        above instead — this is still useful for your own history either way.
+      </p>
       <div className="flex flex-col gap-1">
         <Label htmlFor={`${idPrefix}-notes`}>Notes (optional)</Label>
         <Textarea
@@ -129,6 +146,8 @@ export default function ActivityLogSection({ date, canLog, onChange }: Props) {
   const [newActivityDraft, setNewActivityDraft] = useState<{
     name: string
     met_value: string
+    generatesSteps: boolean
+    stepsPerMinute: string
     applyTo: (id: number) => void
   } | null>(null)
   const [creatingActivity, setCreatingActivity] = useState(false)
@@ -164,6 +183,10 @@ export default function ActivityLogSection({ date, canLog, onChange }: Props) {
       const created = await createActivityMet({
         name: newActivityDraft.name.trim(),
         met_value: newActivityDraft.met_value.trim(),
+        steps_per_minute:
+          newActivityDraft.generatesSteps && newActivityDraft.stepsPerMinute.trim()
+            ? newActivityDraft.stepsPerMinute.trim()
+            : null,
       })
       setActivityMets((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)))
       newActivityDraft.applyTo(created.id)
@@ -259,7 +282,7 @@ export default function ActivityLogSection({ date, canLog, onChange }: Props) {
                     idPrefix={`activity-edit-${entry.id}`}
                     activityMets={activityMets}
                     onRequestCreateActivity={(query, applyTo) =>
-                      setNewActivityDraft({ name: query, met_value: DEFAULT_NEW_ACTIVITY_MET, applyTo })
+                      setNewActivityDraft({ name: query, met_value: DEFAULT_NEW_ACTIVITY_MET, generatesSteps: false, stepsPerMinute: DEFAULT_NEW_ACTIVITY_STEPS_PER_MINUTE, applyTo })
                     }
                   />
                   <div className="flex gap-2">
@@ -327,7 +350,7 @@ export default function ActivityLogSection({ date, canLog, onChange }: Props) {
             idPrefix="activity-add"
             activityMets={activityMets}
             onRequestCreateActivity={(query, applyTo) =>
-              setNewActivityDraft({ name: query, met_value: DEFAULT_NEW_ACTIVITY_MET, applyTo })
+              setNewActivityDraft({ name: query, met_value: DEFAULT_NEW_ACTIVITY_MET, generatesSteps: false, stepsPerMinute: DEFAULT_NEW_ACTIVITY_STEPS_PER_MINUTE, applyTo })
             }
           />
           <div className="flex gap-2">
@@ -385,9 +408,46 @@ export default function ActivityLogSection({ date, canLog, onChange }: Props) {
                 light.
               </p>
             </div>
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="new-activity-generates-steps" className="flex flex-col gap-0.5">
+                Generates steps
+                <span className="text-xs font-normal text-muted-foreground">
+                  Has a walking/running gait a watch would count as steps (jogging, hiking, ...) - off for
+                  cycling/swimming/lifting-style activities.
+                </span>
+              </Label>
+              <Switch
+                id="new-activity-generates-steps"
+                checked={newActivityDraft?.generatesSteps ?? false}
+                onCheckedChange={(checked) =>
+                  setNewActivityDraft((prev) => (prev ? { ...prev, generatesSteps: checked } : prev))
+                }
+              />
+            </div>
+            {newActivityDraft?.generatesSteps && (
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="new-activity-spm">Steps per minute</Label>
+                <Input
+                  id="new-activity-spm"
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="1"
+                  value={newActivityDraft.stepsPerMinute}
+                  onChange={(e) =>
+                    setNewActivityDraft((prev) => (prev ? { ...prev, stepsPerMinute: e.target.value } : prev))
+                  }
+                />
+              </div>
+            )}
             <Button
               type="button"
-              disabled={creatingActivity || !newActivityDraft?.name.trim() || !newActivityDraft?.met_value.trim()}
+              disabled={
+                creatingActivity ||
+                !newActivityDraft?.name.trim() ||
+                !newActivityDraft?.met_value.trim() ||
+                (newActivityDraft?.generatesSteps && !newActivityDraft.stepsPerMinute.trim())
+              }
               onClick={handleCreateActivity}
             >
               {creatingActivity ? 'Adding…' : 'Add activity'}

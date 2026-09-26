@@ -51,7 +51,10 @@ export default function DailySummaryCard({ date, refreshKey }: Props) {
   const proteinMinimum = summary.protein_minimum_g
   const proteinStat = proteinMinimum ? proteinStatus(consumedProtein, proteinMinimum) : 'neutral'
 
-  const profileIncomplete = summary.calories_burned_breakdown.bmr === null
+  // Active energy is expected to be blank plenty of days (no watch that day,
+  // no watch at all) - unlike bmr (a one-time profile gap), flagging it here
+  // too would make the tile permanently red for anyone without a wearable.
+  const caloriesOutIncomplete = summary.calories_burned_breakdown.bmr === null
 
   return (
     <div className="flex flex-col gap-3">
@@ -64,7 +67,7 @@ export default function DailySummaryCard({ date, refreshKey }: Props) {
         <div
           className={cn(
             'flex flex-col gap-0.5 rounded-lg bg-muted/50 px-2 py-2.5',
-            profileIncomplete && 'ring-1 ring-inset ring-destructive/40',
+            caloriesOutIncomplete && 'ring-1 ring-inset ring-destructive/40',
           )}
         >
           <span className="flex items-center justify-center gap-0.5 text-xs text-muted-foreground">
@@ -78,7 +81,10 @@ export default function DailySummaryCard({ date, refreshKey }: Props) {
               <Info className="size-3.5" />
             </button>
           </span>
-          <span className="text-lg font-semibold">{round(summary.calories_burned)}</span>
+          <span className="text-lg font-semibold">
+            {summary.calories_burned_breakdown.tier === 3 ? '≈' : ''}
+            {round(summary.calories_burned)}
+          </span>
         </div>
         <div className="flex flex-col gap-0.5 rounded-lg bg-muted/50 px-2 py-2.5">
           <span className="text-xs text-muted-foreground">Net</span>

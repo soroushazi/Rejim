@@ -19,6 +19,7 @@ type FormState = {
   weight: string
   weight_unit: WeightUnit
   steps: string
+  active_energy_kcal: string
   sleep_hours: string
   bedtime: string
   sleep_quality: string
@@ -31,6 +32,7 @@ const EMPTY: FormState = {
   weight: '',
   weight_unit: 'kg',
   steps: '',
+  active_energy_kcal: '',
   sleep_hours: '',
   bedtime: '',
   sleep_quality: '',
@@ -45,6 +47,7 @@ function toFormState(metric: DailyMetric | null, preferredUnit: WeightUnit): For
     weight: metric.weight ?? '',
     weight_unit: metric.weight_unit,
     steps: metric.steps !== null ? String(metric.steps) : '',
+    active_energy_kcal: metric.active_energy_kcal !== null ? String(metric.active_energy_kcal) : '',
     sleep_hours: metric.sleep_hours ?? '',
     // <input type="time">'s own value format is "HH:MM" - drop a stored ":SS"
     // (DRF's default TimeField serialization) rather than showing it.
@@ -134,6 +137,7 @@ export default function DailyMetricForm({ date, canLog }: Props) {
         weight: form.weight.trim() ? form.weight.trim() : null,
         weight_unit: form.weight_unit,
         steps: form.steps.trim() ? Number(form.steps) : null,
+        active_energy_kcal: form.active_energy_kcal.trim() ? Number(form.active_energy_kcal) : null,
         sleep_hours: form.sleep_hours.trim() ? form.sleep_hours.trim() : null,
         bedtime: form.bedtime || null,
         sleep_quality: form.sleep_quality ? Number(form.sleep_quality) : null,
@@ -203,6 +207,20 @@ export default function DailyMetricForm({ date, canLog }: Props) {
             disabled={!canLog}
             value={form.steps}
             onChange={(e) => update('steps', e.target.value)}
+          />
+        </div>
+        <div id="daily-active-energy-field" className="flex flex-col gap-1">
+          <Label htmlFor="daily-active-energy">Active energy (kcal)</Label>
+          <Input
+            id="daily-active-energy"
+            type="number"
+            inputMode="numeric"
+            min="0"
+            step="1"
+            placeholder="from your watch"
+            disabled={!canLog}
+            value={form.active_energy_kcal}
+            onChange={(e) => update('active_energy_kcal', e.target.value)}
           />
         </div>
         <div className="flex flex-col gap-1">

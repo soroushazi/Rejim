@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useAuth } from '@/auth/AuthContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { toDateKey } from '@/lib/date'
@@ -12,6 +13,16 @@ export default function TrackerPage() {
   const canLog = !!user?.is_trainee
   const [date, setDate] = useState(() => toDateKey(new Date()))
   const [summaryRefreshKey, setSummaryRefreshKey] = useState(0)
+
+  // Lets a hint elsewhere in the app (e.g. "add your Active Energy total
+  // instead" on the workout/activity calorie fields) deep-link straight to
+  // the Metrics card's field, same pattern as ProfilePage's own scrollTo.
+  const location = useLocation()
+  useEffect(() => {
+    const scrollTo = (location.state as { scrollTo?: string } | null)?.scrollTo
+    if (!scrollTo) return
+    document.getElementById(scrollTo)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [location])
 
   return (
     <div className="flex flex-col gap-3">

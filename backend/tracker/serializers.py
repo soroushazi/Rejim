@@ -13,6 +13,7 @@ class DailyMetricSerializer(serializers.ModelSerializer):
             "weight",
             "weight_unit",
             "steps",
+            "active_energy_kcal",
             "sleep_hours",
             "bedtime",
             "sleep_quality",
@@ -35,7 +36,7 @@ class DailyMetricSerializer(serializers.ModelSerializer):
 class ActivityMETSerializer(serializers.ModelSerializer):
     class Meta:
         model = ActivityMET
-        fields = ["id", "name", "met_value"]
+        fields = ["id", "name", "met_value", "steps_per_minute"]
 
 
 class ActivityLogSerializer(serializers.ModelSerializer):

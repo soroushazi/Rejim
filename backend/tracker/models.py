@@ -17,7 +17,18 @@ class DailyMetric(models.Model):
     date = models.DateField()
     weight = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
     weight_unit = models.CharField(max_length=2, choices=WeightUnit.choices, default=WeightUnit.KG)
+    # Movement metric only - never converted to calories (see
+    # tracker/services.py::calculate_tdee and the revision note in
+    # tdee-calculation-spec.md for why steps and active_energy_kcal aren't
+    # both summed into the daily total).
     steps = models.PositiveIntegerField(null=True, blank=True)
+    # The trainee's own device-reported daily Active Energy total (e.g.
+    # Apple Watch's "Active Calories") - replaces our own step/workout-based
+    # additive estimate in calculate_tdee's total, since a wearable's own
+    # number already reconciles overlapping windows (e.g. a run that's both
+    # a logged workout and part of that day's step count) the way ours
+    # couldn't without double-counting.
+    active_energy_kcal = models.PositiveIntegerField(null=True, blank=True)
     sleep_hours = models.DecimalField(max_digits=4, decimal_places=2, null=True, blank=True)
     # Time of day only (no date) - a bedtime naturally falls on "the previous
     # evening" relative to the DailyMetric's own date, but nothing here needs
@@ -54,6 +65,12 @@ class ActivityMET(models.Model):
 
     name = models.CharField(max_length=100, unique=True)
     met_value = models.DecimalField(max_digits=4, decimal_places=1)
+    # Null/0 = doesn't generate steps (cycling, swimming, lifting, machine-based
+    # cardio, ...); a positive value = this activity's approximate walking/running-gait
+    # cadence, used by calculate_tdee to estimate and subtract the steps a logged
+    # instance of it would have contributed to that day's step count, so they aren't
+    # double-counted against NEAT (see tdee-calculation-spec.md's Tier 2).
+    steps_per_minute = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True)
 
     class Meta:
         ordering = ["name"]
