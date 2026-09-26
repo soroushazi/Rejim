@@ -22,10 +22,10 @@ def _resolve_range(request):
 
 
 class ProgressOverviewView(APIView):
-    """Daily arrays of weight/steps/sleep/water/calories for the overview
-    chart - one dense row per calendar day in range (gap-filled with null),
-    since the chart needs a stable x-axis across series with different
-    natural sampling rates."""
+    """Daily arrays of weight/steps/sleep/calories for the overview chart -
+    one dense row per calendar day in range (gap-filled with null), since
+    the chart needs a stable x-axis across series with different natural
+    sampling rates."""
 
     permission_classes = [IsAuthenticated]
 
@@ -61,7 +61,6 @@ class ProgressOverviewView(APIView):
                     "weight_kg": to_kg(metric.weight, metric.weight_unit) if metric and metric.weight is not None else None,
                     "steps": metric.steps if metric else None,
                     "sleep_hours": metric.sleep_hours if metric else None,
-                    "water_intake_ml": metric.water_intake_ml if metric else None,
                     "calories_consumed": calories_consumed,
                     "calories_burned": calories_burned,
                     "net_calories": net_calories,

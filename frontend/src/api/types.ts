@@ -732,7 +732,6 @@ export type ProgressOverviewDay = {
   weight_kg: number | null
   steps: number | null
   sleep_hours: number | null
-  water_intake_ml: number | null
   calories_consumed: number | null
   calories_burned: number | null
   net_calories: number | null

@@ -7,9 +7,9 @@ import { fromKg, toKg } from '@/lib/weightUnits'
 import { usePreferredWeightUnit } from '@/lib/usePreferredWeightUnit'
 import OverviewInfoDialog from './OverviewInfoDialog'
 
-type SeriesKey = 'weight' | 'netCalories' | 'sleepHours' | 'steps' | 'water'
+type SeriesKey = 'weight' | 'netCalories' | 'sleepHours' | 'steps'
 type NonWeightKey = Exclude<SeriesKey, 'weight'>
-const NON_WEIGHT_KEYS: NonWeightKey[] = ['netCalories', 'sleepHours', 'steps', 'water']
+const NON_WEIGHT_KEYS: NonWeightKey[] = ['netCalories', 'sleepHours', 'steps']
 
 const W = 600
 const H = 240
@@ -22,7 +22,7 @@ const PAD_BOTTOM = 22
 // Fixed left/right allocation order, per the spec's default-on set (weight,
 // net calories, sleep hours) rendering as 2-left/1-right - additional axes
 // grow margins live rather than always reserving space for all 5.
-const LEFT_ORDER: SeriesKey[] = ['weight', 'sleepHours', 'water']
+const LEFT_ORDER: SeriesKey[] = ['weight', 'sleepHours']
 const RIGHT_ORDER: SeriesKey[] = ['netCalories', 'steps']
 
 // weight's unit depends on the viewer's preference (kg/lb), resolved at
@@ -32,7 +32,6 @@ const SERIES: Record<SeriesKey, { label: string; unit: string; cssVar: string }>
   netCalories: { label: 'Net calories', unit: 'kcal', cssVar: '--chart-2' },
   sleepHours: { label: 'Sleep', unit: 'hr', cssVar: '--chart-3' },
   steps: { label: 'Steps', unit: '', cssVar: '--chart-4' },
-  water: { label: 'Water', unit: 'ml', cssVar: '--chart-5' },
 }
 
 function seriesUnit(key: SeriesKey, weightUnit: WeightUnit) {
@@ -143,7 +142,6 @@ export default function OverviewChart({
     netCalories: true,
     sleepHours: true,
     steps: false,
-    water: false,
   })
   // Weight is plotted as two independent, peer lines rather than one series
   // with a sub-toggle - see OverviewInfoDialog for why each is useful on its
@@ -184,7 +182,6 @@ export default function OverviewChart({
     netCalories: days.map((d) => d.net_calories),
     sleepHours: days.map((d) => d.sleep_hours),
     steps: days.map((d) => d.steps),
-    water: days.map((d) => d.water_intake_ml),
   }
   const weightMA = movingAverage(rawValues.weight, 7)
   const weightGoal = weightGoalKg !== undefined ? fromKg(weightGoalKg, weightUnit) : undefined
@@ -305,7 +302,7 @@ export default function OverviewChart({
               viewBox={`0 0 ${W} ${H}`}
               className={cn('w-full select-none', zoomed && 'h-full')}
               role="img"
-              aria-label="Weight, calories, sleep, steps and water over time"
+              aria-label="Weight, calories, sleep, and steps over time"
             >
               {(Object.keys(SERIES) as SeriesKey[]).map(
                 (key) =>
