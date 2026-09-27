@@ -1,12 +1,13 @@
 import { Plus } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { createDietPlan, createReferenceMeal, getDietPlan, listDietPlans, updateDietPlan, updateReferenceMeal } from '@/api/dietPlan'
-import type { DietPlanDetail } from '@/api/types'
+import type { DietPlanDetail, MealOptionDetail, Nutrients, ReferenceMealDetail } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import PlanHistoryList from '../../trainer/PlanHistoryList'
+import PlanNutritionSummary from './PlanNutritionSummary'
 import ReferenceMealEditor from './ReferenceMealEditor'
 
 const MEAL_SLOTS = ['Breakfast', 'Morning Snack', 'Lunch', 'Afternoon Snack', 'Dinner', 'Evening Snack']
@@ -18,6 +19,28 @@ export default function DietPlanEditor({ traineeId }: { traineeId: number }) {
   const [loading, setLoading] = useState(true)
   const [planName, setPlanName] = useState('')
   const [savingPlan, setSavingPlan] = useState(false)
+  // Which option each meal counts toward the daily total (mealId -> optionId);
+  // a meal with no entry, or whose picked option was since deleted, falls
+  // back to its first option.
+  const [selectedOptions, setSelectedOptions] = useState<Record<number, number>>({})
+  // Live nutrients of each open option's unsaved ingredient draft, so the
+  // totals move as the trainer types amounts rather than only after saving.
+  // An option with no entry (collapsed, never opened) uses its saved values.
+  const [draftNutrients, setDraftNutrients] = useState<Record<number, Nutrients>>({})
+
+  const handleDraftNutrients = useCallback((optionId: number, nutrients: Nutrients | null) => {
+    setDraftNutrients((prev) => {
+      const next = { ...prev }
+      if (nutrients) next[optionId] = nutrients
+      else delete next[optionId]
+      return next
+    })
+  }, [])
+
+  const nutrientsFor = (option: MealOptionDetail) => draftNutrients[option.id] ?? option.nutrients
+
+  const selectedOptionFor = (meal: ReferenceMealDetail) =>
+    meal.options.find((o) => o.id === selectedOptions[meal.id]) ?? meal.options[0] ?? null
 
   // Deliberately doesn't touch `loading` - this also runs after every edit
   // (add a meal/option, save ingredients, reorder, ...) via onChanged, and
@@ -122,6 +145,15 @@ export default function DietPlanEditor({ traineeId }: { traineeId: number }) {
             </CardContent>
           </Card>
 
+          {plan.meals.length > 0 && (
+            <PlanNutritionSummary
+              meals={plan.meals}
+              selectedOptionFor={selectedOptionFor}
+              onSelectOption={(mealId, optionId) => setSelectedOptions((prev) => ({ ...prev, [mealId]: optionId }))}
+              nutrientsFor={nutrientsFor}
+            />
+          )}
+
           <div className="flex flex-col gap-2">
             {plan.meals.map((meal, i) => (
               <ReferenceMealEditor
@@ -132,6 +164,9 @@ export default function DietPlanEditor({ traineeId }: { traineeId: number }) {
                 onMoveUp={() => moveMeal(i, -1)}
                 onMoveDown={() => moveMeal(i, 1)}
                 onChanged={reload}
+                selectedOption={selectedOptionFor(meal)}
+                nutrientsFor={nutrientsFor}
+                onDraftNutrients={handleDraftNutrients}
               />
             ))}
           </div>

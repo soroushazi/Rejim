@@ -8,12 +8,34 @@ import {
   deleteReferenceMealItem,
   updateMealOption,
 } from '@/api/dietPlan'
-import type { MealOptionDetail, ReferenceMealDetail } from '@/api/types'
+import type { MealOptionDetail, Nutrients, ReferenceMealDetail } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import { nutrientsForWeight, scaleNutrients, sumNutrients } from '@/lib/nutrients'
 import IngredientPicker, { type DraftComponent } from '../IngredientPicker'
+import { MacroLine } from './PlanNutritionSummary'
+
+/** Nutrients of an option's in-progress ingredient list. A row added this
+ * session carries its FoodItem and scales from per-100g; a row preloaded from
+ * the saved option doesn't, so it rescales that saved item's
+ * reference_nutrients to whatever weight is now typed in. Rows with no
+ * weight yet contribute nothing. */
+function draftNutrients(draft: DraftComponent[], option: MealOptionDetail): Nutrients {
+  const parts: Nutrients[] = []
+  for (const row of draft) {
+    const grams = Number(row.weight_grams)
+    if (!row.weight_grams.trim() || !Number.isFinite(grams) || grams <= 0) continue
+    if (row.food_item) {
+      parts.push(nutrientsForWeight(row.food_item, grams))
+      continue
+    }
+    const saved = option.items.find((item) => item.food_item === row.ingredient)
+    if (saved) parts.push(scaleNutrients(saved.reference_nutrients, Number(saved.reference_weight_grams), grams))
+  }
+  return sumNutrients(parts)
+}
 
 function MealOptionEditor({
   option,
@@ -23,6 +45,7 @@ function MealOptionEditor({
   onMoveDown,
   onChanged,
   autoExpand,
+  onDraftNutrients,
 }: {
   option: MealOptionDetail
   isFirst: boolean
@@ -33,6 +56,7 @@ function MealOptionEditor({
   // Set right after this option is created, so the trainer lands straight in
   // its ingredient picker instead of a collapsed row they'd have to re-open.
   autoExpand?: boolean
+  onDraftNutrients: (optionId: number, nutrients: Nutrients | null) => void
 }) {
   const [expanded, setExpanded] = useState(!!autoExpand)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -42,6 +66,15 @@ function MealOptionEditor({
   )
   const [saving, setSaving] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const liveNutrients = draftNutrients(draft, option)
+
+  // Report the draft's nutrients up to the plan-level total on every edit,
+  // and withdraw them on unmount (meal collapsed / option deleted) so the
+  // total falls back to the option's saved values.
+  useEffect(() => {
+    onDraftNutrients(option.id, draftNutrients(draft, option))
+  }, [draft, option, onDraftNutrients])
+  useEffect(() => () => onDraftNutrients(option.id, null), [option.id, onDraftNutrients])
 
   async function saveLabel() {
     setSaving(true)
@@ -104,8 +137,11 @@ function MealOptionEditor({
               <ChevronDown className="size-3.5" />
             </button>
           </div>
-          <button type="button" className="truncate text-left text-sm font-medium" onClick={() => setExpanded((v) => !v)}>
-            {option.label} ({option.items.length} ingredients)
+          <button type="button" className="flex min-w-0 flex-col text-left" onClick={() => setExpanded((v) => !v)}>
+            <span className="truncate text-sm font-medium">
+              {option.label} ({option.items.length} ingredients)
+            </span>
+            <MacroLine nutrients={liveNutrients} className="truncate text-xs text-muted-foreground" />
           </button>
         </div>
         <button type="button" onClick={() => setConfirmingDelete(true)} aria-label="Remove option">
@@ -150,9 +186,24 @@ type Props = {
   onMoveUp: () => void
   onMoveDown: () => void
   onChanged: () => void
+  // The option this meal contributes to the plan's daily total, and the
+  // (possibly unsaved-draft) nutrients to show for any option.
+  selectedOption: MealOptionDetail | null
+  nutrientsFor: (option: MealOptionDetail) => Nutrients
+  onDraftNutrients: (optionId: number, nutrients: Nutrients | null) => void
 }
 
-export default function ReferenceMealEditor({ meal, isFirst, isLast, onMoveUp, onMoveDown, onChanged }: Props) {
+export default function ReferenceMealEditor({
+  meal,
+  isFirst,
+  isLast,
+  onMoveUp,
+  onMoveDown,
+  onChanged,
+  selectedOption,
+  nutrientsFor,
+  onDraftNutrients,
+}: Props) {
   const [expanded, setExpanded] = useState(false)
   const [addingOption, setAddingOption] = useState(false)
   const [newOptionLabel, setNewOptionLabel] = useState('')
@@ -202,8 +253,16 @@ export default function ReferenceMealEditor({ meal, isFirst, isLast, onMoveUp, o
               <ChevronDown className="size-4" />
             </button>
           </div>
-          <button type="button" className="truncate text-left font-semibold" onClick={() => setExpanded((v) => !v)}>
-            {meal.label} ({meal.options.length} option{meal.options.length === 1 ? '' : 's'})
+          <button type="button" className="flex min-w-0 flex-col text-left" onClick={() => setExpanded((v) => !v)}>
+            <span className="truncate font-semibold">
+              {meal.label} ({meal.options.length} option{meal.options.length === 1 ? '' : 's'})
+            </span>
+            {selectedOption && (
+              <span className="truncate text-xs text-muted-foreground">
+                {meal.options.length > 1 && `${selectedOption.label}: `}
+                <MacroLine nutrients={nutrientsFor(selectedOption)} />
+              </span>
+            )}
           </button>
         </div>
         <button type="button" onClick={() => setConfirmingDelete(true)} aria-label="Delete meal">
@@ -230,6 +289,7 @@ export default function ReferenceMealEditor({ meal, isFirst, isLast, onMoveUp, o
               onMoveDown={() => moveOption(i, 1)}
               onChanged={onChanged}
               autoExpand={option.id === newlyAddedOptionId}
+              onDraftNutrients={onDraftNutrients}
             />
           ))}
 
