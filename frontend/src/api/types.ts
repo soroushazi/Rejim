@@ -146,7 +146,25 @@ export type Nutrients = {
   vitamin_a_mcg: number | null
 }
 
-export type DietPlanSummary = {
+/** Effective-dated plan versions (backend accounts/plan_versions.py): a
+ * trainer edits a draft copy and publishes it immediately or from a start
+ * date; versions already in effect are read-only history. */
+export type PlanVersionStatus = 'draft' | 'scheduled' | 'active' | 'past'
+
+type PlanVersionFields = {
+  /** null while still an unpublished draft. */
+  effective_from: string | null
+  published_at: string | null
+  status: PlanVersionStatus
+}
+
+/** A day's plan version (full detail), plus the next scheduled one if any. */
+export type PlanForDate<Detail, Summary> = {
+  plan: Detail | null
+  upcoming: Summary | null
+}
+
+export type DietPlanSummary = PlanVersionFields & {
   id: number
   trainee: number
   name: string
@@ -204,7 +222,9 @@ export type LoggedMealItem = {
 export type LoggedMeal = {
   id: number
   trainee: number
-  reference_meal: number
+  /** null once the trainer deleted this plan meal - the log itself survives,
+   * and reference_meal_label/meal_option_label are save-time snapshots. */
+  reference_meal: number | null
   reference_meal_label: string
   date: string
   source: LoggedMealSource
@@ -383,7 +403,7 @@ export type NewFoodItemEditRequest = {
   description: string
 }
 
-export type WorkoutPlanSummary = {
+export type WorkoutPlanSummary = PlanVersionFields & {
   id: number
   trainee: number
   name: string

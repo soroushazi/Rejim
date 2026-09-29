@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from accounts.plan_versions import plan_status
+
 from .models import (
     Exercise,
     ExerciseEditRequest,
@@ -11,6 +13,7 @@ from .models import (
     WorkoutPlan,
     WorkoutSession,
 )
+from .plan_versions import workout_plan_for_date
 
 
 class MuscleGroupSerializer(serializers.ModelSerializer):
@@ -57,16 +60,21 @@ class ExerciseEditRequestSerializer(serializers.ModelSerializer):
 
 
 class WorkoutPlanSerializer(serializers.ModelSerializer):
+    status = serializers.SerializerMethodField()
+
     class Meta:
         model = WorkoutPlan
-        fields = ["id", "trainee", "name", "sessions_per_week", "created_at"]
-        read_only_fields = ["created_at"]
+        fields = ["id", "trainee", "name", "sessions_per_week", "created_at", "effective_from", "published_at", "status"]
+        read_only_fields = ["created_at", "effective_from", "published_at"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         request = self.context.get("request")
         if request is not None:
             self.fields["trainee"].queryset = request.user.trainees.all()
+
+    def get_status(self, obj):
+        return plan_status(obj)
 
 
 class PlanExerciseDetailSerializer(serializers.ModelSerializer):
@@ -107,10 +115,24 @@ class WorkoutPlanDetailSerializer(serializers.ModelSerializer):
     viewing/logging against a plan, not authoring it (mirrors DietPlanDetailSerializer)."""
 
     sessions = PlanSessionDetailSerializer(many=True, read_only=True)
+    status = serializers.SerializerMethodField()
 
     class Meta:
         model = WorkoutPlan
-        fields = ["id", "trainee", "name", "sessions_per_week", "created_at", "sessions"]
+        fields = [
+            "id",
+            "trainee",
+            "name",
+            "sessions_per_week",
+            "created_at",
+            "effective_from",
+            "published_at",
+            "status",
+            "sessions",
+        ]
+
+    def get_status(self, obj):
+        return plan_status(obj)
 
 
 class PlanSessionSerializer(serializers.ModelSerializer):
@@ -259,6 +281,11 @@ class WorkoutSessionSerializer(serializers.ModelSerializer):
         if not logged_exercises:
             raise serializers.ValidationError("At least one logged exercise is required.")
         plan_session = attrs.get("plan_session", getattr(self.instance, "plan_session", None))
+        # Only the plan version that applies to this day can be logged against
+        # (never a draft, nor a version scheduled for later).
+        day_plan = workout_plan_for_date(self.context["request"].user, attrs.get("date", getattr(self.instance, "date", None)))
+        if day_plan is None or plan_session.plan_id != day_plan.id:
+            raise serializers.ValidationError("That session isn't part of your plan for this date.")
         plan_exercise_ids = {le["plan_exercise"].id for le in logged_exercises}
         for logged_exercise in logged_exercises:
             if logged_exercise["plan_exercise"].session_id != plan_session.id:

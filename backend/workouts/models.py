@@ -100,6 +100,10 @@ class WorkoutPlan(models.Model):
     # calculate the plan-consistency streak.
     sessions_per_week = models.PositiveSmallIntegerField(default=3)
     created_at = models.DateTimeField(auto_now_add=True)
+    # Effective-dated versioning (see accounts/plan_versions.py): null while an
+    # unpublished draft; otherwise the first day this version applies.
+    effective_from = models.DateField(null=True, blank=True)
+    published_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.name} ({self.trainee})"

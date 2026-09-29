@@ -1,4 +1,5 @@
 from django.core.management.base import BaseCommand, CommandError
+from django.utils import timezone
 
 from accounts.models import User
 from workouts.models import Exercise, PlanExercise, PlanSession, WorkoutPlan
@@ -61,6 +62,11 @@ class Command(BaseCommand):
         )
         plan.sessions_per_week = 3
         plan.save(update_fields=["sessions_per_week"])
+        if plan.effective_from is None:
+            # Publish it (see accounts/plan_versions.py) so the trainee sees it.
+            plan.effective_from = timezone.localdate()
+            plan.published_at = timezone.now()
+            plan.save(update_fields=["effective_from", "published_at"])
         plan.sessions.all().delete()
 
         for label, order, exercises in SESSIONS:

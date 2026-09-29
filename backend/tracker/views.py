@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 from accounts.mixins import TraineeScopedQuerysetMixin
 from accounts.permissions import IsTraineeWriteTrainerReadOnly
 from nutrition.models import FoodLog
+from nutrition.plan_versions import diet_plan_for_date
 from nutrition.services import sum_nutrients
 from workouts.models import WorkoutSession
 
@@ -140,7 +141,7 @@ class DailySummaryView(APIView):
         calories_burned = calories_out["total"]
         net_calories = (consumed["calories"] or 0) - calories_burned
 
-        diet_plan = trainee.diet_plans.first()
+        diet_plan = diet_plan_for_date(trainee, target_date)
         planned = diet_plan.average_daily_nutrients() if diet_plan else None
 
         # A trainer-set protein target (planned.protein_g) always wins; falls

@@ -11,6 +11,7 @@ from accounts.permissions import (
     IsTraineeWriteTrainerReadOnly,
     IsTrainerWriteTraineeReadOnly,
 )
+from accounts.plan_versions import PlanVersionLockMixin, PlanVersionViewSetMixin
 from connection.mixins import PlanChangeLoggingMixin
 
 from .models import (
@@ -27,6 +28,7 @@ from .models import (
     ReferenceMealItem,
 )
 from .permissions import FoodItemWritePermission
+from .plan_versions import copy_diet_plan, diet_versions, started_diet_plan_ids
 from .serializers import (
     DietaryTagSerializer,
     DietPlanDetailSerializer,
@@ -180,12 +182,24 @@ class QuickLogItemViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
         serializer.save(trainee=self.request.user)
 
 
-class DietPlanViewSet(PlanChangeLoggingMixin, TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
+class DietPlanViewSet(PlanVersionViewSetMixin, PlanChangeLoggingMixin, TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = DietPlan.objects.all()
     serializer_class = DietPlanSerializer
+    detail_serializer_class = DietPlanDetailSerializer
     permission_classes = [IsTrainerWriteTraineeReadOnly]
     trainee_path = "trainee"
+    by_id_actions = TraineeScopedQuerysetMixin.by_id_actions + ("publish",)
     plan_type = "diet"
+    plan_label = "diet plan"
+
+    def _versions(self, trainee):
+        return diet_versions(trainee)
+
+    def _started_plan_ids(self, trainee, on_date):
+        return started_diet_plan_ids(trainee, on_date)
+
+    def _copy_version(self, plan):
+        return copy_diet_plan(plan)
 
     def get_serializer_class(self):
         if self.action == "retrieve":
@@ -205,34 +219,43 @@ class DietPlanViewSet(PlanChangeLoggingMixin, TraineeScopedQuerysetMixin, viewse
         return instance.trainee, f"diet plan '{instance.name}'"
 
 
-class ReferenceMealViewSet(PlanChangeLoggingMixin, TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
+class ReferenceMealViewSet(PlanVersionLockMixin, PlanChangeLoggingMixin, TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = ReferenceMeal.objects.all()
     serializer_class = ReferenceMealSerializer
     permission_classes = [IsTrainerWriteTraineeReadOnly]
     trainee_path = "diet_plan__trainee"
     plan_type = "diet"
 
+    def _plan_of(self, instance):
+        return instance.diet_plan
+
     def _change_log_context(self, instance):
         return instance.diet_plan.trainee, f"meal '{instance.label}'"
 
 
-class MealOptionViewSet(PlanChangeLoggingMixin, TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
+class MealOptionViewSet(PlanVersionLockMixin, PlanChangeLoggingMixin, TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = MealOption.objects.all()
     serializer_class = MealOptionSerializer
     permission_classes = [IsTrainerWriteTraineeReadOnly]
     trainee_path = "meal__diet_plan__trainee"
     plan_type = "diet"
 
+    def _plan_of(self, instance):
+        return instance.meal.diet_plan
+
     def _change_log_context(self, instance):
         return instance.meal.diet_plan.trainee, f"option '{instance.label}' ({instance.meal.label})"
 
 
-class ReferenceMealItemViewSet(PlanChangeLoggingMixin, TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
+class ReferenceMealItemViewSet(PlanVersionLockMixin, PlanChangeLoggingMixin, TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = ReferenceMealItem.objects.all()
     serializer_class = ReferenceMealItemSerializer
     permission_classes = [IsTrainerWriteTraineeReadOnly]
     trainee_path = "option__meal__diet_plan__trainee"
     plan_type = "diet"
+
+    def _plan_of(self, instance):
+        return instance.option.meal.diet_plan
 
     def _change_log_context(self, instance):
         return instance.option.meal.diet_plan.trainee, f"{instance.food_item.name} in {instance.option.label}"

@@ -23,3 +23,12 @@ export function startOfWeek(today: Date = new Date()) {
 export function startOfMonth(today: Date = new Date()) {
   return toDateKey(new Date(today.getFullYear(), today.getMonth(), 1))
 }
+
+/** "Mon, Oct 5" for a date key - e.g. when a scheduled plan version starts. */
+export function formatDateKey(dateKey: string) {
+  return new Date(`${dateKey}T00:00:00`).toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  })
+}

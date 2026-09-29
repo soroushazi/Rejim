@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getDietPlan, listDietPlans } from '@/api/dietPlan'
+import { getDietPlanForDate } from '@/api/dietPlan'
 import type { DietPlanDetail } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { addDays, toDateKey } from '@/lib/date'
@@ -15,9 +15,8 @@ export default function LogPage() {
 
   useEffect(() => {
     let cancelled = false
-    listDietPlans()
-      .then((plans) => (plans.length ? getDietPlan(plans[0].id) : null))
-      .then((detail) => {
+    getDietPlanForDate(toDateKey(new Date()))
+      .then(({ plan: detail }) => {
         if (!cancelled) {
           setPlan(detail)
           setError(false)
@@ -56,24 +55,17 @@ export default function LogPage() {
     return <p className="mt-6 text-center text-sm text-muted-foreground">No diet plan yet.</p>
   }
 
-  const meals = [...plan.meals].sort((a, b) => a.order - b.order)
   const today = toDateKey(new Date())
 
   return (
     <div className="flex flex-col gap-3">
-      {meals.length === 0 ? (
+      {plan.meals.length === 0 ? (
         <p className="mt-6 text-center text-sm text-muted-foreground">No meals in this plan yet.</p>
       ) : (
         <>
           <ul className="flex flex-col gap-2">
             {days.map((date) => (
-              <LogDayCard
-                key={date}
-                date={date}
-                isToday={date === today}
-                meals={meals}
-                target={plan.average_daily_nutrients}
-              />
+              <LogDayCard key={date} date={date} isToday={date === today} />
             ))}
           </ul>
           <div className="flex justify-center gap-2">

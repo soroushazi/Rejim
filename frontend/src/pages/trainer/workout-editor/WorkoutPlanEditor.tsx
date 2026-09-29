@@ -4,8 +4,11 @@ import { listExercises, listMuscleGroups } from '@/api/exercises'
 import {
   createPlanSession,
   createWorkoutPlan,
+  deleteWorkoutPlan,
   getWorkoutPlan,
   listWorkoutPlans,
+  publishWorkoutPlan,
+  startWorkoutPlanEdit,
   updatePlanSession,
   updateWorkoutPlan,
 } from '@/api/workoutPlans'
@@ -14,15 +17,22 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import PlanVersionBar, { type PlanVersionView } from '@/components/plans/PlanVersionBar'
+import WorkoutPlanView from '../../workout/WorkoutPlanView'
 import PlanHistoryList from '../PlanHistoryList'
 import SessionEditor from './SessionEditor'
 
 /** Full create/edit/delete/reorder UI for a trainee's WorkoutPlan -> PlanSession
  * -> PlanExercise, closing the long-standing "no trainer-side plan-authoring
  * UI" gap. The backend already permitted this (IsTrainerWriteTraineeReadOnly
- * on every level); this is purely the frontend build. */
+ * on every level); this is purely the frontend build. Only a draft/scheduled
+ * version is editable; the live one is shown read-only (see PlanVersionBar /
+ * backend accounts/plan_versions.py). */
 export default function WorkoutPlanEditor({ traineeId }: { traineeId: number }) {
+  // `plan` is the editable (draft/scheduled) version, `current` the live one.
   const [plan, setPlan] = useState<WorkoutPlanDetail | null>(null)
+  const [current, setCurrent] = useState<WorkoutPlanDetail | null>(null)
+  const [view, setView] = useState<PlanVersionView>('pending')
   const [loading, setLoading] = useState(true)
   const [exercises, setExercises] = useState<Exercise[]>([])
   const [muscleGroups, setMuscleGroups] = useState<MuscleGroup[]>([])
@@ -36,16 +46,40 @@ export default function WorkoutPlanEditor({ traineeId }: { traineeId: number }) 
   // unmount every SessionEditor, collapsing whichever session the trainer had
   // open back down each time. Only the very first load (below) needs the
   // full-page loading state.
-  function reload() {
-    return listWorkoutPlans(traineeId)
-      .then((plans) => (plans.length ? getWorkoutPlan(plans[0].id, traineeId) : null))
-      .then((detail) => {
-        setPlan(detail)
-        if (detail) {
-          setPlanName(detail.name)
-          setSessionsPerWeek(String(detail.sessions_per_week))
-        }
-      })
+  async function reload() {
+    const versions = await listWorkoutPlans(traineeId)
+    const pending = versions.find((v) => v.status === 'draft' || v.status === 'scheduled')
+    const active = versions.find((v) => v.status === 'active')
+    const [pendingDetail, activeDetail] = await Promise.all([
+      pending ? getWorkoutPlan(pending.id, traineeId) : null,
+      active ? getWorkoutPlan(active.id, traineeId) : null,
+    ])
+    setPlan(pendingDetail)
+    setCurrent(activeDetail)
+    if (pendingDetail) {
+      setPlanName(pendingDetail.name)
+      setSessionsPerWeek(String(pendingDetail.sessions_per_week))
+    }
+  }
+
+  async function handleStartEdit() {
+    await startWorkoutPlanEdit(traineeId)
+    await reload()
+    setView('pending')
+  }
+
+  async function handlePublish(effectiveFrom: string) {
+    if (!plan) return
+    await publishWorkoutPlan(plan.id, effectiveFrom)
+    await reload()
+    setView('pending')
+  }
+
+  async function handleDiscard() {
+    if (!plan) return
+    await deleteWorkoutPlan(plan.id)
+    await reload()
+    setView('pending')
   }
 
   useEffect(() => {
@@ -117,7 +151,22 @@ export default function WorkoutPlanEditor({ traineeId }: { traineeId: number }) 
     <div className="flex flex-col gap-3">
       <PlanHistoryList traineeId={traineeId} planType="workout" />
 
-      {!plan ? (
+      {(plan || current) && (
+        <PlanVersionBar
+          noun="workout plan"
+          current={current}
+          pending={plan}
+          view={view}
+          onViewChange={setView}
+          onStartEdit={handleStartEdit}
+          onPublish={handlePublish}
+          onDiscard={handleDiscard}
+        />
+      )}
+
+      {current && (!plan || view === 'current') ? (
+        <WorkoutPlanView plan={current} />
+      ) : !plan ? (
         <Card>
           <CardHeader>
             <CardTitle>No workout plan yet</CardTitle>

@@ -27,6 +27,9 @@ class TraineeScopedQuerysetMixin:
     """
 
     trainee_path = "trainee"
+    # Actions addressed by an id in the URL (see above) - a viewset with its
+    # own by-id custom actions extends this.
+    by_id_actions = ("retrieve", "update", "partial_update", "destroy")
 
     def get_queryset(self):
         user = self.request.user
@@ -40,7 +43,7 @@ class TraineeScopedQuerysetMixin:
             return queryset.filter(**{f"{self.trainee_path}__trainer": user}).filter(
                 **{self.trainee_path: trainee_id}
             )
-        if self.action in ("retrieve", "update", "partial_update", "destroy"):
+        if self.action in self.by_id_actions:
             condition = Q(**{self.trainee_path: user})
             if user.is_trainer:
                 condition |= Q(**{f"{self.trainee_path}__trainer": user})

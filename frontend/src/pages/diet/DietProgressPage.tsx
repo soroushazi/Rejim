@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getDietPlan, listDietPlans } from '@/api/dietPlan'
+import { getDietPlanForDate } from '@/api/dietPlan'
 import { listLoggedMealsRange } from '@/api/loggedMeals'
 import type { DietPlanDetail, LoggedMeal } from '@/api/types'
 import { Input } from '@/components/ui/input'
@@ -43,9 +43,8 @@ export default function DietProgressPage() {
 
   useEffect(() => {
     let cancelled = false
-    listDietPlans()
-      .then((plans) => (plans.length ? getDietPlan(plans[0].id) : null))
-      .then((detail) => {
+    getDietPlanForDate(toDateKey(new Date()))
+      .then(({ plan: detail }) => {
         if (!cancelled) setPlan(detail)
       })
       .catch(() => {

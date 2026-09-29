@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from accounts.plan_versions import plan_status
+
 from .models import (
     DietaryTag,
     DietPlan,
@@ -15,6 +17,7 @@ from .models import (
     ReferenceMeal,
     ReferenceMealItem,
 )
+from .plan_versions import diet_plan_for_date
 
 MACRO_FIELDS = ["calories_per_100g", "protein_g_per_100g", "carbs_g_per_100g", "fat_g_per_100g"]
 
@@ -230,16 +233,21 @@ class QuickLogItemSerializer(serializers.ModelSerializer):
 
 
 class DietPlanSerializer(serializers.ModelSerializer):
+    status = serializers.SerializerMethodField()
+
     class Meta:
         model = DietPlan
-        fields = ["id", "trainee", "name", "created_at"]
-        read_only_fields = ["created_at"]
+        fields = ["id", "trainee", "name", "created_at", "effective_from", "published_at", "status"]
+        read_only_fields = ["created_at", "effective_from", "published_at"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         request = self.context.get("request")
         if request is not None:
             self.fields["trainee"].queryset = request.user.trainees.all()
+
+    def get_status(self, obj):
+        return plan_status(obj)
 
 
 class ReferenceMealSerializer(serializers.ModelSerializer):
@@ -339,12 +347,27 @@ class DietPlanDetailSerializer(serializers.ModelSerializer):
     meals = ReferenceMealDetailSerializer(many=True, read_only=True)
     average_daily_nutrients = serializers.SerializerMethodField()
 
+    status = serializers.SerializerMethodField()
+
     class Meta:
         model = DietPlan
-        fields = ["id", "trainee", "name", "created_at", "meals", "average_daily_nutrients"]
+        fields = [
+            "id",
+            "trainee",
+            "name",
+            "created_at",
+            "effective_from",
+            "published_at",
+            "status",
+            "meals",
+            "average_daily_nutrients",
+        ]
 
     def get_average_daily_nutrients(self, obj):
         return obj.average_daily_nutrients()
+
+    def get_status(self, obj):
+        return plan_status(obj)
 
 
 class FoodLogSerializer(serializers.ModelSerializer):
@@ -513,7 +536,7 @@ class LoggedMealItemSerializer(serializers.ModelSerializer):
             return obj.reference_meal_item.food_item.name
         if obj.quick_log_item_id:
             return obj.quick_log_item.name
-        return ""
+        return obj.planned_food_name
 
     def get_actual_nutrients(self, obj):
         return obj.actual_nutrients()
@@ -521,8 +544,10 @@ class LoggedMealItemSerializer(serializers.ModelSerializer):
 
 class LoggedMealSerializer(serializers.ModelSerializer):
     items = LoggedMealItemSerializer(many=True)
-    reference_meal_label = serializers.CharField(source="reference_meal.label", read_only=True)
-    meal_option_label = serializers.SerializerMethodField()
+    # Declared explicitly: the model FK is nullable only so a trainer deleting
+    # the meal orphans (not destroys) this log - a new log must always name one.
+    # (Queryset narrowed per-request in __init__.)
+    reference_meal = serializers.PrimaryKeyRelatedField(queryset=ReferenceMeal.objects.none())
     total_nutrients = serializers.SerializerMethodField()
 
     class Meta:
@@ -541,19 +566,15 @@ class LoggedMealSerializer(serializers.ModelSerializer):
         # source is derived from the items' own sources (see _upsert), not
         # client-supplied - a meal mixing plan and off-plan items no longer
         # needs the client to pre-decide a single label for the whole thing.
-        read_only_fields = ["trainee", "source"]
+        # reference_meal_label/meal_option_label are snapshots set in _upsert,
+        # so they keep resolving once the plan meal/option is deleted.
+        read_only_fields = ["trainee", "source", "reference_meal_label", "meal_option_label"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         request = self.context.get("request")
         if request is not None:
             self.fields["reference_meal"].queryset = ReferenceMeal.objects.filter(diet_plan__trainee=request.user)
-
-    def get_meal_option_label(self, obj):
-        if obj.source != LoggedMeal.Source.PLAN:
-            return None
-        first_item = obj.items.select_related("reference_meal_item__option").first()
-        return first_item.reference_meal_item.option.label if first_item else None
 
     def get_total_nutrients(self, obj):
         return obj.total_nutrients()
@@ -564,6 +585,11 @@ class LoggedMealSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("At least one item is required.")
 
         reference_meal = attrs.get("reference_meal", getattr(self.instance, "reference_meal", None))
+        # Only the plan version that applies to this day can be logged against
+        # (never a draft, nor a version scheduled for later).
+        day_plan = diet_plan_for_date(self.context["request"].user, attrs.get("date", getattr(self.instance, "date", None)))
+        if day_plan is None or reference_meal.diet_plan_id != day_plan.id:
+            raise serializers.ValidationError("That meal isn't part of your plan for this date.")
         for item in items:
             rmi = item.get("reference_meal_item")
             if rmi and rmi.option.meal_id != reference_meal.id:
@@ -599,11 +625,19 @@ class LoggedMealSerializer(serializers.ModelSerializer):
         else:
             meal_source = LoggedMeal.Source.CUSTOM
 
+        reference_meal = validated_data["reference_meal"]
+        meal_option_label = None
+        if meal_source == LoggedMeal.Source.PLAN:
+            meal_option_label = items_data[0]["reference_meal_item"].option.label
         logged_meal, _ = LoggedMeal.objects.update_or_create(
             trainee=user,
-            reference_meal=validated_data["reference_meal"],
+            reference_meal=reference_meal,
             date=validated_data["date"],
-            defaults={"source": meal_source},
+            defaults={
+                "source": meal_source,
+                "reference_meal_label": reference_meal.label,
+                "meal_option_label": meal_option_label,
+            },
         )
         logged_meal.items.all().delete()
         for item in items_data:

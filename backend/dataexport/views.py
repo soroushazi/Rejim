@@ -31,7 +31,9 @@ def _food_log_item_name(log):
         return log.reference_meal_item.food_item.name
     if log.food_item_id:
         return log.food_item.name
-    return log.quick_log_item.name
+    if log.quick_log_item_id:
+        return log.quick_log_item.name
+    return log.planned_food_name
 
 
 class DietLogExportView(APIView):
@@ -49,7 +51,7 @@ class DietLogExportView(APIView):
                 Q(logged_meal__date__range=(start, end))
                 | Q(logged_meal__isnull=True, logged_at__date__range=(start, end))
             )
-            .select_related("logged_meal__reference_meal", "reference_meal_item__food_item", "food_item", "quick_log_item")
+            .select_related("logged_meal", "reference_meal_item__food_item", "food_item", "quick_log_item")
             .order_by("logged_at")
         )
 
@@ -60,7 +62,7 @@ class DietLogExportView(APIView):
         )
         for log in logs:
             day = log.logged_meal.date if log.logged_meal_id else log.logged_at.date()
-            meal = log.logged_meal.reference_meal.label if log.logged_meal_id else ""
+            meal = log.logged_meal.reference_meal_label if log.logged_meal_id else ""
             writer.writerow(
                 [
                     day,

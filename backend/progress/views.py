@@ -1,11 +1,13 @@
 from datetime import date, timedelta
 
 from django.db.models import Count, Sum
+from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from nutrition.plan_versions import diet_plan_for_date
 from tracker.models import ActivityLog, DailyMetric
 from tracker.views import _parse_date, _resolve_trainee
 from workouts.models import LoggedSet, WorkoutSession
@@ -186,7 +188,8 @@ class ProgressNutritionView(APIView):
         trainee = _resolve_trainee(request)
         start, end = _resolve_range(request)
 
-        diet_plan = trainee.diet_plans.first()
+        # The target the range ends on (or today, for a range running past it).
+        diet_plan = diet_plan_for_date(trainee, min(end, timezone.localdate()))
         target = diet_plan.average_daily_nutrients() if diet_plan else None
 
         consumed_by_date = food_logs_by_day(trainee, start, end)

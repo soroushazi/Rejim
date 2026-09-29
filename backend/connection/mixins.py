@@ -13,17 +13,28 @@ class PlanChangeLoggingMixin:
     def _change_log_context(self, instance):
         raise NotImplementedError
 
+    def _should_log_change(self, instance):
+        # Overridden by accounts.plan_versions.PlanVersionLockMixin to skip
+        # edits to a not-yet-published draft version.
+        return True
+
+    def _log(self, instance, verb):
+        if self._should_log_change(instance):
+            trainee, label = self._change_log_context(instance)
+            log_plan_change(trainee, self.request.user, self.plan_type, f"{verb} {label}")
+
     def perform_create(self, serializer):
         instance = serializer.save()
-        trainee, label = self._change_log_context(instance)
-        log_plan_change(trainee, self.request.user, self.plan_type, f"Added {label}")
+        self._log(instance, "Added")
 
     def perform_update(self, serializer):
         instance = serializer.save()
-        trainee, label = self._change_log_context(instance)
-        log_plan_change(trainee, self.request.user, self.plan_type, f"Updated {label}")
+        self._log(instance, "Updated")
 
     def perform_destroy(self, instance):
+        # Resolve the log context before the row (and its parent links) is gone.
+        should_log = self._should_log_change(instance)
         trainee, label = self._change_log_context(instance)
         instance.delete()
-        log_plan_change(trainee, self.request.user, self.plan_type, f"Removed {label}")
+        if should_log:
+            log_plan_change(trainee, self.request.user, self.plan_type, f"Removed {label}")

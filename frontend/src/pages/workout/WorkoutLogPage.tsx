@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { getWorkoutPlan, listWorkoutPlans } from '@/api/workoutPlans'
+import { useEffect, useRef, useState } from 'react'
+import { getWorkoutPlanForDate } from '@/api/workoutPlans'
 import { listWorkoutSessions } from '@/api/workoutSessions'
 import type { WorkoutPlanDetail, WorkoutSessionLog } from '@/api/types'
 import { toDateKey } from '@/lib/date'
@@ -14,22 +14,25 @@ export default function WorkoutLogPage() {
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null)
   const [date, setDate] = useState(() => toDateKey(new Date()))
 
+  // The selected session follows the plan version: re-picked from the rotation
+  // whenever the chosen date resolves to a different version than before
+  // (which restarts a brand-new version at its first session), kept as-is
+  // when it's the same version.
+  const planIdRef = useRef<number | null>(null)
+
   useEffect(() => {
     let cancelled = false
-    listWorkoutPlans()
-      .then(async (plans) => {
-        if (cancelled) return
-        if (plans.length === 0) {
-          setPlan(null)
-          return
-        }
-        const [detail, sessionLogs] = await Promise.all([getWorkoutPlan(plans[0].id), listWorkoutSessions()])
+    Promise.all([getWorkoutPlanForDate(date), listWorkoutSessions()])
+      .then(([{ plan: detail }, sessionLogs]) => {
         if (cancelled) return
         setPlan(detail)
         setSessions(sessionLogs)
-        const ordered = [...detail.sessions].sort((a, b) => a.order - b.order)
-        const next = nextSessionInRotation(ordered, sessionLogs)
-        setSelectedSessionId(next?.id ?? ordered[0]?.id ?? null)
+        if (detail && detail.id !== planIdRef.current) {
+          const ordered = [...detail.sessions].sort((a, b) => a.order - b.order)
+          const next = nextSessionInRotation(ordered, sessionLogs)
+          setSelectedSessionId(next?.id ?? ordered[0]?.id ?? null)
+        }
+        planIdRef.current = detail?.id ?? null
         setError(false)
       })
       .catch(() => {
@@ -41,7 +44,7 @@ export default function WorkoutLogPage() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [date])
 
   if (loading) {
     return <p className="mt-6 text-center text-sm text-muted-foreground">Loading…</p>

@@ -7,6 +7,7 @@ from rest_framework.response import Response
 
 from accounts.mixins import TraineeScopedQuerysetMixin
 from accounts.permissions import EditRequestPermission, IsTraineeWriteTrainerReadOnly, IsTrainerWriteTraineeReadOnly
+from accounts.plan_versions import PlanVersionLockMixin, PlanVersionViewSetMixin
 from connection.mixins import PlanChangeLoggingMixin
 from connection.services import log_plan_change
 
@@ -21,6 +22,7 @@ from .models import (
     WorkoutPlan,
     WorkoutSession,
 )
+from .plan_versions import copy_workout_plan, started_workout_plan_ids, workout_versions
 from .serializers import (
     ExerciseEditRequestSerializer,
     ExerciseSerializer,
@@ -65,12 +67,24 @@ class ExerciseEditRequestViewSet(viewsets.ModelViewSet):
         serializer.save(requested_by=self.request.user)
 
 
-class WorkoutPlanViewSet(PlanChangeLoggingMixin, TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
+class WorkoutPlanViewSet(PlanVersionViewSetMixin, PlanChangeLoggingMixin, TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = WorkoutPlan.objects.all()
     serializer_class = WorkoutPlanSerializer
+    detail_serializer_class = WorkoutPlanDetailSerializer
     permission_classes = [IsTrainerWriteTraineeReadOnly]
     trainee_path = "trainee"
+    by_id_actions = TraineeScopedQuerysetMixin.by_id_actions + ("publish",)
     plan_type = "workout"
+    plan_label = "workout plan"
+
+    def _versions(self, trainee):
+        return workout_versions(trainee)
+
+    def _started_plan_ids(self, trainee, on_date):
+        return started_workout_plan_ids(trainee, on_date)
+
+    def _copy_version(self, plan):
+        return copy_workout_plan(plan)
 
     def get_serializer_class(self):
         if self.action == "retrieve":
@@ -90,18 +104,21 @@ class WorkoutPlanViewSet(PlanChangeLoggingMixin, TraineeScopedQuerysetMixin, vie
         return instance.trainee, f"workout plan '{instance.name}'"
 
 
-class PlanSessionViewSet(PlanChangeLoggingMixin, TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
+class PlanSessionViewSet(PlanVersionLockMixin, PlanChangeLoggingMixin, TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = PlanSession.objects.all()
     serializer_class = PlanSessionSerializer
     permission_classes = [IsTrainerWriteTraineeReadOnly]
     trainee_path = "plan__trainee"
     plan_type = "workout"
 
+    def _plan_of(self, instance):
+        return instance.plan
+
     def _change_log_context(self, instance):
         return instance.plan.trainee, f"session '{instance.label}'"
 
 
-class PlanExerciseViewSet(PlanChangeLoggingMixin, TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
+class PlanExerciseViewSet(PlanVersionLockMixin, PlanChangeLoggingMixin, TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = PlanExercise.objects.all()
     serializer_class = PlanExerciseSerializer
     permission_classes = [IsTrainerWriteTraineeReadOnly]
@@ -122,6 +139,9 @@ class PlanExerciseViewSet(PlanChangeLoggingMixin, TraineeScopedQuerysetMixin, vi
             return self.queryset.filter(condition)
         return super().get_queryset()
 
+    def _plan_of(self, instance):
+        return instance.session.plan
+
     def _change_log_context(self, instance):
         return instance.session.plan.trainee, f"{instance.exercise.name} in {instance.session.label}"
 
@@ -131,6 +151,7 @@ class PlanExerciseViewSet(PlanChangeLoggingMixin, TraineeScopedQuerysetMixin, vi
         superset - always mirrored on both sides. Pairs only: pairing either
         one with a third exercise first unpairs its previous partner."""
         plan_exercise = self.get_object()
+        self._check_editable(plan_exercise)
         partner = get_object_or_404(self.get_queryset(), pk=request.data.get("partner"), session_id=plan_exercise.session_id)
         if partner.id == plan_exercise.id:
             return Response({"detail": "Cannot pair an exercise with itself."}, status=status.HTTP_400_BAD_REQUEST)
@@ -142,21 +163,24 @@ class PlanExerciseViewSet(PlanChangeLoggingMixin, TraineeScopedQuerysetMixin, vi
             partner.superset_with = plan_exercise
             plan_exercise.save(update_fields=["superset_with"])
             partner.save(update_fields=["superset_with"])
-        trainee, _ = self._change_log_context(plan_exercise)
-        log_plan_change(
-            trainee, request.user, self.plan_type, f"Paired {plan_exercise.exercise.name} + {partner.exercise.name} as a superset"
-        )
+        if self._should_log_change(plan_exercise):
+            trainee, _ = self._change_log_context(plan_exercise)
+            log_plan_change(
+                trainee, request.user, self.plan_type, f"Paired {plan_exercise.exercise.name} + {partner.exercise.name} as a superset"
+            )
         return Response(self.get_serializer(plan_exercise).data)
 
     @action(detail=True, methods=["post"])
     def unpair(self, request, pk=None):
         plan_exercise = self.get_object()
+        self._check_editable(plan_exercise)
         if plan_exercise.superset_with_id:
             with transaction.atomic():
                 partner = plan_exercise.superset_with
                 PlanExercise.objects.filter(pk__in=[plan_exercise.id, partner.id]).update(superset_with=None)
-            trainee, _ = self._change_log_context(plan_exercise)
-            log_plan_change(trainee, request.user, self.plan_type, f"Unpaired {plan_exercise.exercise.name} superset")
+            if self._should_log_change(plan_exercise):
+                trainee, _ = self._change_log_context(plan_exercise)
+                log_plan_change(trainee, request.user, self.plan_type, f"Unpaired {plan_exercise.exercise.name} superset")
             plan_exercise.refresh_from_db()
         return Response(self.get_serializer(plan_exercise).data)
 

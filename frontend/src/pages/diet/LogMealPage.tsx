@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Check, Info, Plus, Search, Utensils, X } from 'lucide-react'
 import { ApiError } from '@/api/client'
-import { getDietPlan, listDietPlans } from '@/api/dietPlan'
+import { getDietPlanForDate } from '@/api/dietPlan'
 import { getFoodItem, listFoodItems } from '@/api/foodItems'
 import { listLoggedMeals, saveLoggedMeal } from '@/api/loggedMeals'
 import { listQuickLogItems } from '@/api/quickLogItems'
@@ -160,7 +160,7 @@ export default function LogMealPage() {
   useEffect(() => {
     let cancelled = false
     Promise.all([
-      listDietPlans().then((plans) => (plans.length ? getDietPlan(plans[0].id) : null)),
+      getDietPlanForDate(date).then((forDate) => forDate.plan),
       listLoggedMeals(date),
       listQuickLogItems(),
     ])
@@ -204,7 +204,7 @@ export default function LogMealPage() {
       existingLoggedMeal.items.map(async (item): Promise<CartItem | null> => {
         if (item.reference_meal_item) {
           const source = allPlanItems.get(item.reference_meal_item)
-          return source ? planCartItem(source, item.actual_weight_grams ?? undefined) : null
+          if (source) return planCartItem(source, item.actual_weight_grams ?? undefined)
         }
         if (item.quick_log_item) {
           const known = quickItems.find((q) => q.id === item.quick_log_item)
@@ -234,7 +234,10 @@ export default function LogMealPage() {
           return foodCartItem(foodItem, item.actual_weight_grams ?? '')
         }
         if (item.custom_name) return customCartItem(item.custom_name, item.actual_nutrients)
-        return null
+        // A plan item the trainer has since removed from the plan: keep it in
+        // the cart as a one-off entry with its snapshotted nutrients, so
+        // re-saving this meal doesn't silently drop what was eaten.
+        return customCartItem(item.food_item_name, item.actual_nutrients)
       }),
     ).then((rows) => setCart(rows.filter((r): r is CartItem => r !== null)))
     // eslint-disable-next-line react-hooks/exhaustive-deps

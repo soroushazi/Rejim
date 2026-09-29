@@ -1,5 +1,5 @@
 import { apiFetch } from './client'
-import type { DietPlanDetail, DietPlanSummary } from './types'
+import type { DietPlanDetail, DietPlanSummary, PlanForDate } from './types'
 
 export function listDietPlans(traineeId?: number): Promise<DietPlanSummary[]> {
   const query = traineeId ? `?trainee_id=${traineeId}` : ''
@@ -13,6 +13,28 @@ export function listDietPlans(traineeId?: number): Promise<DietPlanSummary[]> {
 export function getDietPlan(id: number, traineeId?: number): Promise<DietPlanDetail> {
   const query = traineeId ? `?trainee_id=${traineeId}` : ''
   return apiFetch<DietPlanDetail>(`/nutrition/diet-plans/${id}/${query}`)
+}
+
+/** The plan version a given day uses (see backend accounts/plan_versions.py),
+ * plus the next scheduled version if there is one. */
+export function getDietPlanForDate(date: string, traineeId?: number): Promise<PlanForDate<DietPlanDetail, DietPlanSummary>> {
+  const params = new URLSearchParams({ date })
+  if (traineeId) params.set('trainee_id', String(traineeId))
+  return apiFetch(`/nutrition/diet-plans/for-date/?${params}`)
+}
+
+/** The trainee's draft/scheduled version to edit, created as a copy of the
+ * live one if there isn't one yet. */
+export function startDietPlanEdit(traineeId: number): Promise<DietPlanDetail> {
+  return apiFetch<DietPlanDetail>(`/nutrition/diet-plans/edit/`, { method: 'POST', body: JSON.stringify({ trainee: traineeId }) })
+}
+
+/** Publishes a draft (or moves a scheduled version) to start on effectiveFrom. */
+export function publishDietPlan(id: number, effectiveFrom: string): Promise<DietPlanDetail> {
+  return apiFetch<DietPlanDetail>(`/nutrition/diet-plans/${id}/publish/`, {
+    method: 'POST',
+    body: JSON.stringify({ effective_from: effectiveFrom }),
+  })
 }
 
 export function createDietPlan(data: { trainee: number; name: string }): Promise<DietPlanSummary> {
@@ -59,6 +81,10 @@ export type NewReferenceMealItem = { option: number; food_item: number; referenc
 
 export function createReferenceMealItem(data: NewReferenceMealItem): Promise<{ id: number }> {
   return apiFetch('/nutrition/reference-meal-items/', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export function updateReferenceMealItem(id: number, data: Partial<NewReferenceMealItem>): Promise<{ id: number }> {
+  return apiFetch(`/nutrition/reference-meal-items/${id}/`, { method: 'PATCH', body: JSON.stringify(data) })
 }
 
 export function deleteReferenceMealItem(id: number): Promise<void> {

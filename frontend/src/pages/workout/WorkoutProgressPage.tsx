@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getWorkoutPlan, listWorkoutPlans } from '@/api/workoutPlans'
+import { getWorkoutPlanForDate } from '@/api/workoutPlans'
 import { listWorkoutSessions } from '@/api/workoutSessions'
 import type { WorkoutPlanDetail, WorkoutSessionLog } from '@/api/types'
 import { Input } from '@/components/ui/input'
@@ -39,14 +39,8 @@ export default function WorkoutProgressPage() {
 
   useEffect(() => {
     let cancelled = false
-    listWorkoutPlans()
-      .then(async (plans) => {
-        if (cancelled) return
-        if (plans.length === 0) {
-          setPlan(null)
-          return
-        }
-        const [detail, sessionLogs] = await Promise.all([getWorkoutPlan(plans[0].id), listWorkoutSessions()])
+    Promise.all([getWorkoutPlanForDate(toDateKey(new Date())), listWorkoutSessions()])
+      .then(([{ plan: detail }, sessionLogs]) => {
         if (cancelled) return
         setPlan(detail)
         setSessions(sessionLogs)

@@ -285,6 +285,10 @@ class DietPlan(models.Model):
     )
     name = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
+    # Effective-dated versioning (see accounts/plan_versions.py): null while an
+    # unpublished draft; otherwise the first day this version applies.
+    effective_from = models.DateField(null=True, blank=True)
+    published_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.name} ({self.trainee})"
@@ -360,7 +364,16 @@ class LoggedMeal(models.Model):
         limit_choices_to={"is_trainee": True},
         related_name="logged_meals",
     )
-    reference_meal = models.ForeignKey(ReferenceMeal, on_delete=models.PROTECT, related_name="logged_meals")
+    # SET_NULL, not PROTECT/CASCADE: a trainer reshaping the plan (deleting a
+    # meal) must neither be blocked by nor destroy what the trainee already
+    # logged against it. reference_meal_label/meal_option_label are snapshots
+    # taken at save time (see LoggedMealSerializer._upsert) so an orphaned row
+    # still reads correctly - same pattern as WorkoutSession.plan_session_label.
+    reference_meal = models.ForeignKey(
+        ReferenceMeal, on_delete=models.SET_NULL, related_name="logged_meals", null=True, blank=True
+    )
+    reference_meal_label = models.CharField(max_length=100, blank=True, default="")
+    meal_option_label = models.CharField(max_length=100, null=True, blank=True)
     date = models.DateField()
     source = models.CharField(max_length=10, choices=Source.choices)
 
@@ -369,7 +382,7 @@ class LoggedMeal(models.Model):
         ordering = ["reference_meal__order"]
 
     def __str__(self):
-        return f"{self.trainee} - {self.reference_meal.label} - {self.date}"
+        return f"{self.trainee} - {self.reference_meal_label} - {self.date}"
 
     def total_nutrients(self):
         return sum_nutrients([item.actual_nutrients() for item in self.items.all()])
@@ -392,9 +405,15 @@ class FoodLog(models.Model):
     # value for this NOT NULL column (the table starts empty); the API still
     # requires the client to pass it explicitly (see FoodLogSerializer).
     source = models.CharField(max_length=10, choices=Source.choices, default=Source.PLAN)
+    # SET_NULL for the same reason as LoggedMeal.reference_meal: a trainer
+    # editing/removing a plan ingredient must not be blocked by, or destroy,
+    # history. planned_food_name snapshots the item's name at save time so an
+    # orphaned source=plan row (all three links null) still reads correctly;
+    # its nutrients were already snapshotted below.
     reference_meal_item = models.ForeignKey(
-        ReferenceMealItem, on_delete=models.PROTECT, related_name="logs", null=True, blank=True
+        ReferenceMealItem, on_delete=models.SET_NULL, related_name="logs", null=True, blank=True
     )
+    planned_food_name = models.CharField(max_length=255, blank=True, default="")
     food_item = models.ForeignKey(FoodItem, on_delete=models.PROTECT, related_name="logs", null=True, blank=True)
     quick_log_item = models.ForeignKey(
         QuickLogItem, on_delete=models.PROTECT, related_name="logs", null=True, blank=True
@@ -448,13 +467,28 @@ class FoodLog(models.Model):
                     "calories, protein_g, carbs_g, and fat_g are all required when source is 'custom' "
                     "(only the micros stay optional)."
                 )
+        elif self.is_orphaned_plan_log():
+            pass
         elif sum(bool(x) for x in linked) != 1:
             raise ValidationError("Exactly one of reference_meal_item, food_item, or quick_log_item must be set.")
         if self.source not in (self.Source.QUICK, self.Source.CUSTOM) and self.actual_weight_grams is None:
             raise ValidationError("actual_weight_grams is required unless source is 'quick' or 'custom'.")
 
+    def is_orphaned_plan_log(self):
+        """A source=plan row whose ReferenceMealItem the trainer has since
+        deleted (SET_NULL) - still valid history, just no live link."""
+        return (
+            self.pk is not None
+            and self.source == self.Source.PLAN
+            and not (self.reference_meal_item_id or self.food_item_id or self.quick_log_item_id)
+        )
+
     def _compute_nutrients(self):
+        if self.is_orphaned_plan_log():
+            # Nothing left to derive from - keep the existing snapshot.
+            return self.actual_nutrients()
         if self.source == self.Source.PLAN:
+            self.planned_food_name = self.reference_meal_item.food_item.name
             return self.reference_meal_item.food_item.nutrients_for_weight(self.actual_weight_grams)
         if self.source == self.Source.FOOD_ITEM:
             return self.food_item.nutrients_for_weight(self.actual_weight_grams)

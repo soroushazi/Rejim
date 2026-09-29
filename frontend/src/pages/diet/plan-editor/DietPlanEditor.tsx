@@ -1,11 +1,23 @@
 import { Plus } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
-import { createDietPlan, createReferenceMeal, getDietPlan, listDietPlans, updateDietPlan, updateReferenceMeal } from '@/api/dietPlan'
+import {
+  createDietPlan,
+  createReferenceMeal,
+  deleteDietPlan,
+  getDietPlan,
+  listDietPlans,
+  publishDietPlan,
+  startDietPlanEdit,
+  updateDietPlan,
+  updateReferenceMeal,
+} from '@/api/dietPlan'
 import type { DietPlanDetail, MealOptionDetail, Nutrients, ReferenceMealDetail } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import PlanVersionBar, { type PlanVersionView } from '@/components/plans/PlanVersionBar'
+import DietPlanView from '../DietPlanView'
 import PlanHistoryList from '../../trainer/PlanHistoryList'
 import PlanNutritionSummary from './PlanNutritionSummary'
 import ReferenceMealEditor from './ReferenceMealEditor'
@@ -13,9 +25,14 @@ import ReferenceMealEditor from './ReferenceMealEditor'
 const MEAL_SLOTS = ['Breakfast', 'Morning Snack', 'Lunch', 'Afternoon Snack', 'Dinner', 'Evening Snack']
 
 /** Full create/edit/delete/reorder UI for a trainee's DietPlan -> ReferenceMeal
- * -> MealOption -> ReferenceMealItem, mirroring WorkoutPlanEditor's shape. */
+ * -> MealOption -> ReferenceMealItem, mirroring WorkoutPlanEditor's shape.
+ * Only a draft/scheduled version is editable; the live one is shown
+ * read-only (see PlanVersionBar / backend accounts/plan_versions.py). */
 export default function DietPlanEditor({ traineeId }: { traineeId: number }) {
+  // `plan` is the editable (draft/scheduled) version, `current` the live one.
   const [plan, setPlan] = useState<DietPlanDetail | null>(null)
+  const [current, setCurrent] = useState<DietPlanDetail | null>(null)
+  const [view, setView] = useState<PlanVersionView>('pending')
   const [loading, setLoading] = useState(true)
   const [planName, setPlanName] = useState('')
   const [savingPlan, setSavingPlan] = useState(false)
@@ -48,13 +65,37 @@ export default function DietPlanEditor({ traineeId }: { traineeId: number }) {
   // those would unmount every ReferenceMealEditor/MealOptionEditor, collapsing
   // whichever meal/option the trainer had open back down each time. Only the
   // very first load (below) needs the full-page loading state.
-  function reload() {
-    return listDietPlans(traineeId)
-      .then((plans) => (plans.length ? getDietPlan(plans[0].id, traineeId) : null))
-      .then((detail) => {
-        setPlan(detail)
-        if (detail) setPlanName(detail.name)
-      })
+  async function reload() {
+    const versions = await listDietPlans(traineeId)
+    const pending = versions.find((v) => v.status === 'draft' || v.status === 'scheduled')
+    const active = versions.find((v) => v.status === 'active')
+    const [pendingDetail, activeDetail] = await Promise.all([
+      pending ? getDietPlan(pending.id, traineeId) : null,
+      active ? getDietPlan(active.id, traineeId) : null,
+    ])
+    setPlan(pendingDetail)
+    setCurrent(activeDetail)
+    if (pendingDetail) setPlanName(pendingDetail.name)
+  }
+
+  async function handleStartEdit() {
+    await startDietPlanEdit(traineeId)
+    await reload()
+    setView('pending')
+  }
+
+  async function handlePublish(effectiveFrom: string) {
+    if (!plan) return
+    await publishDietPlan(plan.id, effectiveFrom)
+    await reload()
+    setView('pending')
+  }
+
+  async function handleDiscard() {
+    if (!plan) return
+    await deleteDietPlan(plan.id)
+    await reload()
+    setView('pending')
   }
 
   useEffect(() => {
@@ -113,7 +154,22 @@ export default function DietPlanEditor({ traineeId }: { traineeId: number }) {
     <div className="flex flex-col gap-3">
       <PlanHistoryList traineeId={traineeId} planType="diet" />
 
-      {!plan ? (
+      {(plan || current) && (
+        <PlanVersionBar
+          noun="diet plan"
+          current={current}
+          pending={plan}
+          view={view}
+          onViewChange={setView}
+          onStartEdit={handleStartEdit}
+          onPublish={handlePublish}
+          onDiscard={handleDiscard}
+        />
+      )}
+
+      {current && (!plan || view === 'current') ? (
+        <DietPlanView plan={current} />
+      ) : !plan ? (
         <Card>
           <CardHeader>
             <CardTitle>No diet plan yet</CardTitle>

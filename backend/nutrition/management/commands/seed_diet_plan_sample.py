@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.core.management.base import BaseCommand, CommandError
+from django.utils import timezone
 
 from accounts.models import User
 from nutrition.models import DietPlan, FoodItem, FoodItemMeasure, MealOption, ReferenceMeal, ReferenceMealItem
@@ -189,6 +190,11 @@ class Command(BaseCommand):
         food_items = self._ensure_food_items()
 
         plan, _ = DietPlan.objects.get_or_create(trainee=trainee, name=PLAN_NAME)
+        if plan.effective_from is None:
+            # Publish it (see accounts/plan_versions.py) so the trainee sees it.
+            plan.effective_from = timezone.localdate()
+            plan.published_at = timezone.now()
+            plan.save(update_fields=["effective_from", "published_at"])
         plan.meals.all().delete()
 
         for meal_label, meal_order, options in MEAL_PLAN:

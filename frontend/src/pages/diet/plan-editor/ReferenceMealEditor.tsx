@@ -7,6 +7,7 @@ import {
   deleteReferenceMeal,
   deleteReferenceMealItem,
   updateMealOption,
+  updateReferenceMealItem,
 } from '@/api/dietPlan'
 import type { MealOptionDetail, Nutrients, ReferenceMealDetail } from '@/api/types'
 import { Button } from '@/components/ui/button'
@@ -65,6 +66,7 @@ function MealOptionEditor({
     option.items.map((item) => ({ ingredient: item.food_item, name: item.food_item_name, weight_grams: item.reference_weight_grams })),
   )
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const liveNutrients = draftNutrients(draft, option)
 
@@ -88,19 +90,33 @@ function MealOptionEditor({
 
   async function saveIngredients() {
     setSaving(true)
+    setSaveError(null)
     try {
-      // Always send the complete current state (delete-all, recreate) - same
-      // "full replace" convention LoggedMealSerializer/WorkoutSessionSerializer
-      // already use elsewhere in this app, simpler than diffing.
-      await Promise.all(option.items.map((item) => deleteReferenceMealItem(item.id)))
-      await Promise.all(
-        draft
-          .filter((d) => d.weight_grams.trim())
-          .map((d) => createReferenceMealItem({ option: option.id, food_item: d.ingredient, reference_weight_grams: d.weight_grams })),
-      )
-      onChanged()
+      // Diff against the saved items rather than delete-all-and-recreate: an
+      // ingredient that's still there keeps its row (just its weight updated),
+      // so the trainee's past logs of it stay linked to the plan. Each saved
+      // item is matched at most once, so a food listed twice still works.
+      const unmatched = [...option.items]
+      const updates: Promise<unknown>[] = []
+      const creates: Promise<unknown>[] = []
+      for (const row of draft.filter((d) => d.weight_grams.trim())) {
+        const idx = unmatched.findIndex((item) => item.food_item === row.ingredient)
+        if (idx === -1) {
+          creates.push(createReferenceMealItem({ option: option.id, food_item: row.ingredient, reference_weight_grams: row.weight_grams }))
+          continue
+        }
+        const [existing] = unmatched.splice(idx, 1)
+        if (Number(existing.reference_weight_grams) !== Number(row.weight_grams)) {
+          updates.push(updateReferenceMealItem(existing.id, { reference_weight_grams: row.weight_grams }))
+        }
+      }
+      await Promise.all([...updates, ...creates, ...unmatched.map((item) => deleteReferenceMealItem(item.id))])
+    } catch {
+      setSaveError("Couldn't save ingredients. Please try again.")
     } finally {
       setSaving(false)
+      // Even a partial failure may have changed some rows - resync either way.
+      onChanged()
     }
   }
 
@@ -173,6 +189,7 @@ function MealOptionEditor({
               {saving ? 'Saving…' : 'Done'}
             </Button>
           </div>
+          {saveError && <p className="text-sm text-destructive">{saveError}</p>}
         </div>
       )}
     </div>
