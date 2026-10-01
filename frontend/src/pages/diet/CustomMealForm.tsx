@@ -1,10 +1,10 @@
-import { ChevronDown } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import type { NewQuickLogItem, Nutrients } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { cn, round } from '@/lib/utils'
+import { round } from '@/lib/utils'
+import CollapsibleFormSection from './CollapsibleFormSection'
 import IngredientPicker, { ingredientsTotal, type DraftComponent } from './IngredientPicker'
 
 type Props = {
@@ -60,6 +60,7 @@ export default function CustomMealForm({ onAdd, onMoveToQuickLog }: Props) {
   const [values, setValues] = useState(EMPTY_VALUES)
   const [ingredients, setIngredients] = useState<DraftComponent[]>([])
   const [ingredientsOpen, setIngredientsOpen] = useState(false)
+  const [microsOpen, setMicrosOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   function reset() {
@@ -68,6 +69,7 @@ export default function CustomMealForm({ onAdd, onMoveToQuickLog }: Props) {
     setValues(EMPTY_VALUES)
     setIngredients([])
     setIngredientsOpen(false)
+    setMicrosOpen(false)
     setError(null)
   }
 
@@ -87,6 +89,8 @@ export default function CustomMealForm({ onAdd, onMoveToQuickLog }: Props) {
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ingredients])
+
+  const microsFilled = MICRO_FIELDS.filter(({ key }) => values[key]?.trim()).length
 
   function currentNutrients(): Nutrients {
     return {
@@ -162,44 +166,37 @@ export default function CustomMealForm({ onAdd, onMoveToQuickLog }: Props) {
           </div>
         ))}
       </div>
-      <p className="text-xs font-semibold text-muted-foreground">Micronutrients (optional)</p>
-      <div className="grid grid-cols-2 gap-3">
-        {MICRO_FIELDS.map(({ key, label }) => (
-          <div key={key} className="flex flex-col gap-1.5">
-            <Label htmlFor={`custom-meal-${key}`}>{label}</Label>
-            <Input
-              id={`custom-meal-${key}`}
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="0.1"
-              value={values[key]}
-              onChange={(e) => setValues((v) => ({ ...v, [key]: e.target.value }))}
-            />
-          </div>
-        ))}
-      </div>
+      <CollapsibleFormSection
+        title="Micronutrients (optional)"
+        summary={microsFilled ? `${microsFilled} filled` : undefined}
+        open={microsOpen}
+        onOpenChange={setMicrosOpen}
+      >
+        <div className="grid grid-cols-2 gap-3">
+          {MICRO_FIELDS.map(({ key, label }) => (
+            <div key={key} className="flex flex-col gap-1.5">
+              <Label htmlFor={`custom-meal-${key}`}>{label}</Label>
+              <Input
+                id={`custom-meal-${key}`}
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.1"
+                value={values[key]}
+                onChange={(e) => setValues((v) => ({ ...v, [key]: e.target.value }))}
+              />
+            </div>
+          ))}
+        </div>
+      </CollapsibleFormSection>
 
-      <div className="overflow-hidden rounded-lg border border-border">
-        <button
-          type="button"
-          className="flex w-full items-center justify-between gap-2 px-3 py-2 text-sm font-medium"
-          onClick={() => setIngredientsOpen((o) => !o)}
-          aria-expanded={ingredientsOpen}
-        >
-          Enter ingredients (optional)
-          <ChevronDown className={cn('size-4 text-muted-foreground transition-transform', ingredientsOpen && 'rotate-180')} />
-        </button>
-        {ingredientsOpen && (
-          <div className="flex flex-col gap-3 border-t border-border p-3">
-            <p className="text-xs text-muted-foreground">
-              Know roughly what went into it? Add each ingredient's amount and the fields above fill in
-              automatically (still yours to adjust after).
-            </p>
-            <IngredientPicker value={ingredients} onChange={setIngredients} />
-          </div>
-        )}
-      </div>
+      <CollapsibleFormSection title="Enter ingredients (optional)" open={ingredientsOpen} onOpenChange={setIngredientsOpen}>
+        <p className="text-xs text-muted-foreground">
+          Know roughly what went into it? Add each ingredient's amount and the fields above fill in
+          automatically (still yours to adjust after).
+        </p>
+        <IngredientPicker value={ingredients} onChange={setIngredients} />
+      </CollapsibleFormSection>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">

@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn, round } from '@/lib/utils'
+import CollapsibleFormSection from './CollapsibleFormSection'
 import IngredientPicker, { ingredientsTotal, type DraftComponent } from './IngredientPicker'
 
 type Mode = 'ingredients' | 'custom'
@@ -69,6 +70,7 @@ export default function AddQuickLogItemDialog({ open, onOpenChange, onCreated, i
   const [values, setValues] = useState(valuesFrom(initialValues))
   const [mode, setMode] = useState<Mode>(hasTypedValues(initialValues) ? 'custom' : 'ingredients')
   const [ingredients, setIngredients] = useState<DraftComponent[]>([])
+  const [microsOpen, setMicrosOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -78,6 +80,7 @@ export default function AddQuickLogItemDialog({ open, onOpenChange, onCreated, i
     setValues(valuesFrom(initialValues))
     setMode(hasTypedValues(initialValues) ? 'custom' : 'ingredients')
     setIngredients([])
+    setMicrosOpen(false)
     setError(null)
   }
 
@@ -92,6 +95,7 @@ export default function AddQuickLogItemDialog({ open, onOpenChange, onCreated, i
   }
 
   const ingredientNutrients = ingredientsTotal(ingredients)
+  const microsFilled = MICRO_FIELDS.filter(({ key }) => values[key]?.trim()).length
 
   function payload(): NewQuickLogItem | string {
     if (!name.trim()) return 'Give this meal a name.'
@@ -228,23 +232,29 @@ export default function AddQuickLogItemDialog({ open, onOpenChange, onCreated, i
                   </div>
                 ))}
               </div>
-              <p className="text-xs font-semibold text-muted-foreground">Micronutrients (optional)</p>
-              <div className="grid grid-cols-2 gap-3">
-                {MICRO_FIELDS.map(({ key, label }) => (
-                  <div key={key} className="flex flex-col gap-1.5">
-                    <Label htmlFor={`quick-log-${key}`}>{label}</Label>
-                    <Input
-                      id={`quick-log-${key}`}
-                      type="number"
-                      inputMode="decimal"
-                      min="0"
-                      step="0.1"
-                      value={values[key]}
-                      onChange={(e) => setValues((v) => ({ ...v, [key]: e.target.value }))}
-                    />
-                  </div>
-                ))}
-              </div>
+              <CollapsibleFormSection
+                title="Micronutrients (optional)"
+                summary={microsFilled ? `${microsFilled} filled` : undefined}
+                open={microsOpen}
+                onOpenChange={setMicrosOpen}
+              >
+                <div className="grid grid-cols-2 gap-3">
+                  {MICRO_FIELDS.map(({ key, label }) => (
+                    <div key={key} className="flex flex-col gap-1.5">
+                      <Label htmlFor={`quick-log-${key}`}>{label}</Label>
+                      <Input
+                        id={`quick-log-${key}`}
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.1"
+                        value={values[key]}
+                        onChange={(e) => setValues((v) => ({ ...v, [key]: e.target.value }))}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </CollapsibleFormSection>
             </>
           )}
           {error && <p className="text-sm text-destructive">{error}</p>}
