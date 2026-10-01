@@ -14,6 +14,7 @@ import type {
   WeightUnit,
   WorkoutSessionLog,
 } from '@/api/types'
+import CollapsibleSection from '@/components/CollapsibleSection'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -152,6 +153,7 @@ export default function SessionLogForm({
   // thing at once: no risk of "the block I tapped" shifting under a finger.
   const [focusedPeId, setFocusedPeId] = useState<number | null>(null)
   const [reordering, setReordering] = useState(false)
+  const [modifyOpen, setModifyOpen] = useState(false)
   const [weightUnit, setWeightUnit] = useState<WeightUnit>('lb')
   const [notes, setNotes] = useState('')
   const [durationMinutes, setDurationMinutes] = useState('')
@@ -687,13 +689,36 @@ export default function SessionLogForm({
         </div>
       )}
 
-      <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => setReordering((r) => !r)}>
-        {reordering ? 'Done reordering' : 'Reorder exercises'}
-      </Button>
-
-      <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => setOffProgramOpen(true)}>
-        Off-program exercise
-      </Button>
+      {/* Rarely needed, so both tools sit behind one collapsed card rather than
+          two always-visible buttons. Collapsing it also ends reorder mode, so
+          the up/down chevrons never linger with their controls hidden. */}
+      <CollapsibleSection
+        title="Modify session"
+        summary={reordering ? 'Reordering…' : undefined}
+        open={modifyOpen}
+        onOpenChange={(next) => {
+          setModifyOpen(next)
+          if (!next) setReordering(false)
+        }}
+      >
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            type="button"
+            variant={reordering ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setReordering((r) => !r)}
+          >
+            {reordering ? 'Done reordering' : 'Reorder exercises'}
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => setOffProgramOpen(true)}>
+            Off-program exercise
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Reorder moves exercises up or down for today. Off-program swaps in a different exercise or pairs/unpairs a
+          superset - today's log only, your plan stays the same.
+        </p>
+      </CollapsibleSection>
 
       {session.notes.trim() !== '' && (
         <div className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2">
