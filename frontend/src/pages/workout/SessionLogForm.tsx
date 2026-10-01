@@ -165,6 +165,7 @@ export default function SessionLogForm({
   const [timerStartedAt, setTimerStartedAt] = useState<number | null>(null)
   const [timerAccumulatedMs, setTimerAccumulatedMs] = useState(0)
   const [clearTimerOpen, setClearTimerOpen] = useState(false)
+  const [removeLogOpen, setRemoveLogOpen] = useState(false)
   const [nowTick, setNowTick] = useState(() => Date.now())
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -551,9 +552,9 @@ export default function SessionLogForm({
     }
   }
 
+  // Runs from the "Remove log" ConfirmDialog below, never directly.
   async function handleClear() {
     if (!existingLog) return
-    if (!window.confirm('Remove this logged session?')) return
     setDeleting(true)
     setError(null)
     try {
@@ -886,12 +887,21 @@ export default function SessionLogForm({
           {saving ? 'Saving…' : existingLog ? 'Update log' : 'Save log'}
         </Button>
         {existingLog && (
-          <Button type="button" variant="outline" className="w-full" disabled={deleting} onClick={handleClear}>
+          <Button type="button" variant="outline" className="w-full" disabled={deleting} onClick={() => setRemoveLogOpen(true)}>
             {deleting ? 'Removing…' : 'Remove log'}
           </Button>
         )}
       </div>
 
+      <ConfirmDialog
+        open={removeLogOpen}
+        onOpenChange={setRemoveLogOpen}
+        title="Remove this logged session?"
+        description="This deletes every set you logged for this session on this date. It can't be undone."
+        confirmLabel="Remove log"
+        confirmingLabel="Removing…"
+        onConfirm={handleClear}
+      />
       <ConfirmDialog
         open={clearTimerOpen}
         onOpenChange={setClearTimerOpen}
