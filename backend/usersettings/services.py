@@ -106,6 +106,7 @@ def _strength_goal_reached(goal):
             logged_exercise__plan_exercise__exercise=goal.exercise,
             logged_exercise__session__trainee=goal.trainee,
             is_warmup=False,
+            is_dropset=False,
         )
         .order_by("-weight")
         .first()
