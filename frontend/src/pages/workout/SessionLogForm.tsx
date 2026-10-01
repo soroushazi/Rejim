@@ -15,6 +15,7 @@ import type {
   WorkoutSessionLog,
 } from '@/api/types'
 import CollapsibleSection from '@/components/CollapsibleSection'
+import ConfirmDialog from '@/components/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -27,7 +28,7 @@ import {
   type ExerciseOverrideMap,
 } from '@/lib/exerciseOverrides'
 import { cn } from '@/lib/utils'
-import { formatElapsed, minutesElapsed } from '@/lib/elapsed'
+import { formatElapsed, minutesFromMs, timerElapsedMs } from '@/lib/elapsed'
 import { usePreferredWeightUnit } from '@/lib/usePreferredWeightUnit'
 import { clearWorkoutDraft, loadWorkoutDraft, saveWorkoutDraft, type ExerciseDrafts } from '@/lib/workoutDraft'
 import ExerciseLogBlock, { type DraftSet } from './ExerciseLogBlock'
@@ -160,7 +161,10 @@ export default function SessionLogForm({
   const [caloriesBurned, setCaloriesBurned] = useState('')
   // Epoch ms, or null when the timer isn't running - see lib/workoutDraft.ts
   // for why this is persisted rather than just tracked in a setInterval.
+  // Three states: idle (null + 0), running (non-null), paused (null + >0).
   const [timerStartedAt, setTimerStartedAt] = useState<number | null>(null)
+  const [timerAccumulatedMs, setTimerAccumulatedMs] = useState(0)
+  const [clearTimerOpen, setClearTimerOpen] = useState(false)
   const [nowTick, setNowTick] = useState(() => Date.now())
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -206,9 +210,9 @@ export default function SessionLogForm({
   // stops the timer from that point on (see their own handlers below).
   useEffect(() => {
     if (timerStartedAt === null) return
-    const minutes = String(minutesElapsed(timerStartedAt, nowTick))
+    const minutes = String(minutesFromMs(timerElapsedMs(timerAccumulatedMs, timerStartedAt, nowTick)))
     setDurationMinutes((prev) => (prev === minutes ? prev : minutes))
-  }, [timerStartedAt, nowTick])
+  }, [timerStartedAt, timerAccumulatedMs, nowTick])
 
   const exerciseBankById = useMemo(() => new Map(exercises.map((e) => [e.id, e])), [exercises])
 
@@ -227,6 +231,7 @@ export default function SessionLogForm({
     let nextDurationMinutes: string
     let nextCaloriesBurned: string
     let nextTimerStartedAt: number | null
+    let nextTimerAccumulatedMs = 0
 
     // A local draft (unsaved edits from before the app was closed/killed)
     // always wins over both a blank form and an already-saved log - it only
@@ -254,6 +259,7 @@ export default function SessionLogForm({
       nextDurationMinutes = draft.durationMinutes
       nextCaloriesBurned = draft.caloriesBurned ?? ''
       nextTimerStartedAt = draft.timerStartedAt ?? null
+      nextTimerAccumulatedMs = draft.timerAccumulatedMs ?? 0
       setRestoredFromDraft(true)
     } else {
       setRestoredFromDraft(false)
@@ -331,6 +337,7 @@ export default function SessionLogForm({
     setDurationMinutes(nextDurationMinutes)
     setCaloriesBurned(nextCaloriesBurned)
     setTimerStartedAt(nextTimerStartedAt)
+    setTimerAccumulatedMs(nextTimerAccumulatedMs)
     setNowTick(Date.now())
     setRestoreGeneration((g) => g + 1)
     // preferredUnit resolves asynchronously (starts at 'kg' until the
@@ -369,6 +376,7 @@ export default function SessionLogForm({
       durationMinutes,
       caloriesBurned,
       timerStartedAt,
+      timerAccumulatedMs,
     })
   }, [
     session,
@@ -382,27 +390,40 @@ export default function SessionLogForm({
     durationMinutes,
     caloriesBurned,
     timerStartedAt,
+    timerAccumulatedMs,
   ])
 
   if (!session) {
     return <p className="text-sm text-muted-foreground">This plan has no sessions yet.</p>
   }
 
+  const timerIdle = timerStartedAt === null && timerAccumulatedMs === 0
   const exercisesById = new Map(session.exercises.map((pe) => [pe.id, pe]))
   const blocks = buildBlocks(exerciseOrder, exercisesById, overrides)
 
+  // Start and Resume are the same thing - a new run on top of whatever's
+  // already accumulated (0 when starting fresh).
   function handleStartTimer() {
     setTimerStartedAt(Date.now())
   }
 
-  // Shared by the Stop button, a manual edit to the duration field, and
-  // Save (if it's still running then) - stopping always means "freeze
-  // durationMinutes at the current elapsed time and hand control back to
-  // the trainee," never "just discard what the timer had."
-  function stopTimer() {
+  // Folds the current run into the accumulated total and freezes
+  // durationMinutes at it, so the field is exact while paused.
+  function pauseTimer() {
     if (timerStartedAt === null) return
-    setDurationMinutes(String(minutesElapsed(timerStartedAt, Date.now())))
+    const total = timerElapsedMs(timerAccumulatedMs, timerStartedAt, Date.now())
+    setTimerAccumulatedMs(total)
     setTimerStartedAt(null)
+    setNowTick(Date.now())
+    setDurationMinutes(String(minutesFromMs(total)))
+  }
+
+  // Behind a confirmation (see the ConfirmDialog below) - wipes the timer
+  // and the duration it filled in, back to a never-started state.
+  function clearTimer() {
+    setTimerStartedAt(null)
+    setTimerAccumulatedMs(0)
+    setDurationMinutes('')
   }
 
   function moveBlock(index: number, direction: -1 | 1) {
@@ -450,14 +471,17 @@ export default function SessionLogForm({
     // If the timer's still running, freeze it now rather than trusting
     // whatever durationMinutes' last periodic tick happened to write - this
     // computes fresh, right at the moment of saving, and updates state too
-    // (rather than relying on stopTimer(), whose setState wouldn't be
+    // (rather than relying on pauseTimer(), whose setState wouldn't be
     // visible until the next render) so the payload below uses the same
     // value the form will go on to show.
     const finalDurationMinutes =
-      timerStartedAt !== null ? String(minutesElapsed(timerStartedAt, Date.now())) : durationMinutes
+      timerStartedAt !== null
+        ? String(minutesFromMs(timerElapsedMs(timerAccumulatedMs, timerStartedAt, Date.now())))
+        : durationMinutes
     if (timerStartedAt !== null) {
       setDurationMinutes(finalDurationMinutes)
       setTimerStartedAt(null)
+      setTimerAccumulatedMs(0)
     }
     const loggedExercises = exerciseOrder
       .map((peId, order) => {
@@ -639,24 +663,33 @@ export default function SessionLogForm({
       </div>
 
       <div className="flex items-center justify-between gap-2 rounded-lg border border-border px-3 py-2.5">
-        <div className="flex flex-col">
+        <div className="flex min-w-0 flex-col">
           <span className="text-sm font-medium">Workout timer</span>
-          {timerStartedAt !== null ? (
-            <span className="text-xs tabular-nums text-muted-foreground">
-              {formatElapsed(nowTick - timerStartedAt)} elapsed
-            </span>
-          ) : (
+          {timerIdle ? (
             <span className="text-xs text-muted-foreground">Fills in duration below automatically</span>
+          ) : (
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {formatElapsed(timerElapsedMs(timerAccumulatedMs, timerStartedAt, nowTick))}{' '}
+              {timerStartedAt !== null ? 'elapsed' : 'paused'}
+            </span>
           )}
         </div>
-        <Button
-          type="button"
-          size="sm"
-          variant={timerStartedAt === null ? 'outline' : 'default'}
-          onClick={timerStartedAt === null ? handleStartTimer : stopTimer}
-        >
-          {timerStartedAt === null ? 'Start session' : 'Stop'}
-        </Button>
+        <div className="flex shrink-0 gap-2">
+          {!timerIdle && (
+            <Button type="button" size="sm" variant="ghost" onClick={() => setClearTimerOpen(true)}>
+              Clear
+            </Button>
+          )}
+          {timerStartedAt !== null ? (
+            <Button type="button" size="sm" onClick={pauseTimer}>
+              Pause
+            </Button>
+          ) : (
+            <Button type="button" size="sm" variant="outline" onClick={handleStartTimer}>
+              {timerIdle ? 'Start session' : 'Resume'}
+            </Button>
+          )}
+        </div>
       </div>
 
       {isFirstLog && (
@@ -808,9 +841,10 @@ export default function SessionLogForm({
           value={durationMinutes}
           onChange={(e) => {
             setDurationMinutes(e.target.value)
-            // A manual edit takes over from the timer immediately, same as
-            // Stop - it's the trainee's number now, not the timer's.
-            if (timerStartedAt !== null) setTimerStartedAt(null)
+            // A manual edit takes over from the timer entirely - it's the
+            // trainee's number now, not the timer's.
+            setTimerStartedAt(null)
+            setTimerAccumulatedMs(0)
           }}
           className="ml-auto w-28"
         />
@@ -858,6 +892,15 @@ export default function SessionLogForm({
         )}
       </div>
 
+      <ConfirmDialog
+        open={clearTimerOpen}
+        onOpenChange={setClearTimerOpen}
+        title="Clear the workout timer?"
+        description="This resets the timer to zero and clears the session duration it filled in."
+        confirmLabel="Clear"
+        confirmingLabel="Clearing…"
+        onConfirm={clearTimer}
+      />
       <OffProgramDialog
         open={offProgramOpen}
         onOpenChange={setOffProgramOpen}

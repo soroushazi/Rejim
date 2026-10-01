@@ -22,6 +22,10 @@ export type WorkoutDraft = {
    * every other field here. Optional for a draft saved before this field
    * existed. */
   timerStartedAt?: number | null
+  /** Time already on the timer from earlier runs before a Pause - the total
+   * is this plus (now - timerStartedAt) while running. Optional for a draft
+   * saved before pausing existed. */
+  timerAccumulatedMs?: number
 }
 
 function draftKey(planSessionId: number, date: string): string {
@@ -59,6 +63,7 @@ function isEmpty(draft: Omit<WorkoutDraft, 'savedAt'>): boolean {
     draft.durationMinutes.trim() === '' &&
     !(draft.caloriesBurned ?? '').trim() &&
     (draft.timerStartedAt ?? null) === null &&
+    !(draft.timerAccumulatedMs ?? 0) &&
     Object.keys(draft.overrides).length === 0
   )
 }
