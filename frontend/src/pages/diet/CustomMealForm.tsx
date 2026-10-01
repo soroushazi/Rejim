@@ -2,7 +2,6 @@ import { ChevronDown } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import type { NewQuickLogItem, Nutrients } from '@/api/types'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { nutrientsForWeight, sumNutrients } from '@/lib/nutrients'
@@ -10,12 +9,10 @@ import { cn, round } from '@/lib/utils'
 import IngredientPicker, { type DraftComponent } from './IngredientPicker'
 
 type Props = {
-  open: boolean
-  onOpenChange: (open: boolean) => void
   onAdd: (name: string, nutrients: Nutrients) => void
-  // Fires when the trainee picks "head to my meals" instead - hands over
-  // whatever's currently typed here so it isn't lost, and this dialog closes
-  // in favor of AddQuickLogItemDialog (see LogMealPage's handleMoveToQuickLog).
+  // Fires when the trainee picks "head to saved meals" instead - hands over
+  // whatever's currently typed here so it isn't lost, and the form clears in
+  // favor of AddQuickLogItemDialog (see LogMealPage's handleMoveToQuickLog).
   onMoveToQuickLog: (draft: NewQuickLogItem) => void
 }
 
@@ -65,8 +62,11 @@ function ingredientsTotal(ingredients: DraftComponent[]): Nutrients | null {
  * via IngredientPicker + nutrientsForWeight/sumNutrients (same math the
  * cart's own totals use), and those fields stay directly editable afterward
  * for a manual nudge - re-editing the ingredient list recomputes and
- * overwrites them again. */
-export default function AddCustomMealDialog({ open, onOpenChange, onAdd, onMoveToQuickLog }: Props) {
+ * overwrites them again.
+ *
+ * Rendered inline as LogMealPage's "Custom meals" tab (it used to be a dialog
+ * behind a floating button, which trainees rarely found). */
+export default function CustomMealForm({ onAdd, onMoveToQuickLog }: Props) {
   const [name, setName] = useState('')
   const [calories, setCalories] = useState('')
   const [values, setValues] = useState(EMPTY_VALUES)
@@ -82,10 +82,6 @@ export default function AddCustomMealDialog({ open, onOpenChange, onAdd, onMoveT
     setIngredientsOpen(false)
     setError(null)
   }
-
-  useEffect(() => {
-    if (open) reset()
-  }, [open])
 
   // Recompute from the ingredient list whenever it changes - see
   // ingredientsTotal's doc comment for why it's a calculator, not a merge.
@@ -103,11 +99,6 @@ export default function AddCustomMealDialog({ open, onOpenChange, onAdd, onMoveT
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ingredients])
-
-  function handleOpenChange(next: boolean) {
-    if (!next) reset()
-    onOpenChange(next)
-  }
 
   function currentNutrients(): Nutrients {
     return {
@@ -133,7 +124,7 @@ export default function AddCustomMealDialog({ open, onOpenChange, onAdd, onMoveT
       return
     }
     onAdd(name.trim(), currentNutrients())
-    handleOpenChange(false)
+    reset()
   }
 
   function handleMoveToQuickLog() {
@@ -142,109 +133,102 @@ export default function AddCustomMealDialog({ open, onOpenChange, onAdd, onMoveT
       calories: calories.trim(),
       ...Object.fromEntries([...MACRO_FIELDS, ...MICRO_FIELDS].map(({ key }) => [key, values[key]?.trim() || null])),
     })
-    handleOpenChange(false)
+    reset()
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[85svh] overflow-y-auto sm:max-w-sm">
-        <DialogHeader>
-          <DialogTitle>Add custom meal</DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <p className="text-sm text-muted-foreground">
-            A one-time estimate for something you can't look up precisely (e.g. "Stew" at a party) - added to
-            today's log only.
-          </p>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="custom-meal-name">Name</Label>
-            <Input id="custom-meal-name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="custom-meal-calories">Calories (kcal)</Label>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+      <p className="text-sm text-muted-foreground">
+        A one-time estimate for something you can't look up precisely (e.g. "Stew" at a party) - added to
+        today's log only.
+      </p>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="custom-meal-name">Name</Label>
+        <Input id="custom-meal-name" value={name} onChange={(e) => setName(e.target.value)} />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="custom-meal-calories">Calories (kcal)</Label>
+        <Input
+          id="custom-meal-calories"
+          type="number"
+          inputMode="decimal"
+          min="0"
+          step="0.1"
+          value={calories}
+          onChange={(e) => setCalories(e.target.value)}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        {MACRO_FIELDS.map(({ key, label }) => (
+          <div key={key} className="flex flex-col gap-1.5">
+            <Label htmlFor={`custom-meal-${key}`}>{label}</Label>
             <Input
-              id="custom-meal-calories"
+              id={`custom-meal-${key}`}
               type="number"
               inputMode="decimal"
               min="0"
               step="0.1"
-              value={calories}
-              onChange={(e) => setCalories(e.target.value)}
+              value={values[key]}
+              onChange={(e) => setValues((v) => ({ ...v, [key]: e.target.value }))}
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            {MACRO_FIELDS.map(({ key, label }) => (
-              <div key={key} className="flex flex-col gap-1.5">
-                <Label htmlFor={`custom-meal-${key}`}>{label}</Label>
-                <Input
-                  id={`custom-meal-${key}`}
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="0.1"
-                  value={values[key]}
-                  onChange={(e) => setValues((v) => ({ ...v, [key]: e.target.value }))}
-                />
-              </div>
-            ))}
+        ))}
+      </div>
+      <p className="text-xs font-semibold text-muted-foreground">Micronutrients (optional)</p>
+      <div className="grid grid-cols-2 gap-3">
+        {MICRO_FIELDS.map(({ key, label }) => (
+          <div key={key} className="flex flex-col gap-1.5">
+            <Label htmlFor={`custom-meal-${key}`}>{label}</Label>
+            <Input
+              id={`custom-meal-${key}`}
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.1"
+              value={values[key]}
+              onChange={(e) => setValues((v) => ({ ...v, [key]: e.target.value }))}
+            />
           </div>
-          <p className="text-xs font-semibold text-muted-foreground">Micronutrients (optional)</p>
-          <div className="grid grid-cols-2 gap-3">
-            {MICRO_FIELDS.map(({ key, label }) => (
-              <div key={key} className="flex flex-col gap-1.5">
-                <Label htmlFor={`custom-meal-${key}`}>{label}</Label>
-                <Input
-                  id={`custom-meal-${key}`}
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="0.1"
-                  value={values[key]}
-                  onChange={(e) => setValues((v) => ({ ...v, [key]: e.target.value }))}
-                />
-              </div>
-            ))}
-          </div>
+        ))}
+      </div>
 
-          <div className="overflow-hidden rounded-lg border border-border">
-            <button
-              type="button"
-              className="flex w-full items-center justify-between gap-2 px-3 py-2 text-sm font-medium"
-              onClick={() => setIngredientsOpen((o) => !o)}
-              aria-expanded={ingredientsOpen}
-            >
-              Enter ingredients (optional)
-              <ChevronDown className={cn('size-4 text-muted-foreground transition-transform', ingredientsOpen && 'rotate-180')} />
-            </button>
-            {ingredientsOpen && (
-              <div className="flex flex-col gap-3 border-t border-border p-3">
-                <p className="text-xs text-muted-foreground">
-                  Know roughly what went into it? Add each ingredient's amount and the fields above fill in
-                  automatically (still yours to adjust after).
-                </p>
-                <IngredientPicker value={ingredients} onChange={setIngredients} />
-              </div>
-            )}
+      <div className="overflow-hidden rounded-lg border border-border">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-2 px-3 py-2 text-sm font-medium"
+          onClick={() => setIngredientsOpen((o) => !o)}
+          aria-expanded={ingredientsOpen}
+        >
+          Enter ingredients (optional)
+          <ChevronDown className={cn('size-4 text-muted-foreground transition-transform', ingredientsOpen && 'rotate-180')} />
+        </button>
+        {ingredientsOpen && (
+          <div className="flex flex-col gap-3 border-t border-border p-3">
+            <p className="text-xs text-muted-foreground">
+              Know roughly what went into it? Add each ingredient's amount and the fields above fill in
+              automatically (still yours to adjust after).
+            </p>
+            <IngredientPicker value={ingredients} onChange={setIngredients} />
           </div>
+        )}
+      </div>
 
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => handleOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" size="sm">
-              Add
-            </Button>
-          </div>
-          <p className="text-center text-xs text-muted-foreground">
-            This will be logged just this once. For something you'll want to log again later, head to{' '}
-            <button type="button" onClick={handleMoveToQuickLog} className="font-medium text-primary hover:underline">
-              My meals
-            </button>{' '}
-            instead.
-          </p>
-        </form>
-      </DialogContent>
-    </Dialog>
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={reset}>
+          Clear
+        </Button>
+        <Button type="submit" size="sm">
+          Add
+        </Button>
+      </div>
+      <p className="text-center text-xs text-muted-foreground">
+        This will be logged just this once. For something you'll want to log again later, head to{' '}
+        <button type="button" onClick={handleMoveToQuickLog} className="font-medium text-primary hover:underline">
+          Saved meals
+        </button>{' '}
+        instead.
+      </p>
+    </form>
   )
 }

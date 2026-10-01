@@ -12,7 +12,7 @@ type Props = {
   onCreated: (item: QuickLogItem) => void
   // Seeds every field when opening - either just a searched name (the empty-
   // Food-Bank-search "Add..." link) or a full draft handed over from
-  // AddCustomMealDialog's "head to my meals" link, which carries over
+  // CustomMealForm's "head to saved meals" link, which carries over
   // whatever the trainee had already typed there.
   initialValues?: Partial<NewQuickLogItem>
 }

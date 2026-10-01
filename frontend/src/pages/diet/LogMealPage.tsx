@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Check, Info, Plus, Search, Utensils, X } from 'lucide-react'
+import { ArrowLeft, Check, Info, Plus, Search, X } from 'lucide-react'
 import { ApiError } from '@/api/client'
 import { getDietPlanForDate } from '@/api/dietPlan'
 import { getFoodItem, listFoodItems } from '@/api/foodItems'
@@ -26,12 +26,20 @@ import { availableUnits, gramsForQuantity } from '@/lib/servingUnits'
 import { nutrientsForWeight, scaleNutrients, sumNutrients } from '@/lib/nutrients'
 import { cn, round } from '@/lib/utils'
 import { toDateKey } from '@/lib/date'
-import AddCustomMealDialog from './AddCustomMealDialog'
 import AddFoodItemDialog from './AddFoodItemDialog'
 import AddQuickLogItemDialog from './AddQuickLogItemDialog'
+import CustomMealForm from './CustomMealForm'
 import NutritionFactsDialog from './NutritionFactsDialog'
 
-type Tab = 'plan' | 'mine' | 'bank'
+type Tab = 'plan' | 'mine' | 'custom' | 'bank'
+
+// Short labels so all four tabs fit a phone's width in one row.
+const TABS: { value: Tab; label: string }[] = [
+  { value: 'plan', label: 'Plan' },
+  { value: 'mine', label: 'Saved meals' },
+  { value: 'custom', label: 'Custom meals' },
+  { value: 'bank', label: 'Bank' },
+]
 
 // Food Bank search results page size for this page's typeahead - kept small since
 // this is a quick-pick list inline in the logging flow, not the full-browse
@@ -51,7 +59,7 @@ type PlanCartItem = {
 }
 type FoodCartItem = { kind: 'food'; key: string; foodItem: FoodItem; unit: string; quantity: string }
 type QuickCartItem = { kind: 'quick'; key: string; quickLogItem: QuickLogItem }
-// A one-time, typed-in estimate (see AddCustomMealDialog) - fixed nutrients,
+// A one-time, typed-in estimate (see CustomMealForm) - fixed nutrients,
 // same as a quick-log item, but never saved anywhere beyond this one log.
 type CustomCartItem = { kind: 'custom'; key: string; name: string; nutrients: Nutrients }
 type CartItem = PlanCartItem | FoodCartItem | QuickCartItem | CustomCartItem
@@ -151,7 +159,6 @@ export default function LogMealPage() {
   const [addFoodOpen, setAddFoodOpen] = useState(false)
   const [addQuickOpen, setAddQuickOpen] = useState(false)
   const [addQuickInitial, setAddQuickInitial] = useState<Partial<NewQuickLogItem> | undefined>(undefined)
-  const [addCustomOpen, setAddCustomOpen] = useState(false)
   const [detailRow, setDetailRow] = useState<{ name: string; caption: string; nutrients: Nutrients } | null>(null)
   const [removeAllOpen, setRemoveAllOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -316,11 +323,11 @@ export default function LogMealPage() {
     setCart((prev) => [...prev, customCartItem(name, nutrients)])
   }
 
-  // AddCustomMealDialog's "head to my meals" link - swap it for
+  // CustomMealForm's "head to saved meals" link - swap it for
   // AddQuickLogItemDialog, pre-filled with whatever was already typed, so
   // saving it as a reusable shortcut doesn't mean starting over.
   function handleMoveToQuickLog(draft: NewQuickLogItem) {
-    setAddCustomOpen(false)
+    setTab('mine')
     setAddQuickInitial(draft)
     setAddQuickOpen(true)
   }
@@ -465,7 +472,7 @@ export default function LogMealPage() {
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Search plan, my meals, food bank…"
+              placeholder="Search plan, saved meals, bank…"
               className="rounded-full pl-9"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -500,7 +507,7 @@ export default function LogMealPage() {
                     <div className="flex min-w-0 flex-1 flex-col gap-1">
                       <div className="flex items-center gap-1.5">
                         <Badge variant={row.kind === 'plan' || row.kind === 'food' ? 'outline' : 'secondary'} className="shrink-0">
-                          {row.kind === 'plan' ? 'Plan' : row.kind === 'food' ? 'Food bank' : row.kind === 'quick' ? 'My meal' : 'Custom'}
+                          {row.kind === 'plan' ? 'Plan' : row.kind === 'food' ? 'Bank' : row.kind === 'quick' ? 'Saved meal' : 'Custom'}
                         </Badge>
                         <span className="min-w-0 flex-1 truncate text-sm font-medium">{cartItemName(row)}</span>
                       </div>
@@ -563,20 +570,20 @@ export default function LogMealPage() {
         )}
 
         <div className="flex gap-1 rounded-full bg-muted p-1">
-          {(['plan', 'mine', 'bank'] as Tab[]).map((t) => (
+          {TABS.map(({ value, label }) => (
             <button
-              key={t}
+              key={value}
               type="button"
               onClick={() => {
-                setTab(t)
+                setTab(value)
                 setQuery('')
               }}
               className={cn(
-                'flex-1 rounded-full py-1.5 text-center text-xs font-semibold transition-colors',
-                tab === t ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground',
+                'flex-1 whitespace-nowrap rounded-full px-1 py-1.5 text-center text-xs font-semibold transition-colors',
+                tab === value ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground',
               )}
             >
-              {t === 'plan' ? 'From plan' : t === 'mine' ? 'My meals' : 'Food bank'}
+              {label}
             </button>
           ))}
         </div>
@@ -598,7 +605,7 @@ export default function LogMealPage() {
               </BrowseSection>
             )}
             {matchingQuickItems.length > 0 && (
-              <BrowseSection title="My meals">
+              <BrowseSection title="Saved meals">
                 {matchingQuickItems.map((item) => (
                   <BrowseListItem
                     key={item.id}
@@ -612,7 +619,7 @@ export default function LogMealPage() {
               </BrowseSection>
             )}
             {bankResults.length > 0 && (
-              <BrowseSection title="Food bank">
+              <BrowseSection title="Bank">
                 {bankResults.map((item) => (
                   <BrowseListItem
                     key={item.id}
@@ -704,10 +711,10 @@ export default function LogMealPage() {
                   ))}
                 </ul>
                 {quickItems.length === 0 && (
-                  <p className="text-sm text-muted-foreground">No saved shortcuts yet - add one below.</p>
+                  <p className="text-sm text-muted-foreground">No saved meals yet - add one below.</p>
                 )}
                 <Button type="button" variant="link" className="h-auto justify-start px-0" onClick={() => setAddQuickOpen(true)}>
-                  <Plus className="size-3.5" /> New quick-log shortcut
+                  <Plus className="size-3.5" /> New saved meal
                 </Button>
               </div>
             )}
@@ -745,16 +752,13 @@ export default function LogMealPage() {
             )}
           </>
         )}
-      </div>
 
-      <Button
-        type="button"
-        className="fixed z-15 gap-1.5 rounded-full shadow-lg"
-        style={{ right: 16, bottom: 'calc(var(--nav-height) + env(safe-area-inset-bottom) + 16px)' }}
-        onClick={() => setAddCustomOpen(true)}
-      >
-        <Utensils className="size-4" /> Add custom meal
-      </Button>
+        {/* Kept mounted (just hidden) rather than conditionally rendered, so a
+            half-typed estimate survives switching tabs or searching. */}
+        <div className={cn(!(tab === 'custom' && !searching) && 'hidden')}>
+          <CustomMealForm onAdd={addCustomItem} onMoveToQuickLog={handleMoveToQuickLog} />
+        </div>
+      </div>
 
       <AddFoodItemDialog
         open={addFoodOpen}
@@ -770,12 +774,6 @@ export default function LogMealPage() {
         }}
         onCreated={(item) => { setQuickItems((prev) => [item, ...prev]); addQuickItem(item) }}
         initialValues={addQuickInitial ?? { name: trimmedQuery }}
-      />
-      <AddCustomMealDialog
-        open={addCustomOpen}
-        onOpenChange={setAddCustomOpen}
-        onAdd={addCustomItem}
-        onMoveToQuickLog={handleMoveToQuickLog}
       />
       <NutritionFactsDialog
         open={detailRow !== null}
