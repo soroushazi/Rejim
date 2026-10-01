@@ -4,9 +4,8 @@ import type { NewQuickLogItem, Nutrients } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { nutrientsForWeight, sumNutrients } from '@/lib/nutrients'
 import { cn, round } from '@/lib/utils'
-import IngredientPicker, { type DraftComponent } from './IngredientPicker'
+import IngredientPicker, { ingredientsTotal, type DraftComponent } from './IngredientPicker'
 
 type Props = {
   onAdd: (name: string, nutrients: Nutrients) => void
@@ -36,17 +35,6 @@ const MICRO_FIELDS: { key: keyof Nutrients; label: string }[] = [
 const EMPTY_VALUES = Object.fromEntries(
   [...MACRO_FIELDS, ...MICRO_FIELDS].map(({ key }) => [key, '']),
 ) as Record<string, string>
-
-/** Sums whichever ingredient rows already have a resolvable weight (IngredientPicker
- * itself keeps weight_grams in sync with each row's own unit/quantity) - a row added
- * but not yet given an amount just doesn't count yet, rather than blowing the
- * running total away. */
-function ingredientsTotal(ingredients: DraftComponent[]): Nutrients | null {
-  const rows = ingredients
-    .filter((c) => c.food_item && Number(c.weight_grams) > 0)
-    .map((c) => nutrientsForWeight(c.food_item!, Number(c.weight_grams)))
-  return rows.length > 0 ? sumNutrients(rows) : null
-}
 
 /** A one-time, typed-in estimate for something eaten today that has no
  * sensible backing item - e.g. "Stew" at a party, where a rough guess is all
@@ -84,7 +72,7 @@ export default function CustomMealForm({ onAdd, onMoveToQuickLog }: Props) {
   }
 
   // Recompute from the ingredient list whenever it changes - see
-  // ingredientsTotal's doc comment for why it's a calculator, not a merge.
+  // the component's doc comment for why it's a calculator, not a merge.
   useEffect(() => {
     const total = ingredientsTotal(ingredients)
     if (!total) return

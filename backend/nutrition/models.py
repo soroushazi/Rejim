@@ -261,8 +261,8 @@ class QuickLogItem(models.Model):
     fiber_g = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
     sugar_g = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
     sodium_mg = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
-    # Added so a custom-meal entry (LogMealPage's "Add custom meal", which does
-    # carry these) loses nothing when moved here via "head to my meals" - see
+    # Added so a custom-meal entry (LogMealPage's "Custom meals" tab, which does
+    # carry these) loses nothing when moved here via "head to saved meals" - see
     # FoodLog.custom_name.
     potassium_mg = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
     calcium_mg = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)

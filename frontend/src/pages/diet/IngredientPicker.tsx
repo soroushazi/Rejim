@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import { listFoodItems } from '../../api/foodItems'
-import type { FoodItem } from '../../api/types'
+import type { FoodItem, Nutrients } from '../../api/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { nutrientsForWeight, sumNutrients } from '@/lib/nutrients'
 import { availableUnits, gramsForQuantity } from '@/lib/servingUnits'
 import AddFoodItemDialog from './AddFoodItemDialog'
 
@@ -21,6 +22,17 @@ export type DraftComponent = {
   food_item?: FoodItem
   unit?: string
   quantity?: string
+}
+
+/** Sums whichever ingredient rows already have a resolvable weight (IngredientPicker
+ * itself keeps weight_grams in sync with each row's own unit/quantity) - a row added
+ * but not yet given an amount just doesn't count yet, rather than blowing the
+ * running total away. */
+export function ingredientsTotal(ingredients: DraftComponent[]): Nutrients | null {
+  const rows = ingredients
+    .filter((c) => c.food_item && Number(c.weight_grams) > 0)
+    .map((c) => nutrientsForWeight(c.food_item!, Number(c.weight_grams)))
+  return rows.length > 0 ? sumNutrients(rows) : null
 }
 
 type IngredientPickerProps = {

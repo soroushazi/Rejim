@@ -173,7 +173,8 @@ class FoodItemEditRequestViewSet(viewsets.ModelViewSet):
 
 
 class QuickLogItemViewSet(TraineeScopedQuerysetMixin, viewsets.ModelViewSet):
-    queryset = QuickLogItem.objects.all()
+    # Alphabetical, so the Saved meals tab reads in a stable, scannable order.
+    queryset = QuickLogItem.objects.order_by("name", "id")
     serializer_class = QuickLogItemSerializer
     permission_classes = [IsTraineeWriteTrainerReadOnly]
     trainee_path = "trainee"

@@ -379,6 +379,10 @@ export default function LogMealPage() {
     return rows
   }, [searching, meal, trimmedQuery])
 
+  // Memoized: AddQuickLogItemDialog resets its form (ingredient list included)
+  // whenever this object's identity changes, so it mustn't be rebuilt every render.
+  const quickLogInitialValues = useMemo(() => addQuickInitial ?? { name: trimmedQuery }, [addQuickInitial, trimmedQuery])
+
   const matchingQuickItems = useMemo(
     () => (searching ? quickItems.filter((q) => q.name.toLowerCase().includes(trimmedQuery.toLowerCase())) : []),
     [searching, quickItems, trimmedQuery],
@@ -697,25 +701,32 @@ export default function LogMealPage() {
 
             {tab === 'mine' && (
               <div className="flex flex-col gap-2">
-                <ul className="flex flex-col overflow-hidden rounded-lg border border-border">
-                  {quickItems.map((item) => (
-                    <BrowseListItem
-                      key={item.id}
-                      name={item.name}
-                      caption={`${item.calories} kcal`}
-                      added={false}
-                      addLabel="Add"
-                      onToggle={() => addQuickItem(item)}
-                      onInfo={() => showQuickItemInfo(item)}
-                    />
-                  ))}
-                </ul>
-                {quickItems.length === 0 && (
-                  <p className="text-sm text-muted-foreground">No saved meals yet - add one below.</p>
+                <div className="flex items-center justify-end">
+                  <Button type="button" variant="outline" size="sm" onClick={() => setAddQuickOpen(true)}>
+                    <Plus className="size-3.5" /> New saved meal
+                  </Button>
+                </div>
+                {quickItems.length > 0 && (
+                  <ul className="flex flex-col overflow-hidden rounded-lg border border-border">
+                    {quickItems.map((item) => (
+                      <BrowseListItem
+                        key={item.id}
+                        name={item.name}
+                        caption={`${item.calories} kcal`}
+                        added={false}
+                        addLabel="Add"
+                        onToggle={() => addQuickItem(item)}
+                        onInfo={() => showQuickItemInfo(item)}
+                      />
+                    ))}
+                  </ul>
                 )}
-                <Button type="button" variant="link" className="h-auto justify-start px-0" onClick={() => setAddQuickOpen(true)}>
-                  <Plus className="size-3.5" /> New saved meal
-                </Button>
+                {quickItems.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    No saved meals yet. Save something you eat often (e.g. a protein shake) and it'll be here, one tap
+                    to add.
+                  </p>
+                )}
               </div>
             )}
 
@@ -772,8 +783,11 @@ export default function LogMealPage() {
           setAddQuickOpen(next)
           if (!next) setAddQuickInitial(undefined)
         }}
-        onCreated={(item) => { setQuickItems((prev) => [item, ...prev]); addQuickItem(item) }}
-        initialValues={addQuickInitial ?? { name: trimmedQuery }}
+        onCreated={(item) => {
+          setQuickItems((prev) => [...prev, item].sort((a, b) => a.name.localeCompare(b.name)))
+          addQuickItem(item)
+        }}
+        initialValues={quickLogInitialValues}
       />
       <NutritionFactsDialog
         open={detailRow !== null}
