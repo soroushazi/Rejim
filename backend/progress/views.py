@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 from nutrition.models import LoggedMeal
 from nutrition.plan_versions import diet_plan_for_date
 from tracker.models import ActivityLog, DailyMetric
+from tracker.services import calculate_tdee
 from tracker.views import _parse_date, _resolve_trainee
 from workouts.models import LoggedSet, WorkoutSession
 
@@ -183,7 +184,14 @@ class ProgressTrainingVolumeView(APIView):
 
 class ProgressNutritionView(APIView):
     """Daily calories/macros consumed vs. the diet plan's target, plus the
-    diet-adherence percentage, for the Nutrition dashboard."""
+    diet-adherence percentage, for the Nutrition dashboard.
+
+    Each day also carries calories_out (the same TDEE estimate the Daily
+    Tracker's summary uses - tracker/services.py::calculate_tdee) and
+    net_calories = consumed - calories_out. Only days with food logged are
+    returned, so a day nobody logged never reads as a huge deficit.
+    calories_out_is_estimate flags a lower-confidence day: Tier 3 (steps
+    only) or no BMR (profile missing height/age/weight)."""
 
     permission_classes = [IsAuthenticated]
 
@@ -196,10 +204,18 @@ class ProgressNutritionView(APIView):
         target = diet_plan.average_daily_nutrients() if diet_plan else None
 
         consumed_by_date = food_logs_by_day(trainee, start, end)
-        days = [
-            {"date": day, "consumed": nutrients}
-            for day, nutrients in sorted(consumed_by_date.items())
-        ]
+        days = []
+        for day, nutrients in sorted(consumed_by_date.items()):
+            calories_out = calculate_tdee(trainee, day, consumed_calories=nutrients["calories"])
+            days.append(
+                {
+                    "date": day,
+                    "consumed": nutrients,
+                    "calories_out": calories_out["total"],
+                    "net_calories": (nutrients["calories"] or 0) - calories_out["total"],
+                    "calories_out_is_estimate": calories_out["tier"] == 3 or calories_out["bmr"] is None,
+                }
+            )
 
         return Response(
             {

@@ -8,6 +8,7 @@ import ProgressSummaryCard from '@/pages/diet/ProgressSummaryCard'
 import { toDateKey } from '@/lib/date'
 import { averageNutrients } from '@/lib/nutrients'
 import MacroTrendChart from './MacroTrendChart'
+import NetCaloriesCard from './NetCaloriesCard'
 
 type Props = {
   range: { start: string; end: string }
@@ -71,6 +72,8 @@ export default function NutritionDashboard({ range, traineeId }: Props) {
       <DietHistoryCard loggedMeals={loggedMeals} target={data.target} />
 
       <ProgressSummaryCard heading={heading} nutrients={hovered ? hovered.consumed : periodAverage} target={data.target} />
+
+      <NetCaloriesCard days={days} hovered={hovered} />
 
       <Card>
         <CardContent>

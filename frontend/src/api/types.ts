@@ -801,6 +801,12 @@ export type ProgressTrainingVolumeResponse = {
 export type ProgressNutritionDay = {
   date: string
   consumed: Nutrients
+  /** That day's TDEE estimate - same as the Daily tab's "Calories out". */
+  calories_out: number
+  /** consumed.calories - calories_out: negative = deficit, positive = surplus. */
+  net_calories: number
+  /** Steps-only (Tier 3) or no BMR - a rougher estimate. */
+  calories_out_is_estimate: boolean
 }
 
 export type ProgressNutritionResponse = {
