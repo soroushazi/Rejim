@@ -155,6 +155,10 @@ export function SetEditorRow({
   onChange: (patch: Partial<DraftSet>) => void
   onConfirm: () => void
   onRemove: () => void
+  /** Drives the live "lowering/pushing heavier vs. last time" note under the
+   * Weight field. Callers pass it for the first working set (round) only -
+   * like `hint`, it's guidance for picking the session's starting weight, not
+   * something to repeat on every later set. */
   suggestion?: WeightSuggestion
   /** Hides the per-row confirm/remove buttons - used when a caller confirms
    * multiple rows together (e.g. one superset round confirms both exercises

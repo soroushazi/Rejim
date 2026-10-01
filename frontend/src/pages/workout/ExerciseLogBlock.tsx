@@ -239,7 +239,7 @@ export default function ExerciseLogBlock({
               key={i}
               label={`Set ${i + 1}`}
               set={set}
-              suggestion={suggestion}
+              suggestion={i === 0 ? suggestion : undefined}
               isUnilateral={isUnilateral}
               weightPlaceholder={workingPlaceholder}
               hint={i === 0 ? hint : null}

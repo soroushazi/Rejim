@@ -395,7 +395,7 @@ export default function SupersetLogBlock({ entries, weightUnit }: Props) {
               <SetEditorRow
                 label={a.planExercise.exercise_name}
                 set={setA}
-                suggestion={suggestionA}
+                suggestion={i === 0 ? suggestionA : undefined}
                 isUnilateral={isUnilateralA}
                 weightPlaceholder={placeholdersA.working}
                 hint={i === 0 && placeholdersA.hint ? { ...placeholdersA.hint, text: `${a.planExercise.exercise_name}: ${placeholdersA.hint.text}` } : null}
@@ -407,7 +407,7 @@ export default function SupersetLogBlock({ entries, weightUnit }: Props) {
               <SetEditorRow
                 label={b.planExercise.exercise_name}
                 set={setB}
-                suggestion={suggestionB}
+                suggestion={i === 0 ? suggestionB : undefined}
                 isUnilateral={isUnilateralB}
                 weightPlaceholder={placeholdersB.working}
                 hint={i === 0 && placeholdersB.hint ? { ...placeholdersB.hint, text: `${b.planExercise.exercise_name}: ${placeholdersB.hint.text}` } : null}
