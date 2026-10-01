@@ -2,7 +2,7 @@ import type { Nutrients } from '@/api/types'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { round } from '@/lib/utils'
 
-const MICRO_FIELDS: { key: keyof Nutrients; label: string; unit: string }[] = [
+export const MICRO_FIELDS: { key: keyof Nutrients; label: string; unit: string }[] = [
   { key: 'fiber_g', label: 'Fiber', unit: 'g' },
   { key: 'sugar_g', label: 'Sugar', unit: 'g' },
   { key: 'sodium_mg', label: 'Sodium', unit: 'mg' },

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type MouseEvent } from 'react'
 import { Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { deleteLoggedMeal } from '@/api/loggedMeals'
@@ -7,7 +7,8 @@ import { useAuth } from '@/auth/AuthContext'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import ConfirmDialog from '@/components/ConfirmDialog'
-import { round } from '@/lib/utils'
+import { cn, round } from '@/lib/utils'
+import LoggedMealDetailDialog from './LoggedMealDetailDialog'
 
 /** Slot-card tint by logged state: off-plan (any custom item) reads as a
  * warning (reddish), fully on-plan or plan+off-plan both read as a confirmed
@@ -37,6 +38,16 @@ export default function LogMealSlot({ meal, date, loggedMeal, onCleared }: Props
   const [clearing, setClearing] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [detailOpen, setDetailOpen] = useState(false)
+
+  // Tapping a logged meal's card anywhere opens its full breakdown - except its
+  // own buttons (remove/edit), and clicks bubbling up through React from a
+  // portaled dialog, which aren't inside this card's DOM at all.
+  function handleCardClick(e: MouseEvent<HTMLLIElement>) {
+    const target = e.target as HTMLElement
+    if (!loggedMeal || !e.currentTarget.contains(target) || target.closest('button')) return
+    setDetailOpen(true)
+  }
 
   async function handleClear() {
     if (!loggedMeal) return
@@ -53,9 +64,9 @@ export default function LogMealSlot({ meal, date, loggedMeal, onCleared }: Props
   }
 
   return (
-    <li className={slotClassName(loggedMeal?.source)}>
+    <li className={cn(slotClassName(loggedMeal?.source), loggedMeal && 'cursor-pointer')} onClick={handleCardClick}>
       <div className="flex items-center justify-between gap-2 px-3 py-2.5">
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1">
           <span className="font-medium">{meal.label}</span>
           {loggedMeal?.source === 'plan' && loggedMeal.meal_option_label && (
             <span className="text-xs text-muted-foreground">From plan · {loggedMeal.meal_option_label}</span>
@@ -73,11 +84,6 @@ export default function LogMealSlot({ meal, date, loggedMeal, onCleared }: Props
           {!loggedMeal && <span className="text-xs text-muted-foreground">Not logged yet</span>}
         </div>
         <div className="flex items-center gap-2">
-          {loggedMeal && (
-            <span className="whitespace-nowrap text-sm text-muted-foreground">
-              {loggedMeal.total_nutrients.calories !== null ? round(loggedMeal.total_nutrients.calories) : '—'} kcal
-            </span>
-          )}
           {canLog && loggedMeal && (
             <Button
               type="button"
@@ -99,6 +105,17 @@ export default function LogMealSlot({ meal, date, loggedMeal, onCleared }: Props
         </div>
       </div>
 
+      {loggedMeal && (
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 border-t border-border/60 px-3 py-2 text-sm">
+          <span className="font-medium">
+            {loggedMeal.total_nutrients.calories !== null ? round(loggedMeal.total_nutrients.calories) : '—'} kcal
+          </span>
+          <span className="text-muted-foreground">P {round(loggedMeal.total_nutrients.protein_g ?? 0)}g</span>
+          <span className="text-muted-foreground">C {round(loggedMeal.total_nutrients.carbs_g ?? 0)}g</span>
+          <span className="text-muted-foreground">F {round(loggedMeal.total_nutrients.fat_g ?? 0)}g</span>
+        </div>
+      )}
+
       {error && <p className="px-3 pb-2 text-sm text-destructive">{error}</p>}
 
       <ConfirmDialog
@@ -107,6 +124,8 @@ export default function LogMealSlot({ meal, date, loggedMeal, onCleared }: Props
         title={`Remove your logged ${meal.label.toLowerCase()}?`}
         onConfirm={handleClear}
       />
+
+      {loggedMeal && <LoggedMealDetailDialog open={detailOpen} onOpenChange={setDetailOpen} meal={loggedMeal} />}
     </li>
   )
 }
