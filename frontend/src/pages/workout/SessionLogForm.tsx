@@ -30,6 +30,7 @@ import { formatElapsed, minutesElapsed } from '@/lib/elapsed'
 import { usePreferredWeightUnit } from '@/lib/usePreferredWeightUnit'
 import { clearWorkoutDraft, loadWorkoutDraft, saveWorkoutDraft, type ExerciseDrafts } from '@/lib/workoutDraft'
 import ExerciseLogBlock, { type DraftSet } from './ExerciseLogBlock'
+import ExerciseInfoButton from './ExerciseInfoButton'
 import ExerciseLogListRow from './ExerciseLogListRow'
 import OffProgramDialog from './OffProgramDialog'
 import { newDraftSet } from './SetRows'
@@ -546,10 +547,7 @@ export default function SessionLogForm({
   if (focusedBlock) {
     const entryA = entryFor(focusedBlock.peId)
     const entryB = focusedBlock.type === 'pair' ? entryFor(focusedBlock.partnerId) : null
-    const title =
-      focusedBlock.type === 'pair' && entryA && entryB
-        ? `${entryA.planExercise.exercise_name} + ${entryB.planExercise.exercise_name}`
-        : (entryA?.planExercise.exercise_name ?? '')
+    const headerEntries = [entryA, entryB].filter((e): e is ExerciseLogEntry => e !== null)
 
     return (
       <div className="-mx-4 flex flex-col gap-3">
@@ -560,7 +558,25 @@ export default function SessionLogForm({
           <Button type="button" variant="ghost" size="icon" aria-label="Back to session" onClick={() => setFocusedPeId(null)}>
             <ArrowLeft className="size-5" />
           </Button>
-          <span className="min-w-0 flex-1 truncate font-semibold">{title}</span>
+          {/* One line per exercise (two for a superset), each with its own ⓘ -
+              trainees often only glance at the name in the overview list, so
+              the description/video/muscles need to be reachable here too. */}
+          <div className="flex min-w-0 flex-1 flex-col">
+            {headerEntries.map((entry, i) => (
+              <div key={entry.planExercise.id} className="flex min-w-0 items-center gap-1.5">
+                <span className="min-w-0 truncate font-semibold">
+                  {i > 0 && '+ '}
+                  {entry.planExercise.exercise_name}
+                </span>
+                <ExerciseInfoButton
+                  name={entry.planExercise.exercise_name}
+                  exercise={entry.exercise}
+                  exercisesById={exerciseBankById}
+                  muscleGroups={muscleGroups}
+                />
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="flex flex-col gap-3 px-4">

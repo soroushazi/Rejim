@@ -1,8 +1,7 @@
-import { ChevronDown, ChevronUp, Info, Link2 } from 'lucide-react'
-import { useState } from 'react'
+import { ChevronDown, ChevronUp, Link2 } from 'lucide-react'
 import type { Exercise, MuscleGroup, PlanExerciseDetail } from '@/api/types'
 import { Button } from '@/components/ui/button'
-import ExerciseDetailDialog from './ExerciseDetailDialog'
+import ExerciseInfoButton from './ExerciseInfoButton'
 
 type Props = {
   planExerciseA: PlanExerciseDetail
@@ -40,34 +39,28 @@ export default function SupersetLogListRow({
   reordering,
   onLog,
 }: Props) {
-  const [detailsFor, setDetailsFor] = useState<0 | 1 | null>(null)
-
   return (
     <div className="overflow-hidden rounded-lg border border-primary/30">
-      <div className="flex items-center gap-0.5 bg-primary/5 px-3 py-2.5">
+      <div className="flex items-center gap-1.5 bg-primary/5 px-3 py-2.5">
         <Link2 className="size-3.5 shrink-0 text-primary" />
         <div className="flex min-w-0 shrink flex-col leading-tight">
-          <span className="flex min-w-0 items-center gap-1 truncate text-sm font-medium">
+          <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
             <span className="min-w-0 truncate">{planExerciseA.exercise_name}</span>
-            <button
-              type="button"
-              className="shrink-0 text-muted-foreground hover:text-foreground"
-              onClick={() => setDetailsFor(0)}
-              aria-label={`View details for ${planExerciseA.exercise_name}`}
-            >
-              <Info className="size-3.5" />
-            </button>
+            <ExerciseInfoButton
+              name={planExerciseA.exercise_name}
+              exercise={exerciseA}
+              exercisesById={exercisesById}
+              muscleGroups={muscleGroups}
+            />
           </span>
-          <span className="flex min-w-0 items-center gap-1 truncate text-sm font-medium">
+          <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
             <span className="min-w-0 truncate">+ {planExerciseB.exercise_name}</span>
-            <button
-              type="button"
-              className="shrink-0 text-muted-foreground hover:text-foreground"
-              onClick={() => setDetailsFor(1)}
-              aria-label={`View details for ${planExerciseB.exercise_name}`}
-            >
-              <Info className="size-3.5" />
-            </button>
+            <ExerciseInfoButton
+              name={planExerciseB.exercise_name}
+              exercise={exerciseB}
+              exercisesById={exercisesById}
+              muscleGroups={muscleGroups}
+            />
           </span>
         </div>
         <span className="ml-auto whitespace-nowrap text-xs text-muted-foreground">
@@ -92,13 +85,6 @@ export default function SupersetLogListRow({
           </Button>
         </div>
       )}
-
-      <ExerciseDetailDialog
-        exercise={detailsFor === 0 ? exerciseA : detailsFor === 1 ? exerciseB : null}
-        exercisesById={exercisesById}
-        muscleGroups={muscleGroups}
-        onOpenChange={(open) => !open && setDetailsFor(null)}
-      />
     </div>
   )
 }

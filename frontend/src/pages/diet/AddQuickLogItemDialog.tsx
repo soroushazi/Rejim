@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn, round } from '@/lib/utils'
-import CollapsibleFormSection from './CollapsibleFormSection'
+import CollapsibleSection from '@/components/CollapsibleSection'
 import IngredientPicker, { ingredientsTotal, type DraftComponent } from './IngredientPicker'
 
 type Mode = 'ingredients' | 'custom'
@@ -232,7 +232,7 @@ export default function AddQuickLogItemDialog({ open, onOpenChange, onCreated, i
                   </div>
                 ))}
               </div>
-              <CollapsibleFormSection
+              <CollapsibleSection
                 title="Micronutrients (optional)"
                 summary={microsFilled ? `${microsFilled} filled` : undefined}
                 open={microsOpen}
@@ -254,7 +254,7 @@ export default function AddQuickLogItemDialog({ open, onOpenChange, onCreated, i
                     </div>
                   ))}
                 </div>
-              </CollapsibleFormSection>
+              </CollapsibleSection>
             </>
           )}
           {error && <p className="text-sm text-destructive">{error}</p>}

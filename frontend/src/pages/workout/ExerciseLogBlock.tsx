@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { listExerciseHistory } from '@/api/loggedSets'
 import type { Exercise, ExerciseHistorySet, PlanExerciseDetail } from '@/api/types'
+import CollapsibleSection from '@/components/CollapsibleSection'
 import { Button } from '@/components/ui/button'
 import { checkPersonalRecord, type PersonalRecordKind } from '@/lib/personalRecord'
 import { suggestUnilateralWeight, suggestWeight } from '@/lib/weightSuggestion'
@@ -35,6 +36,9 @@ export default function ExerciseLogBlock({
   onDropsetSetsChange,
 }: Props) {
   const [history, setHistory] = useState<ExerciseHistorySet[]>([])
+  // Most trainees skip warm-ups, so the section starts collapsed - unless this
+  // exercise already has some (a restored draft, or re-opening a saved log).
+  const [warmupOpen, setWarmupOpen] = useState(warmupSets.length > 0)
 
   useEffect(() => {
     let cancelled = false
@@ -209,37 +213,43 @@ export default function ExerciseLogBlock({
         </p>
       )}
 
-      <div className="flex flex-col gap-1.5">
-        <p className="text-xs font-semibold text-muted-foreground">Warm-up</p>
-        {warmupSets.map((set, i) =>
-          set.confirmed ? (
-            <SetSummaryRow
-              key={i}
-              label={`Warm-up ${i + 1}`}
-              set={set}
-              isPr={null}
-              isUnilateral={isUnilateral}
-              onEdit={() => updateWarmup(i, { confirmed: false })}
-              onRemove={() => removeWarmup(i)}
-            />
-          ) : (
-            <SetEditorRow
-              key={i}
-              label={`Warm-up ${i + 1}`}
-              set={set}
-              isUnilateral={isUnilateral}
-              onChange={(patch) => updateWarmup(i, patch)}
-              onConfirm={() => updateWarmup(i, { confirmed: true })}
-              onRemove={() => removeWarmup(i)}
-            />
-          ),
-        )}
-        {!hasActiveWarmup && (
-          <Button type="button" variant="outline" size="sm" className="self-start" onClick={addWarmup}>
-            + Add warm-up set
-          </Button>
-        )}
-      </div>
+      <CollapsibleSection
+        title="Warm-up (optional)"
+        summary={warmupSets.length ? `${warmupSets.length} ${warmupSets.length === 1 ? 'set' : 'sets'}` : undefined}
+        open={warmupOpen}
+        onOpenChange={setWarmupOpen}
+      >
+        <div className="flex flex-col gap-1.5">
+          {warmupSets.map((set, i) =>
+            set.confirmed ? (
+              <SetSummaryRow
+                key={i}
+                label={`Warm-up ${i + 1}`}
+                set={set}
+                isPr={null}
+                isUnilateral={isUnilateral}
+                onEdit={() => updateWarmup(i, { confirmed: false })}
+                onRemove={() => removeWarmup(i)}
+              />
+            ) : (
+              <SetEditorRow
+                key={i}
+                label={`Warm-up ${i + 1}`}
+                set={set}
+                isUnilateral={isUnilateral}
+                onChange={(patch) => updateWarmup(i, patch)}
+                onConfirm={() => updateWarmup(i, { confirmed: true })}
+                onRemove={() => removeWarmup(i)}
+              />
+            ),
+          )}
+          {!hasActiveWarmup && (
+            <Button type="button" variant="outline" size="sm" className="self-start" onClick={addWarmup}>
+              + Add warm-up set
+            </Button>
+          )}
+        </div>
+      </CollapsibleSection>
 
       <div className="flex flex-col gap-1.5">
         <p className="text-xs font-semibold text-muted-foreground">Working sets</p>

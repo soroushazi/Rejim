@@ -1,8 +1,7 @@
-import { ChevronDown, ChevronUp, Info } from 'lucide-react'
-import { useState } from 'react'
+import { ChevronDown, ChevronUp } from 'lucide-react'
 import type { Exercise, MuscleGroup, PlanExerciseDetail } from '@/api/types'
 import { Button } from '@/components/ui/button'
-import ExerciseDetailDialog from './ExerciseDetailDialog'
+import ExerciseInfoButton from './ExerciseInfoButton'
 
 type Props = {
   planExercise: PlanExerciseDetail
@@ -34,20 +33,16 @@ export default function ExerciseLogListRow({
   reordering,
   onLog,
 }: Props) {
-  const [detailsOpen, setDetailsOpen] = useState(false)
-
   return (
     <div className="overflow-hidden rounded-lg border border-border">
-      <div className="flex items-center gap-0.5 px-3 py-2.5">
+      <div className="flex items-center gap-1.5 px-3 py-2.5">
         <span className="min-w-0 shrink truncate font-medium">{planExercise.exercise_name}</span>
-        <button
-          type="button"
-          className="shrink-0 text-muted-foreground hover:text-foreground"
-          onClick={() => setDetailsOpen(true)}
-          aria-label={`View details for ${planExercise.exercise_name}`}
-        >
-          <Info className="size-4" />
-        </button>
+        <ExerciseInfoButton
+          name={planExercise.exercise_name}
+          exercise={exercise}
+          exercisesById={exercisesById}
+          muscleGroups={muscleGroups}
+        />
         <span className="ml-auto whitespace-nowrap text-xs text-muted-foreground">
           {confirmedWorkingCount}/{planExercise.target_sets} sets · {planExercise.target_reps_min}-
           {planExercise.target_reps_max} reps
@@ -85,13 +80,6 @@ export default function ExerciseLogListRow({
           </Button>
         </div>
       )}
-
-      <ExerciseDetailDialog
-        exercise={detailsOpen ? exercise : null}
-        exercisesById={exercisesById}
-        muscleGroups={muscleGroups}
-        onOpenChange={setDetailsOpen}
-      />
     </div>
   )
 }

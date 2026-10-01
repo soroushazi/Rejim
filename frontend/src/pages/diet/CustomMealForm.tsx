@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { round } from '@/lib/utils'
-import CollapsibleFormSection from './CollapsibleFormSection'
+import CollapsibleSection from '@/components/CollapsibleSection'
 import IngredientPicker, { ingredientsTotal, type DraftComponent } from './IngredientPicker'
 
 type Props = {
@@ -166,7 +166,7 @@ export default function CustomMealForm({ onAdd, onMoveToQuickLog }: Props) {
           </div>
         ))}
       </div>
-      <CollapsibleFormSection
+      <CollapsibleSection
         title="Micronutrients (optional)"
         summary={microsFilled ? `${microsFilled} filled` : undefined}
         open={microsOpen}
@@ -188,15 +188,15 @@ export default function CustomMealForm({ onAdd, onMoveToQuickLog }: Props) {
             </div>
           ))}
         </div>
-      </CollapsibleFormSection>
+      </CollapsibleSection>
 
-      <CollapsibleFormSection title="Enter ingredients (optional)" open={ingredientsOpen} onOpenChange={setIngredientsOpen}>
+      <CollapsibleSection title="Enter ingredients (optional)" open={ingredientsOpen} onOpenChange={setIngredientsOpen}>
         <p className="text-xs text-muted-foreground">
           Know roughly what went into it? Add each ingredient's amount and the fields above fill in
           automatically (still yours to adjust after).
         </p>
         <IngredientPicker value={ingredients} onChange={setIngredients} />
-      </CollapsibleFormSection>
+      </CollapsibleSection>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
       <div className="flex justify-end gap-2">

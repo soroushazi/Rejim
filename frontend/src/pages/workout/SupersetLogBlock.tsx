@@ -3,6 +3,7 @@ import { Trophy, X } from 'lucide-react'
 import { listExerciseHistory } from '@/api/loggedSets'
 import type { Exercise, ExerciseHistorySet, PlanExerciseDetail } from '@/api/types'
 import { Badge } from '@/components/ui/badge'
+import CollapsibleSection from '@/components/CollapsibleSection'
 import { Button } from '@/components/ui/button'
 import { checkPersonalRecord } from '@/lib/personalRecord'
 import { suggestWeight } from '@/lib/weightSuggestion'
@@ -196,6 +197,10 @@ export default function SupersetLogBlock({ entries }: Props) {
   const isUnilateralB = b.exercise?.is_unilateral ?? false
   const historyA = useHistory(a.planExercise.exercise)
   const historyB = useHistory(b.planExercise.exercise)
+  // Collapsed by default, same as ExerciseLogBlock - unless either side
+  // already has warm-ups (restored draft, or re-opening a saved log).
+  const warmupCount = a.warmupSets.length + b.warmupSets.length
+  const [warmupOpen, setWarmupOpen] = useState(warmupCount > 0)
 
   // Weight suggestions/PR detection don't cover per-side data yet, so both
   // are skipped for whichever side is unilateral (see ExerciseLogBlock).
@@ -267,11 +272,15 @@ export default function SupersetLogBlock({ entries }: Props) {
         ) : null,
       )}
 
-      <div className="flex flex-col gap-3">
-        <p className="text-xs font-semibold text-muted-foreground">Warm-up</p>
+      <CollapsibleSection
+        title="Warm-up (optional)"
+        summary={warmupCount ? `${warmupCount} ${warmupCount === 1 ? 'set' : 'sets'}` : undefined}
+        open={warmupOpen}
+        onOpenChange={setWarmupOpen}
+      >
         <WarmupColumn entry={a} />
         <WarmupColumn entry={b} />
-      </div>
+      </CollapsibleSection>
 
       <div className="flex flex-col gap-2">
         <p className="text-xs font-semibold text-muted-foreground">Rounds (one set of each, back to back)</p>

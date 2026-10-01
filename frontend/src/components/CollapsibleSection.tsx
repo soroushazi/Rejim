@@ -2,12 +2,12 @@ import { ChevronDown } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 
-/** A bordered, collapsed-by-default card for an optional part of a form (e.g.
- * micronutrients, an ingredients calculator) - keeps rarely-used fields from
+/** A bordered, collapsed-by-default card for an optional part of a form or page (e.g.
+ * micronutrients, an ingredients calculator, warm-up sets) - keeps rarely-used fields from
  * taking over the page while staying one tap away. `summary` shows next to the
  * title (e.g. "3 filled") so values entered or computed while it's closed
  * aren't invisible. */
-export default function CollapsibleFormSection({
+export default function CollapsibleSection({
   title,
   summary,
   open,
