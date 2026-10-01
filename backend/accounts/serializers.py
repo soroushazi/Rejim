@@ -9,6 +9,7 @@ class UserSerializer(serializers.ModelSerializer):
     bmi_category = serializers.SerializerMethodField()
     current_weight_kg = serializers.SerializerMethodField()
     default_weight_unit = serializers.SerializerMethodField()
+    trainer_name = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -21,6 +22,7 @@ class UserSerializer(serializers.ModelSerializer):
             "is_trainee",
             "is_trainer",
             "trainer",
+            "trainer_name",
             "height_cm",
             "age",
             "sex",
@@ -40,6 +42,13 @@ class UserSerializer(serializers.ModelSerializer):
             "bmi_category",
         ]
         read_only_fields = ["is_trainee", "is_trainer", "trainer"]
+
+    def get_trainer_name(self, obj):
+        # First name for the trainee-facing Trainer tab header; username as a
+        # fallback since admin-provisioned trainers may not have one set.
+        if not obj.trainer:
+            return None
+        return obj.trainer.first_name or obj.trainer.username
 
     def get_bmi(self, obj):
         from .services import compute_bmi

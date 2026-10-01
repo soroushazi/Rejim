@@ -21,6 +21,8 @@ export type User = {
   is_trainee: boolean
   is_trainer: boolean
   trainer: number | null
+  /** The trainer's first name (username if they have none) - null with no trainer. */
+  trainer_name: string | null
   height_cm: string | null
   age: number | null
   sex: Sex

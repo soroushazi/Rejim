@@ -1,8 +1,10 @@
 import { NavLink, Outlet } from 'react-router-dom'
+import { useAuth } from '@/auth/AuthContext'
 import { cn } from '@/lib/utils'
 import { useTrainerUnreadCounts } from '@/lib/useTrainerUnreadCounts'
 
 export default function TrainerLayout() {
+  const { user } = useAuth()
   const { notesUnread, qaUnread } = useTrainerUnreadCounts()
   const subTabs = [
     { to: '/trainer/notes', label: 'Notes', unread: notesUnread },
@@ -15,6 +17,11 @@ export default function TrainerLayout() {
         className="sticky z-10 bg-background px-4 pb-3 pt-3"
         style={{ top: 'calc(var(--header-height) + env(safe-area-inset-top))' }}
       >
+        {user?.trainer_name && (
+          <p className="mb-2.5 text-lg font-semibold">
+            <span className="text-muted-foreground">Trainer:</span> {user.trainer_name}
+          </p>
+        )}
         <div className="flex rounded-full bg-muted p-1 shadow-sm ring-1 ring-border/60">
           {subTabs.map(({ to, label, unread }) => (
             <NavLink
