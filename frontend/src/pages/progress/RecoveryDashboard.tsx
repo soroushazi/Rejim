@@ -6,7 +6,14 @@ import ZoomableChart, { ChartEmptyState } from '@/components/charts/ZoomableChar
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { RATING_LABELS } from '@/lib/ratings'
-import { bedtimeToScale, formatBedtime, scaleToClockLabel } from '@/lib/bedtime'
+import {
+  BEDTIME_SCALE_BASE_HOUR,
+  formatBedtime,
+  LAST_MEAL_SCALE_BASE_HOUR,
+  LAST_MEAL_WRAP_HOUR,
+  scaleToClockLabel,
+  timeToScale,
+} from '@/lib/bedtime'
 
 const W = 600
 const H = 220
@@ -202,50 +209,79 @@ function RecoveryChart({ days }: { days: ProgressRecoveryDay[] }) {
   )
 }
 
-// At least through 6am (10 hours after 8pm) so the axis isn't cramped when
-// every bedtime clusters close together; otherwise hugs the latest bedtime in
-// range, rounded up to a clean 2-hour tick - same "hug the data, with a
-// sensible floor" spirit as OverviewChart's weight axis.
-function computeBedtimeAxisMax(values: number[]): number {
-  return Math.ceil(Math.max(10, ...values) / 2) * 2
+/** How each kind of time-of-day is placed on a scatter plot's x-axis - see
+ * lib/bedtime.ts for both scales. `minAxisMax` keeps the axis from being
+ * cramped when every point clusters close together (bedtime: at least
+ * through 6am; last meal: at least through midnight); otherwise it hugs the
+ * latest point, rounded up to a clean 2-hour tick - same "hug the data, with
+ * a sensible floor" spirit as OverviewChart's weight axis. The axis starts at
+ * the base hour unless a point is earlier (only possible for last meal). */
+type TimeAxis = {
+  timeKey: 'bedtime' | 'last_meal_at'
+  timeLabel: string
+  baseHour: number
+  wrapBeforeHour: number
+  minAxisMax: number
+  emptyMessage: string
 }
 
-type BedtimePoint = { date: string; bedtime: string; scale: number; rating: number }
+const BEDTIME_AXIS: TimeAxis = {
+  timeKey: 'bedtime',
+  timeLabel: 'Bedtime',
+  baseHour: BEDTIME_SCALE_BASE_HOUR,
+  wrapBeforeHour: BEDTIME_SCALE_BASE_HOUR,
+  minAxisMax: 10,
+  emptyMessage: 'No days with both bedtime and this logged yet.',
+}
 
-/** One day per point: bedtime (as hours-after-8pm, see lib/bedtime.ts) on the
- * x-axis, a 1-5 rating on the y-axis - reuses the same RATING_LABELS y-axis
- * and left padding as the trend chart above, so the two read as one family. */
-function BedtimeScatterChart({
+const LAST_MEAL_AXIS: TimeAxis = {
+  timeKey: 'last_meal_at',
+  timeLabel: 'Last meal (day before)',
+  baseHour: LAST_MEAL_SCALE_BASE_HOUR,
+  wrapBeforeHour: LAST_MEAL_WRAP_HOUR,
+  minAxisMax: 6,
+  emptyMessage: 'No days with both this and a timed meal the day before yet.',
+}
+
+type TimePoint = { date: string; time: string; scale: number; rating: number }
+
+/** One day per point: a time of day (as hours after the axis' base hour) on
+ * the x-axis, a 1-5 rating on the y-axis - reuses the same RATING_LABELS
+ * y-axis and left padding as the trend chart above, so they read as one family. */
+function TimeScatterChart({
   title,
   label,
   metricKey,
   cssVar,
+  axis,
   days,
 }: {
   title: string
   label: string
   metricKey: 'sleep_quality' | 'readiness'
   cssVar: string
+  axis: TimeAxis
   days: ProgressRecoveryDay[]
 }) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
 
-  const points: BedtimePoint[] = days
-    .filter((d) => d.bedtime !== null && d[metricKey] !== null)
+  const points: TimePoint[] = days
+    .filter((d) => d[axis.timeKey] !== null && d[metricKey] !== null)
     .map((d) => ({
       date: d.date,
-      bedtime: d.bedtime as string,
-      scale: bedtimeToScale(d.bedtime as string),
+      time: d[axis.timeKey] as string,
+      scale: timeToScale(d[axis.timeKey] as string, axis.baseHour, axis.wrapBeforeHour),
       rating: d[metricKey] as number,
     }))
 
   if (points.length === 0) {
-    return <ChartEmptyState title={title} message="No days with both bedtime and this logged yet." />
+    return <ChartEmptyState title={title} message={axis.emptyMessage} />
   }
 
-  const axisMax = computeBedtimeAxisMax(points.map((p) => p.scale))
+  const axisMin = Math.floor(Math.min(0, ...points.map((p) => p.scale)) / 2) * 2
+  const axisMax = Math.ceil(Math.max(axis.minAxisMax, ...points.map((p) => p.scale)) / 2) * 2
   const xTicks: number[] = []
-  for (let v = 0; v <= axisMax; v += 2) xTicks.push(v)
+  for (let v = axisMin; v <= axisMax; v += 2) xTicks.push(v)
 
   const selected = selectedDate !== null ? (points.find((p) => p.date === selectedDate) ?? null) : null
 
@@ -261,7 +297,7 @@ function BedtimeScatterChart({
         const PLOT_H = H - PAD.top - PAD.bottom
 
         function x(scale: number) {
-          return PAD.left + (scale / axisMax) * PLOT_W
+          return PAD.left + ((scale - axisMin) / (axisMax - axisMin)) * PLOT_W
         }
         function y(rating: number) {
           return PAD.top + PLOT_H - ((rating - 1) / 4) * PLOT_H
@@ -288,7 +324,7 @@ function BedtimeScatterChart({
                   <g key={t}>
                     <line x1={x(t)} x2={x(t)} y1={PAD.top} y2={H - PAD.bottom} stroke="var(--border)" strokeWidth={thinStroke} opacity={0.4} />
                     <text x={x(t)} y={H - PAD.bottom + 16} textAnchor="middle" className="fill-muted-foreground" fontSize={tickFontSize}>
-                      {scaleToClockLabel(t)}
+                      {scaleToClockLabel(t, axis.baseHour)}
                     </text>
                   </g>
                 ))}
@@ -328,8 +364,8 @@ function BedtimeScatterChart({
                     </button>
                   </div>
                   <div className="flex items-center gap-1.5 whitespace-nowrap">
-                    <span className="text-muted-foreground">Bedtime:</span>
-                    <span className="font-medium">{formatBedtime(selected.bedtime)}</span>
+                    <span className="text-muted-foreground">{axis.timeLabel}:</span>
+                    <span className="font-medium">{formatBedtime(selected.time)}</span>
                   </div>
                   <div className="flex items-center gap-1.5 whitespace-nowrap">
                     <span className="text-muted-foreground">{label}:</span>
@@ -386,11 +422,12 @@ export default function RecoveryDashboard({ range, traineeId }: Props) {
           {loading ? (
             <ChartEmptyState title="Bedtime vs. sleep quality" message="Loading…" />
           ) : (
-            <BedtimeScatterChart
+            <TimeScatterChart
               title="Bedtime vs. sleep quality"
               label="Sleep quality"
               metricKey="sleep_quality"
               cssVar="--chart-1"
+              axis={BEDTIME_AXIS}
               days={days}
             />
           )}
@@ -402,11 +439,46 @@ export default function RecoveryDashboard({ range, traineeId }: Props) {
           {loading ? (
             <ChartEmptyState title="Bedtime vs. readiness" message="Loading…" />
           ) : (
-            <BedtimeScatterChart
+            <TimeScatterChart
               title="Bedtime vs. readiness"
               label="Readiness"
               metricKey="readiness"
               cssVar="--chart-2"
+              axis={BEDTIME_AXIS}
+              days={days}
+            />
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent>
+          {loading ? (
+            <ChartEmptyState title="Last meal vs. sleep quality" message="Loading…" />
+          ) : (
+            <TimeScatterChart
+              title="Last meal vs. sleep quality"
+              label="Sleep quality"
+              metricKey="sleep_quality"
+              cssVar="--chart-1"
+              axis={LAST_MEAL_AXIS}
+              days={days}
+            />
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent>
+          {loading ? (
+            <ChartEmptyState title="Last meal vs. readiness" message="Loading…" />
+          ) : (
+            <TimeScatterChart
+              title="Last meal vs. readiness"
+              label="Readiness"
+              metricKey="readiness"
+              cssVar="--chart-2"
+              axis={LAST_MEAL_AXIS}
               days={days}
             />
           )}

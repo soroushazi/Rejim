@@ -8,6 +8,14 @@
  * comment) - the raw time is what's stored and sent over the API. */
 export const BEDTIME_SCALE_BASE_HOUR = 20 // 8pm, 24h clock
 
+/** Progress -> Recovery's last-meal scatter plots use the same idea from 6pm:
+ * 6pm is 0, midnight is 6. Unlike bedtime, only times before 4am wrap past
+ * midnight - a last meal at 5pm is genuinely earlier than the axis start (a
+ * negative value, which the chart extends its axis down to), not a meal at
+ * 5pm the next day. Matches the backend's LAST_MEAL_WRAP_HOUR. */
+export const LAST_MEAL_SCALE_BASE_HOUR = 18 // 6pm
+export const LAST_MEAL_WRAP_HOUR = 4
+
 function formatClockTime(hour24: number): string {
   const normalized = ((hour24 % 24) + 24) % 24
   const wholeHour = Math.floor(normalized + 1e-9) % 24
@@ -17,19 +25,19 @@ function formatClockTime(hour24: number): string {
   return minute === 0 ? `${hour12} ${period}` : `${hour12}:${String(minute).padStart(2, '0')} ${period}`
 }
 
-/** Hours after 8pm (0 up to just under 24, wrapping past midnight) for a raw
- * "HH:MM[:SS]" bedtime - e.g. "00:00" (midnight) -> 4, "06:00" -> 10. */
-export function bedtimeToScale(bedtime: string): number {
-  const [h, m] = bedtime.split(':').map(Number)
+/** Hours after `baseHour` for a raw "HH:MM[:SS]" time, where anything before
+ * `wrapBeforeHour` counts as past midnight (+24h). Bedtime passes its base hour
+ * for both (nothing is ever negative: "00:00" -> 4, "06:00" -> 10). */
+export function timeToScale(time: string, baseHour: number, wrapBeforeHour: number): number {
+  const [h, m] = time.split(':').map(Number)
   const hours = h + m / 60
-  const delta = hours - BEDTIME_SCALE_BASE_HOUR
-  return delta < 0 ? delta + 24 : delta
+  return hours - baseHour + (hours < wrapBeforeHour ? 24 : 0)
 }
 
-/** The inverse of bedtimeToScale, as a short clock-time label (e.g. "8 PM",
+/** The inverse of timeToScale, as a short clock-time label (e.g. "8 PM",
  * "12 AM", "2:30 AM") - for chart axis ticks. */
-export function scaleToClockLabel(hoursAfter8pm: number): string {
-  return formatClockTime(BEDTIME_SCALE_BASE_HOUR + hoursAfter8pm)
+export function scaleToClockLabel(hoursAfter8pm: number, baseHour: number = BEDTIME_SCALE_BASE_HOUR): string {
+  return formatClockTime(baseHour + hoursAfter8pm)
 }
 
 /** A raw "HH:MM[:SS]" bedtime formatted as a friendly clock time (e.g. "11:45 PM"). */

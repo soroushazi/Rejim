@@ -817,6 +817,9 @@ export type ProgressRecoveryDay = {
   sleep_quality: number | null
   readiness: number | null
   bedtime: string | null
+  /** Latest timed meal logged the day *before* (the evening ahead of the
+   * night these ratings describe), "HH:MM:SS" - see ProgressRecoveryView. */
+  last_meal_at: string | null
 }
 
 export type ProgressRecoveryResponse = {

@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from nutrition.models import LoggedMeal
 from nutrition.plan_versions import diet_plan_for_date
 from tracker.models import ActivityLog, DailyMetric
 from tracker.views import _parse_date, _resolve_trainee
@@ -212,12 +213,39 @@ class ProgressNutritionView(APIView):
         )
 
 
+# A meal eaten before this hour counts as a late-night meal belonging to the
+# previous evening (later than 11pm), not as the day's earliest meal - same
+# 4am cutoff the frontend's lib/bedtime.ts uses for its last-meal scale.
+LAST_MEAL_WRAP_HOUR = 4
+
+
+def _last_meal_times_by_date(trainee, start, end):
+    """The latest LoggedMeal.eaten_at per date in [start, end] (dates with no
+    timed meal are absent), where "latest" treats anything before
+    LAST_MEAL_WRAP_HOUR as after midnight."""
+    def lateness(t):
+        return (t.hour + 24 if t.hour < LAST_MEAL_WRAP_HOUR else t.hour, t.minute, t.second)
+
+    latest = {}
+    meals = LoggedMeal.objects.filter(
+        trainee=trainee, date__range=(start, end), eaten_at__isnull=False
+    ).values_list("date", "eaten_at")
+    for day, eaten_at in meals:
+        if day not in latest or lateness(eaten_at) > lateness(latest[day]):
+            latest[day] = eaten_at
+    return latest
+
+
 class ProgressRecoveryView(APIView):
     """Daily sleep quality / readiness (both 1-5) plus bedtime for the Recovery
     dashboard - sleep hours itself already lives in the overview chart. Bedtime
     is returned as a plain "HH:MM:SS" time (DRF's default time serialization);
     the 8pm-based display scale used to plot it alongside the 1-5 ratings is a
-    client-side-only concern - see frontend lib/bedtime.ts."""
+    client-side-only concern - see frontend lib/bedtime.ts.
+
+    last_meal_at is the latest timed meal logged on the *previous* date: a
+    day's sleep quality and morning readiness rate the night before it, so the
+    meal that could have affected them is the prior evening's last one."""
 
     permission_classes = [IsAuthenticated]
 
@@ -228,8 +256,15 @@ class ProgressRecoveryView(APIView):
         rows = DailyMetric.objects.filter(trainee=trainee, date__range=(start, end)).exclude(
             sleep_quality__isnull=True, readiness__isnull=True, bedtime__isnull=True
         )
+        last_meals = _last_meal_times_by_date(trainee, start - timedelta(days=1), end - timedelta(days=1))
         days = [
-            {"date": m.date, "sleep_quality": m.sleep_quality, "readiness": m.readiness, "bedtime": m.bedtime}
+            {
+                "date": m.date,
+                "sleep_quality": m.sleep_quality,
+                "readiness": m.readiness,
+                "bedtime": m.bedtime,
+                "last_meal_at": last_meals.get(m.date - timedelta(days=1)),
+            }
             for m in rows.order_by("date")
         ]
 
