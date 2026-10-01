@@ -1,4 +1,5 @@
 import type { ExerciseHistorySet, WeightUnit } from '@/api/types'
+import { fromKg, toKg } from './weightUnits'
 
 export type WeightSuggestion =
   | { status: 'first' }
@@ -194,4 +195,102 @@ export function weightDirectionFeedback(
         tone: 'bad',
         note: `Not heavier than last time (${suggestion.anchorWeight}${unit}) — consider adding weight.`,
       }
+}
+
+/** How much a "lower"/"raise" suggestion moves the first set's weight. */
+const WEIGHT_STEP_CHANGE = 10
+
+/** Plate-friendly rounding: nearest 5 lb, or nearest 2.5 kg (the kg
+ * equivalent - rounding kg to 5 would be a ~11 lb jump). */
+export function roundToPlate(value: number, unit: WeightUnit): number {
+  const step = unit === 'lb' ? 5 : 2.5
+  return Math.round(value / step) * step
+}
+
+/** A last-session weight, expressed in the unit being logged now - unchanged
+ * when the units already match, converted + plate-rounded when they don't. */
+function inUnit(value: number, from: WeightUnit, to: WeightUnit): number {
+  return from === to ? value : roundToPlate(fromKg(toKg(value, from), to), to)
+}
+
+/** The weight to suggest (as a placeholder) for the first working set, in the
+ * unit being logged now: last time's weight when its reps landed in range,
+ * 10 lower/higher when they fell under/over it, and the in-between weight for
+ * a 'mixed' session. A per-side 'catchup' keeps the weight (see
+ * suggestUnilateralWeight). Null the first time an exercise is done. */
+export function suggestedWorkingWeight(
+  suggestion: WeightSuggestion | UnilateralWeightSuggestion,
+  unit: WeightUnit,
+): number | null {
+  switch (suggestion.status) {
+    case 'first':
+      return null
+    case 'mixed':
+      return inUnit(suggestion.suggestedWeight, suggestion.lastWeightUnit, unit)
+    case 'low':
+      return Math.max(0, inUnit(suggestion.anchorWeight, suggestion.lastWeightUnit, unit) - WEIGHT_STEP_CHANGE)
+    case 'high':
+      return inUnit(suggestion.anchorWeight, suggestion.lastWeightUnit, unit) + WEIGHT_STEP_CHANGE
+    default:
+      return inUnit(suggestion.anchorWeight, suggestion.lastWeightUnit, unit)
+  }
+}
+
+/** Warm-up placeholder: a third of the suggested working weight, plate-rounded.
+ * Null when there's nothing sensible to suggest (no working suggestion, or it
+ * rounds down to nothing). */
+export function suggestedWarmupWeight(workingWeight: number | null, unit: WeightUnit): number | null {
+  if (workingWeight === null) return null
+  const weight = roundToPlate(workingWeight / 3, unit)
+  return weight > 0 ? weight : null
+}
+
+/** Drop-set placeholder: half the weight of this session's last working set,
+ * plate-rounded. */
+export function suggestedDropsetWeight(lastWorkingWeight: string, unit: WeightUnit): number | null {
+  const value = Number(lastWorkingWeight)
+  if (lastWorkingWeight.trim() === '' || !Number.isFinite(value) || value <= 0) return null
+  const weight = roundToPlate(value / 2, unit)
+  return weight > 0 ? weight : null
+}
+
+export type SuggestionHint = { tone: 'neutral' | 'lower' | 'raise' | 'mixed'; text: string }
+
+/** The "why" shown under the first working set, next to its placeholder - so
+ * the trainee sees the suggestion *before* lifting, not only once they've
+ * already done a set at the wrong weight. */
+export function suggestionHint(
+  suggestion: WeightSuggestion | UnilateralWeightSuggestion,
+  suggestedWeight: number | null,
+  unit: WeightUnit,
+  targetRepsMin: number,
+  targetRepsMax: number,
+): SuggestionHint | null {
+  if (suggestion.status === 'first' || suggestedWeight === null) return null
+  const range = `${targetRepsMin}–${targetRepsMax}`
+  const suggested = `${suggestedWeight}${unit}`
+  if (suggestion.status === 'mixed') {
+    return {
+      tone: 'mixed',
+      text: `Last time you used different weights (${suggestion.lowWeight}–${suggestion.highWeight}${suggestion.lastWeightUnit}). Somewhere in between should land in your ${range} rep range — suggested: ${suggested}.`,
+    }
+  }
+  const at = `${suggestion.anchorWeight}${suggestion.lastWeightUnit}`
+  const reps =
+    'avgReps' in suggestion
+      ? `${suggestion.avgReps} reps per set`
+      : `~${suggestion.avgRepsLeft} (L) / ~${suggestion.avgRepsRight} (R) reps per set`
+  switch (suggestion.status) {
+    case 'low':
+      return { tone: 'lower', text: `Last time you averaged ${reps} at ${at} — under your ${range} range, so go lighter: ${suggested}.` }
+    case 'high':
+      return { tone: 'raise', text: `Last time you averaged ${reps} at ${at} — over your ${range} range, so go heavier: ${suggested}.` }
+    case 'catchup':
+      return {
+        tone: 'mixed',
+        text: `Last time you did ${reps} at ${at} — keep ${suggested}, but push extra reps on your ${suggestion.strongerSide} side until the other catches up.`,
+      }
+    default:
+      return { tone: 'neutral', text: `Last time you averaged ${reps} at ${at} — right in your ${range} range, so keep it: ${suggested}.` }
+  }
 }

@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { PersonalRecordKind } from '@/lib/personalRecord'
 import { RPE_OPTIONS, rpeLabel } from '@/lib/rpe'
 import { cn } from '@/lib/utils'
-import { weightDirectionFeedback, type WeightSuggestion } from '@/lib/weightSuggestion'
+import { weightDirectionFeedback, type SuggestionHint, type WeightSuggestion } from '@/lib/weightSuggestion'
 import RpeInfoDialog from './RpeInfoDialog'
 
 export type DraftSet = {
@@ -65,6 +65,7 @@ function SideInputs({
   weight,
   reps,
   rpe,
+  weightPlaceholder,
   onWeightChange,
   onRepsChange,
   onRpeChange,
@@ -72,6 +73,7 @@ function SideInputs({
 }: {
   sideLabel: string
   weight: string
+  weightPlaceholder: string
   reps: string
   rpe: string
   onWeightChange: (v: string) => void
@@ -88,7 +90,7 @@ function SideInputs({
           inputMode="decimal"
           step="0.5"
           min="0"
-          placeholder="Weight"
+          placeholder={weightPlaceholder}
           value={weight}
           onChange={(e) => onWeightChange(e.target.value)}
           className="h-8 w-full"
@@ -145,6 +147,8 @@ export function SetEditorRow({
   suggestion,
   hideActions,
   isUnilateral,
+  weightPlaceholder,
+  hint,
 }: {
   label: string
   set: DraftSet
@@ -161,7 +165,14 @@ export function SetEditorRow({
    * suggestions/live feedback don't cover per-side data yet, so `suggestion`
    * is ignored in this mode even if a caller passes one. */
   isUnilateral?: boolean
+  /** Suggested weight shown greyed in the empty Weight field(s) - only a
+   * placeholder, never a value; the trainee still types the weight. */
+  weightPlaceholder?: number | null
+  /** The reason behind the suggestion, shown under the inputs (first working
+   * set only) so it's read before the set is done. */
+  hint?: SuggestionHint | null
 }) {
+  const placeholder = weightPlaceholder != null ? String(weightPlaceholder) : 'Weight'
   const canConfirm = isUnilateral
     ? [set.weight_left, set.weight_right, set.reps_done_left, set.reps_done_right].every((v) => v.trim() !== '')
     : set.weight.trim() !== '' && set.reps_done.trim() !== ''
@@ -185,6 +196,7 @@ export function SetEditorRow({
             onRepsChange={(v) => onChange({ reps_done_left: v })}
             onRpeChange={(v) => onChange({ rpe_left: v })}
             onInfo={() => setRpeInfoOpen(true)}
+            weightPlaceholder={placeholder}
           />
           <SideInputs
             sideLabel="R"
@@ -195,6 +207,7 @@ export function SetEditorRow({
             onRepsChange={(v) => onChange({ reps_done_right: v })}
             onRpeChange={(v) => onChange({ rpe_right: v })}
             onInfo={() => setRpeInfoOpen(true)}
+            weightPlaceholder={placeholder}
           />
         </div>
       ) : (
@@ -204,7 +217,7 @@ export function SetEditorRow({
             inputMode="decimal"
             step="0.5"
             min="0"
-            placeholder="Weight"
+            placeholder={placeholder}
             value={set.weight}
             onChange={(e) => onChange({ weight: e.target.value })}
             className={cn(
@@ -249,6 +262,19 @@ export function SetEditorRow({
             </button>
           </div>
         </div>
+      )}
+      {hint && (
+        <p
+          className={cn(
+            'rounded-md px-2.5 py-1.5 text-xs',
+            hint.tone === 'neutral' && 'bg-muted text-muted-foreground',
+            hint.tone === 'lower' && 'bg-destructive/10 text-destructive',
+            hint.tone === 'raise' && 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+            hint.tone === 'mixed' && 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
+          )}
+        >
+          {hint.text}
+        </p>
       )}
       {!hideActions && (
         <div className="flex gap-1.5">

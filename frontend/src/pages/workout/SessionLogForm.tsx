@@ -611,7 +611,7 @@ export default function SessionLogForm({
             <>
               {substitutionBadge(focusedBlock.peId)}
               {substitutionBadge(focusedBlock.partnerId)}
-              <SupersetLogBlock entries={[entryA, entryB]} />
+              <SupersetLogBlock entries={[entryA, entryB]} weightUnit={weightUnit} />
             </>
           ) : entryA ? (
             <>
@@ -619,6 +619,7 @@ export default function SessionLogForm({
               <ExerciseLogBlock
                 planExercise={entryA.planExercise}
                 exercise={entryA.exercise}
+                weightUnit={weightUnit}
                 warmupSets={entryA.warmupSets}
                 workingSets={entryA.workingSets}
                 dropsetSets={entryA.dropsetSets}

@@ -1,12 +1,20 @@
 import { useEffect, useState } from 'react'
 import { Trophy, X } from 'lucide-react'
 import { listExerciseHistory } from '@/api/loggedSets'
-import type { Exercise, ExerciseHistorySet, PlanExerciseDetail } from '@/api/types'
+import type { Exercise, ExerciseHistorySet, PlanExerciseDetail, WeightUnit } from '@/api/types'
 import { Badge } from '@/components/ui/badge'
 import CollapsibleSection from '@/components/CollapsibleSection'
 import { Button } from '@/components/ui/button'
 import { checkPersonalRecord } from '@/lib/personalRecord'
-import { suggestWeight } from '@/lib/weightSuggestion'
+import {
+  suggestedDropsetWeight,
+  suggestedWarmupWeight,
+  suggestedWorkingWeight,
+  suggestionHint,
+  suggestUnilateralWeight,
+  suggestWeight,
+  type SuggestionHint,
+} from '@/lib/weightSuggestion'
 import ExerciseHistoryDisclosure from './ExerciseHistoryDisclosure'
 import RestTimer from './RestTimer'
 import { newDraftSet, SetEditorRow, SetSummaryRow, type DraftSet } from './SetRows'
@@ -47,7 +55,15 @@ function useHistory(exerciseId: number) {
  * (if either) needs warming up varies by pairing. Stacked under the other
  * side (see the `flex-col` wrapper below), not side by side - a 2-column
  * grid squeezed each set-editor row too tight on a phone. */
-function WarmupColumn({ entry }: { entry: ExerciseLogEntry }) {
+function WarmupColumn({
+  entry,
+  workingPlaceholder,
+  warmupPlaceholder,
+}: {
+  entry: ExerciseLogEntry
+  workingPlaceholder: number | null
+  warmupPlaceholder: number | null
+}) {
   const { planExercise, exercise, warmupSets, workingSets, onWarmupSetsChange, onWorkingSetsChange } = entry
   const isUnilateral = exercise?.is_unilateral ?? false
   const hasActive = warmupSets.some((s) => !s.confirmed)
@@ -56,8 +72,9 @@ function WarmupColumn({ entry }: { entry: ExerciseLogEntry }) {
     const nextWarmup = warmupSets.map((s, i) => (i === index ? { ...s, ...patch } : s))
     onWarmupSetsChange(nextWarmup)
     // Backfills the pre-seeded-blank first round set for this exercise, same
-    // rationale as ExerciseLogBlock's updateWarmup.
-    if (patch.confirmed && workingSets.length > 0 && !workingSets[0].confirmed && workingSets[0].weight === '') {
+    // rationale (and same "not when there's a suggestion" exception) as
+    // ExerciseLogBlock's updateWarmup.
+    if (patch.confirmed && workingPlaceholder === null && workingSets.length > 0 && !workingSets[0].confirmed && workingSets[0].weight === '') {
       const confirmedWarmup = nextWarmup[index]
       onWorkingSetsChange(
         workingSets.map((s, i) =>
@@ -92,6 +109,7 @@ function WarmupColumn({ entry }: { entry: ExerciseLogEntry }) {
             label={`Warm-up ${i + 1}`}
             set={set}
             isUnilateral={isUnilateral}
+            weightPlaceholder={warmupPlaceholder}
             onChange={(patch) => update(i, patch)}
             onConfirm={() => update(i, { confirmed: true })}
             onRemove={() => remove(i)}
@@ -119,10 +137,22 @@ function WarmupColumn({ entry }: { entry: ExerciseLogEntry }) {
  * exercise's own last working set. Kept mounted (rather than unmounted) once
  * it has entries even if `enabled` later goes false, so editing an already-
  * confirmed round back open doesn't hide already-entered drop sets. */
-function DropsetColumn({ entry, enabled }: { entry: ExerciseLogEntry; enabled: boolean }) {
-  const { planExercise, exercise, warmupSets, workingSets, dropsetSets, onDropsetSetsChange } = entry
+function DropsetColumn({
+  entry,
+  enabled,
+  weightUnit,
+}: {
+  entry: ExerciseLogEntry
+  enabled: boolean
+  weightUnit: WeightUnit
+}) {
+  const { planExercise, exercise, workingSets, dropsetSets, onDropsetSetsChange } = entry
   const isUnilateral = exercise?.is_unilateral ?? false
   const hasActive = dropsetSets.some((s) => !s.confirmed)
+  const lastConfirmedWorking = workingSets.filter((s) => s.confirmed).at(-1)
+  const placeholder = lastConfirmedWorking
+    ? suggestedDropsetWeight(isUnilateral ? lastConfirmedWorking.weight_left : lastConfirmedWorking.weight, weightUnit)
+    : null
 
   function update(index: number, patch: Partial<DraftSet>) {
     onDropsetSetsChange(dropsetSets.map((s, i) => (i === index ? { ...s, ...patch } : s)))
@@ -153,6 +183,7 @@ function DropsetColumn({ entry, enabled }: { entry: ExerciseLogEntry; enabled: b
             label={`Drop set ${i + 1}`}
             set={set}
             isUnilateral={isUnilateral}
+            weightPlaceholder={placeholder}
             onChange={(patch) => update(i, patch)}
             onConfirm={() => update(i, { confirmed: true })}
             onRemove={() => remove(i)}
@@ -166,8 +197,8 @@ function DropsetColumn({ entry, enabled }: { entry: ExerciseLogEntry; enabled: b
           size="sm"
           className="self-start"
           onClick={() => {
-            const previous = dropsetSets[dropsetSets.length - 1] ?? workingSets[workingSets.length - 1] ?? warmupSets[warmupSets.length - 1]
-            onDropsetSetsChange([...dropsetSets, newDraftSet(false, true, previous)])
+            // First drop set starts blank so its placeholder shows - same as ExerciseLogBlock.
+            onDropsetSetsChange([...dropsetSets, newDraftSet(false, true, dropsetSets[dropsetSets.length - 1])])
           }}
         >
           + Add drop set
@@ -179,6 +210,19 @@ function DropsetColumn({ entry, enabled }: { entry: ExerciseLogEntry; enabled: b
 
 type Props = {
   entries: [ExerciseLogEntry, ExerciseLogEntry]
+  /** The unit this session is being logged in - suggestions are converted to it. */
+  weightUnit: WeightUnit
+}
+
+/** One side's suggested weights (placeholders) + the reason for round 1. */
+function sideSuggestions(entry: ExerciseLogEntry, history: ExerciseHistorySet[], weightUnit: WeightUnit) {
+  const { target_reps_min: min, target_reps_max: max } = entry.planExercise
+  const suggestion = entry.exercise?.is_unilateral
+    ? suggestUnilateralWeight(history, min, max)
+    : suggestWeight(history, min, max)
+  const working = suggestedWorkingWeight(suggestion, weightUnit)
+  const hint: SuggestionHint | null = suggestionHint(suggestion, working, weightUnit, min, max)
+  return { working, warmup: suggestedWarmupWeight(working, weightUnit), hint }
 }
 
 /** Logs a pair of exercises tied together as a superset: one working set of
@@ -191,7 +235,7 @@ type Props = {
  * The actual set-logging content for a superset pair - rendered as the body
  * of SessionLogForm's full-screen "Log exercise(s)" view, which supplies the
  * shared back-button header above it. */
-export default function SupersetLogBlock({ entries }: Props) {
+export default function SupersetLogBlock({ entries, weightUnit }: Props) {
   const [a, b] = entries
   const isUnilateralA = a.exercise?.is_unilateral ?? false
   const isUnilateralB = b.exercise?.is_unilateral ?? false
@@ -252,6 +296,9 @@ export default function SupersetLogBlock({ entries }: Props) {
     b.onWorkingSetsChange([...Array.from({ length: roundCount }, (_, j) => roundsAt(j)[1]), newDraftSet(false, false, lastB)])
   }
 
+  const placeholdersA = sideSuggestions(a, historyA, weightUnit)
+  const placeholdersB = sideSuggestions(b, historyB, weightUnit)
+
   const restSeconds = Math.max(a.planExercise.default_rest_seconds, b.planExercise.default_rest_seconds)
 
   return (
@@ -278,8 +325,8 @@ export default function SupersetLogBlock({ entries }: Props) {
         open={warmupOpen}
         onOpenChange={setWarmupOpen}
       >
-        <WarmupColumn entry={a} />
-        <WarmupColumn entry={b} />
+        <WarmupColumn entry={a} workingPlaceholder={placeholdersA.working} warmupPlaceholder={placeholdersA.warmup} />
+        <WarmupColumn entry={b} workingPlaceholder={placeholdersB.working} warmupPlaceholder={placeholdersB.warmup} />
       </CollapsibleSection>
 
       <div className="flex flex-col gap-2">
@@ -350,6 +397,8 @@ export default function SupersetLogBlock({ entries }: Props) {
                 set={setA}
                 suggestion={suggestionA}
                 isUnilateral={isUnilateralA}
+                weightPlaceholder={placeholdersA.working}
+                hint={i === 0 && placeholdersA.hint ? { ...placeholdersA.hint, text: `${a.planExercise.exercise_name}: ${placeholdersA.hint.text}` } : null}
                 onChange={(patch) => writeRound(i, patch, null)}
                 onConfirm={() => {}}
                 onRemove={() => {}}
@@ -360,6 +409,8 @@ export default function SupersetLogBlock({ entries }: Props) {
                 set={setB}
                 suggestion={suggestionB}
                 isUnilateral={isUnilateralB}
+                weightPlaceholder={placeholdersB.working}
+                hint={i === 0 && placeholdersB.hint ? { ...placeholdersB.hint, text: `${b.planExercise.exercise_name}: ${placeholdersB.hint.text}` } : null}
                 onChange={(patch) => writeRound(i, null, patch)}
                 onConfirm={() => {}}
                 onRemove={() => {}}
@@ -381,8 +432,8 @@ export default function SupersetLogBlock({ entries }: Props) {
       {(allRoundsConfirmed || a.dropsetSets.length > 0 || b.dropsetSets.length > 0) && (
         <div className="flex flex-col gap-3">
           <p className="text-xs font-semibold text-muted-foreground">Drop sets</p>
-          <DropsetColumn entry={a} enabled={allRoundsConfirmed} />
-          <DropsetColumn entry={b} enabled={allRoundsConfirmed} />
+          <DropsetColumn entry={a} enabled={allRoundsConfirmed} weightUnit={weightUnit} />
+          <DropsetColumn entry={b} enabled={allRoundsConfirmed} weightUnit={weightUnit} />
         </div>
       )}
 

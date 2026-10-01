@@ -1,10 +1,17 @@
 import { useEffect, useState } from 'react'
 import { listExerciseHistory } from '@/api/loggedSets'
-import type { Exercise, ExerciseHistorySet, PlanExerciseDetail } from '@/api/types'
+import type { Exercise, ExerciseHistorySet, PlanExerciseDetail, WeightUnit } from '@/api/types'
 import CollapsibleSection from '@/components/CollapsibleSection'
 import { Button } from '@/components/ui/button'
 import { checkPersonalRecord, type PersonalRecordKind } from '@/lib/personalRecord'
-import { suggestUnilateralWeight, suggestWeight } from '@/lib/weightSuggestion'
+import {
+  suggestedDropsetWeight,
+  suggestedWarmupWeight,
+  suggestedWorkingWeight,
+  suggestionHint,
+  suggestUnilateralWeight,
+  suggestWeight,
+} from '@/lib/weightSuggestion'
 import ExerciseHistoryDisclosure from './ExerciseHistoryDisclosure'
 import RestTimer from './RestTimer'
 import { newDraftSet, SetEditorRow, SetSummaryRow, type DraftSet } from './SetRows'
@@ -14,6 +21,8 @@ export type { DraftSet }
 type Props = {
   planExercise: PlanExerciseDetail
   exercise: Exercise | null
+  /** The unit this session is being logged in - suggestions are converted to it. */
+  weightUnit: WeightUnit
   warmupSets: DraftSet[]
   workingSets: DraftSet[]
   dropsetSets: DraftSet[]
@@ -28,6 +37,7 @@ type Props = {
 export default function ExerciseLogBlock({
   planExercise,
   exercise,
+  weightUnit,
   warmupSets,
   workingSets,
   dropsetSets,
@@ -67,6 +77,22 @@ export default function ExerciseLogBlock({
   const unilateralSuggestion = isUnilateral
     ? suggestUnilateralWeight(history, planExercise.target_reps_min, planExercise.target_reps_max)
     : ({ status: 'first' } as const)
+  const activeSuggestion = isUnilateral ? unilateralSuggestion : suggestion
+  // Placeholders only - greyed in an empty Weight field, never a value. The
+  // reason (hint) shows under the first working set, before it's lifted.
+  const workingPlaceholder = suggestedWorkingWeight(activeSuggestion, weightUnit)
+  const warmupPlaceholder = suggestedWarmupWeight(workingPlaceholder, weightUnit)
+  const hint = suggestionHint(
+    activeSuggestion,
+    workingPlaceholder,
+    weightUnit,
+    planExercise.target_reps_min,
+    planExercise.target_reps_max,
+  )
+  const lastConfirmedWorking = workingSets.filter((s) => s.confirmed).at(-1)
+  const dropsetPlaceholder = lastConfirmedWorking
+    ? suggestedDropsetWeight(isUnilateral ? lastConfirmedWorking.weight_left : lastConfirmedWorking.weight, weightUnit)
+    : null
   const hasActiveWarmup = warmupSets.some((s) => !s.confirmed)
   const allWorkingConfirmed = workingSets.length > 0 && workingSets.every((s) => s.confirmed)
 
@@ -81,8 +107,10 @@ export default function ExerciseLogBlock({
     // The first working set is pre-seeded blank before any warm-up exists
     // (see SessionLogForm), so unlike every later set it never got a chance
     // to inherit a default from a "previous" set at creation time - backfill
-    // it here as long as the trainee hasn't already typed something in.
-    if (patch.confirmed && workingSets.length > 0 && !workingSets[0].confirmed && workingSets[0].weight === '') {
+    // it here as long as the trainee hasn't already typed something in -
+    // unless there's a suggested weight, since a warm-up weight would then
+    // just bury that suggestion's placeholder.
+    if (patch.confirmed && workingPlaceholder === null && workingSets.length > 0 && !workingSets[0].confirmed && workingSets[0].weight === '') {
       const confirmedWarmup = nextWarmup[index]
       onWorkingSetsChange(
         workingSets.map((s, i) =>
@@ -125,8 +153,10 @@ export default function ExerciseLogBlock({
   function removeDropset(index: number) {
     onDropsetSetsChange(dropsetSets.filter((_, i) => i !== index))
   }
+  // The first drop set starts blank so its "half the last working set"
+  // placeholder shows; later ones carry over the previous drop's weight.
   function addDropset() {
-    const previous = dropsetSets[dropsetSets.length - 1] ?? workingSets[workingSets.length - 1] ?? warmupSets[warmupSets.length - 1]
+    const previous = dropsetSets[dropsetSets.length - 1]
     onDropsetSetsChange([...dropsetSets, newDraftSet(false, true, previous)])
   }
 
@@ -146,70 +176,9 @@ export default function ExerciseLogBlock({
           Tracked per side — enter weight, reps, and RPE for left and right separately.
         </p>
       )}
-      {isUnilateral && unilateralSuggestion.status === 'first' && (
+      {activeSuggestion.status === 'first' && (
         <p className="rounded-md bg-muted px-2.5 py-1.5 text-xs text-muted-foreground">
           First time — enter weight with no suggestion.
-        </p>
-      )}
-      {isUnilateral && unilateralSuggestion.status === 'low' && (
-        <p className="rounded-md bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive">
-          Last time you lifted {unilateralSuggestion.anchorWeight}
-          {unilateralSuggestion.lastWeightUnit} and both sides stayed under {planExercise.target_reps_min} reps —
-          consider lowering the weight.
-        </p>
-      )}
-      {isUnilateral && unilateralSuggestion.status === 'high' && (
-        <p className="rounded-md bg-emerald-500/10 px-2.5 py-1.5 text-xs text-emerald-700 dark:text-emerald-400">
-          Last time you lifted {unilateralSuggestion.anchorWeight}
-          {unilateralSuggestion.lastWeightUnit} and both sides exceeded {planExercise.target_reps_max} reps —
-          consider raising the weight.
-        </p>
-      )}
-      {isUnilateral && unilateralSuggestion.status === 'good' && (
-        <p className="rounded-md bg-muted px-2.5 py-1.5 text-xs text-muted-foreground">
-          Last time: {unilateralSuggestion.anchorWeight}
-          {unilateralSuggestion.lastWeightUnit} for ~{unilateralSuggestion.avgRepsLeft} (L) / ~
-          {unilateralSuggestion.avgRepsRight} (R) reps/set — same weight suggested.
-        </p>
-      )}
-      {isUnilateral && unilateralSuggestion.status === 'catchup' && (
-        <p className="rounded-md bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-400">
-          Your {unilateralSuggestion.strongerSide} side did more reps last time (~{unilateralSuggestion.avgRepsLeft} L
-          vs ~{unilateralSuggestion.avgRepsRight} R) — keep the same weight, but push extra reps on that side until
-          the other catches up.
-        </p>
-      )}
-      {!isUnilateral && suggestion.status === 'first' && (
-        <p className="rounded-md bg-muted px-2.5 py-1.5 text-xs text-muted-foreground">
-          First time — enter weight with no suggestion.
-        </p>
-      )}
-      {!isUnilateral && suggestion.status === 'low' && (
-        <p className="rounded-md bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive">
-          Last time you lifted {suggestion.anchorWeight}
-          {suggestion.lastWeightUnit} (your lightest set) and stayed under {planExercise.target_reps_min} reps —
-          consider lowering the weight.
-        </p>
-      )}
-      {!isUnilateral && suggestion.status === 'high' && (
-        <p className="rounded-md bg-emerald-500/10 px-2.5 py-1.5 text-xs text-emerald-700 dark:text-emerald-400">
-          Last time you lifted {suggestion.anchorWeight}
-          {suggestion.lastWeightUnit} (your heaviest set) and exceeded {planExercise.target_reps_max} reps —
-          consider raising the weight.
-        </p>
-      )}
-      {!isUnilateral && suggestion.status === 'good' && (
-        <p className="rounded-md bg-muted px-2.5 py-1.5 text-xs text-muted-foreground">
-          Last time: {suggestion.anchorWeight}
-          {suggestion.lastWeightUnit} for ~{suggestion.avgReps} reps/set — same weight suggested.
-        </p>
-      )}
-      {!isUnilateral && suggestion.status === 'mixed' && (
-        <p className="rounded-md bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-400">
-          Last time you used different weights across sets — choose between {suggestion.lowWeight} and{' '}
-          {suggestion.highWeight}
-          {suggestion.lastWeightUnit}. Suggestion: {suggestion.suggestedWeight}
-          {suggestion.lastWeightUnit}.
         </p>
       )}
 
@@ -237,6 +206,7 @@ export default function ExerciseLogBlock({
                 label={`Warm-up ${i + 1}`}
                 set={set}
                 isUnilateral={isUnilateral}
+                weightPlaceholder={warmupPlaceholder}
                 onChange={(patch) => updateWarmup(i, patch)}
                 onConfirm={() => updateWarmup(i, { confirmed: true })}
                 onRemove={() => removeWarmup(i)}
@@ -271,6 +241,8 @@ export default function ExerciseLogBlock({
               set={set}
               suggestion={suggestion}
               isUnilateral={isUnilateral}
+              weightPlaceholder={workingPlaceholder}
+              hint={i === 0 ? hint : null}
               onChange={(patch) => updateWorking(i, patch)}
               onConfirm={() => confirmWorking(i)}
               onRemove={() => removeWorking(i)}
@@ -304,6 +276,7 @@ export default function ExerciseLogBlock({
                 label={`Drop set ${i + 1}`}
                 set={set}
                 isUnilateral={isUnilateral}
+                weightPlaceholder={dropsetPlaceholder}
                 onChange={(patch) => updateDropset(i, patch)}
                 onConfirm={() => updateDropset(i, { confirmed: true })}
                 onRemove={() => removeDropset(i)}
