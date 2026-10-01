@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { cn, round } from '@/lib/utils'
 import LoggedMealDetailDialog from './LoggedMealDetailDialog'
+import PlannedMealDetailDialog from './PlannedMealDetailDialog'
 
 /** Slot-card tint by logged state: off-plan (any custom item) reads as a
  * warning (reddish), fully on-plan or plan+off-plan both read as a confirmed
@@ -40,12 +41,13 @@ export default function LogMealSlot({ meal, date, loggedMeal, onCleared }: Props
   const [error, setError] = useState<string | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
 
-  // Tapping a logged meal's card anywhere opens its full breakdown - except its
-  // own buttons (remove/edit), and clicks bubbling up through React from a
-  // portaled dialog, which aren't inside this card's DOM at all.
+  // Tapping the card anywhere opens its full breakdown (what was logged, or
+  // the plan's options if nothing is yet) - except its own buttons
+  // (remove/edit/log), and clicks bubbling up through React from a portaled
+  // dialog, which aren't inside this card's DOM at all.
   function handleCardClick(e: MouseEvent<HTMLLIElement>) {
     const target = e.target as HTMLElement
-    if (!loggedMeal || !e.currentTarget.contains(target) || target.closest('button')) return
+    if (!e.currentTarget.contains(target) || target.closest('button')) return
     setDetailOpen(true)
   }
 
@@ -64,7 +66,7 @@ export default function LogMealSlot({ meal, date, loggedMeal, onCleared }: Props
   }
 
   return (
-    <li className={cn(slotClassName(loggedMeal?.source), loggedMeal && 'cursor-pointer')} onClick={handleCardClick}>
+    <li className={cn(slotClassName(loggedMeal?.source), 'cursor-pointer')} onClick={handleCardClick}>
       <div className="flex items-center justify-between gap-2 px-3 py-2.5">
         <div className="flex min-w-0 flex-col gap-1">
           <span className="font-medium">{meal.label}</span>
@@ -125,7 +127,16 @@ export default function LogMealSlot({ meal, date, loggedMeal, onCleared }: Props
         onConfirm={handleClear}
       />
 
-      {loggedMeal && <LoggedMealDetailDialog open={detailOpen} onOpenChange={setDetailOpen} meal={loggedMeal} />}
+      {loggedMeal ? (
+        <LoggedMealDetailDialog open={detailOpen} onOpenChange={setDetailOpen} meal={loggedMeal} />
+      ) : (
+        <PlannedMealDetailDialog
+          open={detailOpen}
+          onOpenChange={setDetailOpen}
+          meal={meal}
+          onLog={canLog ? () => navigate(`/diet/log/${date}/${meal.id}`) : undefined}
+        />
+      )}
     </li>
   )
 }

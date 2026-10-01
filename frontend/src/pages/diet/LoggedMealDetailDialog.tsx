@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { round } from '@/lib/utils'
 import { MICRO_FIELDS } from './NutritionFactsDialog'
 
-function macroLine(n: Nutrients) {
+export function macroLine(n: Nutrients) {
   return `P ${round(n.protein_g ?? 0)}g · C ${round(n.carbs_g ?? 0)}g · F ${round(n.fat_g ?? 0)}g`
 }
 
