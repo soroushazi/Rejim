@@ -26,6 +26,14 @@ type MultiSelectDropdownProps = {
    * (typically opening a small dialog to also capture a description before
    * creating the option). Only takes effect with `searchable`. */
   onCreateNew?: (query: string) => void
+  /** Button text while nothing is selected (defaults to `label`) - e.g. an
+   * example-led prompt for someone who doesn't know the vocabulary yet. */
+  placeholder?: string
+  /** Placeholder for the search box (defaults to "Search…"). */
+  searchPlaceholder?: string
+  /** Shows the selected options' names on the button instead of
+   * "<label> (N)" - for short lists where seeing the picks matters. */
+  showSelectedNames?: boolean
 }
 
 export default function MultiSelectDropdown({
@@ -36,6 +44,9 @@ export default function MultiSelectDropdown({
   className,
   searchable,
   onCreateNew,
+  placeholder,
+  searchPlaceholder,
+  showSelectedNames,
 }: MultiSelectDropdownProps) {
   const [query, setQuery] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
@@ -61,7 +72,16 @@ export default function MultiSelectDropdown({
             className,
           )}
         >
-          {selected.length > 0 ? `${label} (${selected.length})` : label}
+          <span className="min-w-0 truncate">
+            {selected.length === 0
+              ? (placeholder ?? label)
+              : showSelectedNames
+                ? options
+                    .filter((opt) => selected.includes(String(opt.id)))
+                    .map((opt) => opt.name)
+                    .join(', ')
+                : `${label} (${selected.length})`}
+          </span>
           <ChevronDown className="size-3.5 opacity-60" data-icon="inline-end" />
         </Button>
       </DropdownMenuTrigger>
@@ -71,7 +91,7 @@ export default function MultiSelectDropdown({
             <Input
               ref={inputRef}
               type="search"
-              placeholder="Search…"
+              placeholder={searchPlaceholder ?? 'Search…'}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.stopPropagation()}

@@ -28,11 +28,15 @@ DIETARY_TAGS = {
     "Dairy-Free": "No milk, cheese, yogurt, or other dairy.",
     "Keto": "Very low-carb, high-fat - typically under ~50g of carbs a day.",
     "Low-Carb": "Reduced carbs, less strict than keto.",
+    "Low-Fat": "Limits fats and oils - leaner meats, less butter and fried food.",
     "High-Protein": "Prioritizes protein-dense foods.",
     "Paleo": "Whole foods only - no grains, dairy, or processed sugar.",
+    "Mediterranean": "Plenty of vegetables, fish, olive oil, and whole grains; little red meat.",
     "Nut-Free": "No tree nuts or peanuts.",
     "Soy-Free": "No soy or soy-derived ingredients.",
     "Carnivore": "Animal products only - meat, fish, and eggs, no plant foods.",
+    "Halal": "Follows Islamic dietary law - no pork or alcohol, halal-slaughtered meat.",
+    "Kosher": "Follows Jewish dietary law - no pork or shellfish, meat and dairy kept apart.",
 }
 
 # Keyword groups used to classify existing FoodItems by name. Deliberately

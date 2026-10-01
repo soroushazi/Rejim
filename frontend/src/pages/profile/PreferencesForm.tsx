@@ -111,8 +111,14 @@ export default function PreferencesForm() {
       <CardContent className="flex flex-col gap-3">
         <div className="flex flex-col gap-1.5">
           <Label>Meal preferences</Label>
+          <p className="text-xs text-muted-foreground">
+            Pick any diet you follow, or type your own. Not sure? Leave it blank — your trainer can help.
+          </p>
           <MultiSelectDropdown
-            label="Dietary tags"
+            label="Diets"
+            placeholder="Select a diet (e.g. Keto, Carnivore)"
+            searchPlaceholder="Search or type your own…"
+            showSelectedNames
             options={dietaryTags}
             selected={mealPreferences}
             onChange={(next) => {
