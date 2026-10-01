@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import ConfirmDialog from '@/components/ConfirmDialog'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { availableUnits, gramsForQuantity } from '@/lib/servingUnits'
 import { nutrientsForWeight, scaleNutrients, sumNutrients } from '@/lib/nutrients'
@@ -161,6 +162,7 @@ export default function LogMealPage() {
   const [addQuickInitial, setAddQuickInitial] = useState<Partial<NewQuickLogItem> | undefined>(undefined)
   const [detailRow, setDetailRow] = useState<{ name: string; caption: string; nutrients: Nutrients } | null>(null)
   const [removeAllOpen, setRemoveAllOpen] = useState(false)
+  const [eatenAt, setEatenAt] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -203,6 +205,8 @@ export default function LogMealPage() {
     if (hydrated.current || !meal || loading) return
     hydrated.current = true
     if (!existingLoggedMeal) return
+    // <input type="time"> wants "HH:MM" - drop DRF's ":SS".
+    setEatenAt(existingLoggedMeal.eaten_at ? existingLoggedMeal.eaten_at.slice(0, 5) : '')
 
     const allPlanItems = new Map<number, ReferenceMealItemDetail>()
     for (const opt of meal.options) for (const item of opt.items) allPlanItems.set(item.id, item)
@@ -435,7 +439,7 @@ export default function LogMealPage() {
     }
     setSaving(true)
     try {
-      await saveLoggedMeal({ reference_meal: referenceMealId, date, items })
+      await saveLoggedMeal({ reference_meal: referenceMealId, date, eaten_at: eatenAt || null, items })
       navigate('/diet/log')
     } catch (err) {
       setError(
@@ -485,6 +489,31 @@ export default function LogMealPage() {
           <Button type="button" size="sm" disabled={saving} onClick={handleSave}>
             {saving ? 'Saving…' : 'Save all'}
           </Button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Label htmlFor="meal-eaten-at" className="shrink-0 text-sm font-normal text-muted-foreground">
+            Time eaten <span className="text-xs">(optional)</span>
+          </Label>
+          <Input
+            id="meal-eaten-at"
+            type="time"
+            className="h-8 w-32"
+            value={eatenAt}
+            onChange={(e) => setEatenAt(e.target.value)}
+          />
+          {eatenAt && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="text-muted-foreground"
+              aria-label="Clear time eaten"
+              onClick={() => setEatenAt('')}
+            >
+              <X className="size-3.5" />
+            </Button>
+          )}
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}

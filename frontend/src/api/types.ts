@@ -229,6 +229,8 @@ export type LoggedMeal = {
   reference_meal: number | null
   reference_meal_label: string
   date: string
+  /** Optional time of day it was eaten, "HH:MM:SS". */
+  eaten_at: string | null
   source: LoggedMealSource
   meal_option_label: string | null
   items: LoggedMealItem[]
@@ -268,6 +270,8 @@ export type NewLoggedMealItem =
 export type NewLoggedMeal = {
   reference_meal: number
   date: string
+  /** "HH:MM", or null/omitted for no time - a resave without it clears it. */
+  eaten_at?: string | null
   items: NewLoggedMealItem[]
 }
 

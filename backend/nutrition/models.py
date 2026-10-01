@@ -375,6 +375,9 @@ class LoggedMeal(models.Model):
     reference_meal_label = models.CharField(max_length=100, blank=True, default="")
     meal_option_label = models.CharField(max_length=100, null=True, blank=True)
     date = models.DateField()
+    # Optional time of day the trainee actually ate this meal - a plain
+    # time-of-day like DailyMetric.bedtime, since `date` already pins the day.
+    eaten_at = models.TimeField(null=True, blank=True)
     source = models.CharField(max_length=10, choices=Source.choices)
 
     class Meta:

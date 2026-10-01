@@ -558,6 +558,7 @@ class LoggedMealSerializer(serializers.ModelSerializer):
             "reference_meal",
             "reference_meal_label",
             "date",
+            "eaten_at",
             "source",
             "meal_option_label",
             "items",
@@ -637,6 +638,8 @@ class LoggedMealSerializer(serializers.ModelSerializer):
                 "source": meal_source,
                 "reference_meal_label": reference_meal.label,
                 "meal_option_label": meal_option_label,
+                # Complete-state upsert: omitting it on a resave clears it.
+                "eaten_at": validated_data.get("eaten_at"),
             },
         )
         logged_meal.items.all().delete()

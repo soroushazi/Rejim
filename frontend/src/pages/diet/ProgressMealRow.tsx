@@ -1,5 +1,6 @@
 import type { LoggedMeal } from '@/api/types'
 import { Badge } from '@/components/ui/badge'
+import { formatBedtime as formatTimeOfDay } from '@/lib/bedtime'
 import { round } from '@/lib/utils'
 
 export default function ProgressMealRow({ meal }: { meal: LoggedMeal }) {
@@ -7,7 +8,12 @@ export default function ProgressMealRow({ meal }: { meal: LoggedMeal }) {
     <li className="min-w-0 rounded-lg border border-border bg-background px-3 py-2.5">
       <div className="flex min-w-0 items-center justify-between gap-2">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className="truncate font-medium">{meal.reference_meal_label}</span>
+          <span className="truncate font-medium">
+            {meal.reference_meal_label}
+            {meal.eaten_at && (
+              <span className="ml-1.5 text-xs font-normal text-muted-foreground">{formatTimeOfDay(meal.eaten_at)}</span>
+            )}
+          </span>
           {meal.source === 'plan' && meal.meal_option_label && (
             <span className="truncate text-xs text-muted-foreground">From plan · {meal.meal_option_label}</span>
           )}

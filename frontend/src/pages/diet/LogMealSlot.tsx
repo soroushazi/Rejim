@@ -7,6 +7,7 @@ import { useAuth } from '@/auth/AuthContext'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import ConfirmDialog from '@/components/ConfirmDialog'
+import { formatBedtime as formatTimeOfDay } from '@/lib/bedtime'
 import { cn, round } from '@/lib/utils'
 import LoggedMealDetailDialog from './LoggedMealDetailDialog'
 import PlannedMealDetailDialog from './PlannedMealDetailDialog'
@@ -69,7 +70,14 @@ export default function LogMealSlot({ meal, date, loggedMeal, onCleared }: Props
     <li className={cn(slotClassName(loggedMeal?.source), 'cursor-pointer')} onClick={handleCardClick}>
       <div className="flex items-center justify-between gap-2 px-3 py-2.5">
         <div className="flex min-w-0 flex-col gap-1">
-          <span className="font-medium">{meal.label}</span>
+          <span className="font-medium">
+            {meal.label}
+            {loggedMeal?.eaten_at && (
+              <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                {formatTimeOfDay(loggedMeal.eaten_at)}
+              </span>
+            )}
+          </span>
           {loggedMeal?.source === 'plan' && loggedMeal.meal_option_label && (
             <span className="text-xs text-muted-foreground">From plan · {loggedMeal.meal_option_label}</span>
           )}

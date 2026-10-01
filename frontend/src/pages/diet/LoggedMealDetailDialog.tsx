@@ -1,5 +1,6 @@
 import type { LoggedMeal, Nutrients } from '@/api/types'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { formatBedtime as formatTimeOfDay } from '@/lib/bedtime'
 import { round } from '@/lib/utils'
 import { MICRO_FIELDS } from './NutritionFactsDialog'
 
@@ -33,7 +34,10 @@ export default function LoggedMealDetailDialog({
       <DialogContent className="max-h-[85svh] overflow-y-auto sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>{meal.reference_meal_label}</DialogTitle>
-          <DialogDescription>{sourceLabel(meal)}</DialogDescription>
+          <DialogDescription>
+            {sourceLabel(meal)}
+            {meal.eaten_at && ` · Eaten at ${formatTimeOfDay(meal.eaten_at)}`}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-4">

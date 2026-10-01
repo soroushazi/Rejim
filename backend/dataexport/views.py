@@ -58,7 +58,7 @@ class DietLogExportView(APIView):
         response = _csv_response("diet-log.csv")
         writer = csv.writer(response)
         writer.writerow(
-            ["date", "meal", "item", "actual_weight_grams", "calories", "protein_g", "carbs_g", "fat_g"]
+            ["date", "meal", "eaten_at", "item", "actual_weight_grams", "calories", "protein_g", "carbs_g", "fat_g"]
         )
         for log in logs:
             day = log.logged_meal.date if log.logged_meal_id else log.logged_at.date()
@@ -67,6 +67,7 @@ class DietLogExportView(APIView):
                 [
                     day,
                     meal,
+                    log.logged_meal.eaten_at if log.logged_meal_id else "",
                     _food_log_item_name(log),
                     log.actual_weight_grams,
                     log.calories,
