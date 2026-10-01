@@ -178,6 +178,9 @@ export function weightDirectionFeedback(
 ): WeightDirectionFeedback | null {
   if (suggestion.status !== 'low' && suggestion.status !== 'high') return null
   if (!Number.isFinite(enteredWeight)) return null
+  // Already at bodyweight (no added weight) - there's nothing lighter to go
+  // to, so there's no "consider dropping the weight" to nag about.
+  if (suggestion.status === 'low' && suggestion.anchorWeight <= 0) return null
 
   const unit = suggestion.lastWeightUnit
   if (suggestion.status === 'low') {
@@ -185,7 +188,7 @@ export function weightDirectionFeedback(
       ? { tone: 'good', note: 'Lowering the weight — that’s what’s suggested.' }
       : {
           tone: 'bad',
-          note: `Not lower than last time (${suggestion.anchorWeight}${unit}) — consider dropping the weight.`,
+          note: `Not lower than last time (${formatWeight(suggestion.anchorWeight, unit)}) — consider dropping the weight.`,
         }
   }
 
@@ -193,7 +196,7 @@ export function weightDirectionFeedback(
     ? { tone: 'good', note: 'Pushing heavier — that’s what’s suggested.' }
     : {
         tone: 'bad',
-        note: `Not heavier than last time (${suggestion.anchorWeight}${unit}) — consider adding weight.`,
+        note: `Not heavier than last time (${formatWeight(suggestion.anchorWeight, unit)}) — consider adding weight.`,
       }
 }
 
@@ -256,6 +259,12 @@ export function suggestedDropsetWeight(lastWorkingWeight: string, unit: WeightUn
 
 export type SuggestionHint = { tone: 'neutral' | 'lower' | 'raise' | 'mixed'; text: string }
 
+/** A logged weight of 0 means no added weight - bodyweight (a pull-up, a
+ * push-up) - so it reads as that rather than "0lb". */
+function formatWeight(weight: number, unit: string, zeroLabel = 'bodyweight'): string {
+  return weight <= 0 ? zeroLabel : `${weight}${unit}`
+}
+
 /** The "why" shown under the first working set, next to its placeholder - so
  * the trainee sees the suggestion *before* lifting, not only once they've
  * already done a set at the wrong weight. */
@@ -268,22 +277,33 @@ export function suggestionHint(
 ): SuggestionHint | null {
   if (suggestion.status === 'first' || suggestedWeight === null) return null
   const range = `${targetRepsMin}–${targetRepsMax}`
-  const suggested = `${suggestedWeight}${unit}`
+  const suggested = formatWeight(suggestedWeight, unit, 'bodyweight (no added weight)')
   if (suggestion.status === 'mixed') {
     return {
       tone: 'mixed',
       text: `Last time you used different weights (${suggestion.lowWeight}–${suggestion.highWeight}${suggestion.lastWeightUnit}). Somewhere in between should land in your ${range} rep range — suggested: ${suggested}.`,
     }
   }
-  const at = `${suggestion.anchorWeight}${suggestion.lastWeightUnit}`
+  const at = formatWeight(suggestion.anchorWeight, suggestion.lastWeightUnit)
   const reps =
     'avgReps' in suggestion
       ? `${suggestion.avgReps} reps per set`
       : `~${suggestion.avgRepsLeft} (L) / ~${suggestion.avgRepsRight} (R) reps per set`
   switch (suggestion.status) {
     case 'low':
+      // Weights can't go negative: at bodyweight already, the only way into
+      // the range is more reps over time, not a lighter load.
+      if (suggestion.anchorWeight <= 0) {
+        return {
+          tone: 'neutral',
+          text: `Last time you averaged ${reps} at bodyweight — under your ${range} range. You can't go lighter than bodyweight, so keep it and work toward more reps.`,
+        }
+      }
       return { tone: 'lower', text: `Last time you averaged ${reps} at ${at} — under your ${range} range, so go lighter: ${suggested}.` }
     case 'high':
+      if (suggestion.anchorWeight <= 0) {
+        return { tone: 'raise', text: `Last time you averaged ${reps} at bodyweight — over your ${range} range, so add weight: ${suggested}.` }
+      }
       return { tone: 'raise', text: `Last time you averaged ${reps} at ${at} — over your ${range} range, so go heavier: ${suggested}.` }
     case 'catchup':
       return {
