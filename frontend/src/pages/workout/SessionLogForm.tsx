@@ -1,5 +1,5 @@
 import { ArrowLeft } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { ApiError } from '@/api/client'
 import { listExercises, listMuscleGroups } from '@/api/exercises'
@@ -87,6 +87,9 @@ type Props = {
   existingLog: WorkoutSessionLog | null
   onSaved: (log: WorkoutSessionLog) => void
   onDeleted: () => void
+  /** Rendered under the Save/Remove buttons - WorkoutLogPage's "Back to
+   * today's workout" when the day already has a log. */
+  footer?: ReactNode
   /** True until the trainee has ever saved a single WorkoutSession - gates
    * the Weight unit banner below, which only needs to be seen once. */
   isFirstLog: boolean
@@ -142,6 +145,7 @@ export default function SessionLogForm({
   existingLog,
   onSaved,
   onDeleted,
+  footer,
   isFirstLog,
 }: Props) {
   const session = sessions.find((s) => s.id === selectedSessionId) ?? sessions[0]
@@ -892,6 +896,7 @@ export default function SessionLogForm({
             {deleting ? 'Removing…' : 'Remove log'}
           </Button>
         )}
+        {footer}
       </div>
 
       <ConfirmDialog

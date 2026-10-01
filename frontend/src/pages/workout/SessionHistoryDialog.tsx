@@ -23,12 +23,14 @@ type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
   sessions: WorkoutSessionLog[]
+  /** See SessionHistoryRow's editable. */
+  editable?: boolean
 }
 
 /** Independent of the Progress page's own period selector (which scopes the
  * frequency stat) - filtering session history shouldn't also change the
  * numbers in the cards above. */
-export default function SessionHistoryDialog({ open, onOpenChange, sessions }: Props) {
+export default function SessionHistoryDialog({ open, onOpenChange, sessions, editable }: Props) {
   const [period, setPeriod] = useState<Period>('week')
   const [customStart, setCustomStart] = useState(() => addDays(toDateKey(new Date()), -6))
   const [customEnd, setCustomEnd] = useState(() => toDateKey(new Date()))
@@ -122,7 +124,7 @@ export default function SessionHistoryDialog({ open, onOpenChange, sessions }: P
           ) : (
             <ul className="flex flex-col gap-2">
               {sorted.map((s) => (
-                <SessionHistoryRow key={s.id} session={s} />
+                <SessionHistoryRow key={s.id} session={s} editable={editable} />
               ))}
             </ul>
           )}

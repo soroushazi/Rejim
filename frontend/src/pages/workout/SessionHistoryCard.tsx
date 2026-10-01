@@ -3,7 +3,14 @@ import { useState } from 'react'
 import type { WorkoutSessionLog } from '@/api/types'
 import SessionHistoryDialog from './SessionHistoryDialog'
 
-export default function SessionHistoryCard({ sessions }: { sessions: WorkoutSessionLog[] }) {
+export default function SessionHistoryCard({
+  sessions,
+  editable,
+}: {
+  sessions: WorkoutSessionLog[]
+  /** See SessionHistoryRow's editable. */
+  editable?: boolean
+}) {
   const [open, setOpen] = useState(false)
   const mostRecent = [...sessions].sort((a, b) => b.date.localeCompare(a.date))[0]
 
@@ -28,7 +35,7 @@ export default function SessionHistoryCard({ sessions }: { sessions: WorkoutSess
         <ChevronRight className="size-4 text-muted-foreground" />
       </button>
 
-      <SessionHistoryDialog open={open} onOpenChange={setOpen} sessions={sessions} />
+      <SessionHistoryDialog open={open} onOpenChange={setOpen} sessions={sessions} editable={editable} />
     </>
   )
 }

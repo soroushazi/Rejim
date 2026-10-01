@@ -167,12 +167,13 @@ export default function WorkoutProgressPage() {
 
       <WorkoutStatsSummary periodLabel={PERIOD_LABEL[period]} frequency={frequency} streak={streak} />
 
-      <SessionHistoryCard sessions={sessions} />
-      <ExerciseHistoryCard exercises={loggedExercises} />
+      <SessionHistoryCard sessions={sessions} editable />
+      <ExerciseHistoryCard exercises={loggedExercises} editable />
 
       <TopMoversSection improving={improving} declining={declining} onSelectExercise={selectExercise} />
 
       <ExerciseHistoryDialog
+        editable
         exerciseId={historyExercise?.id ?? null}
         exerciseName={historyExercise?.name ?? ''}
         onOpenChange={(open) => !open && setHistoryExercise(null)}

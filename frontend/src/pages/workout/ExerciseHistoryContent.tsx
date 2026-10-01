@@ -4,6 +4,7 @@ import type { ExerciseHistorySet } from '@/api/types'
 import type { PrEvent } from '@/lib/personalRecord'
 import { rpeLabel } from '@/lib/rpe'
 import { fromKg } from '@/lib/weightUnits'
+import EditWorkoutLogButton from './EditWorkoutLogButton'
 import ExerciseHistoryChart from './ExerciseHistoryChart'
 
 type Props = {
@@ -33,6 +34,10 @@ type Props = {
   /** All-time personal record for this exercise, independent of whatever date
    * range `history` is narrowed to - see ExerciseHistoryChart's currentPr prop. */
   currentPr?: { weight: number; reps: number; unit: string }
+  /** Adds "Edit workout" (behind a confirmation) to each day - only for the
+   * trainee's own history in Progress views, never the in-log disclosure or a
+   * trainer viewing a trainee. */
+  editable?: boolean
 }
 
 /** Fetches and renders one exercise's history (chart + date-grouped set list) -
@@ -46,6 +51,7 @@ export default function ExerciseHistoryContent({
   traineeId,
   showVolume,
   currentPr,
+  editable = false,
 }: Props) {
   const [history, setHistory] = useState<ExerciseHistorySet[]>([])
   const [loading, setLoading] = useState(true)
@@ -111,13 +117,16 @@ export default function ExerciseHistoryContent({
       <div className="flex flex-col gap-2 border-t border-border pt-3">
         {days.map(([date, sets]) => (
           <div key={date} className="rounded-lg border border-border p-2.5">
-            <p className="mb-1.5 text-sm font-medium">
-              {new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
-                weekday: 'short',
-                month: 'short',
-                day: 'numeric',
-              })}
-            </p>
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <p className="text-sm font-medium">
+                {new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
+                  weekday: 'short',
+                  month: 'short',
+                  day: 'numeric',
+                })}
+              </p>
+              {editable && <EditWorkoutLogButton date={date} />}
+            </div>
             <ul className="flex flex-col gap-1 text-sm">
               {sets
                 .sort((a, b) => a.set_number - b.set_number)

@@ -1,9 +1,20 @@
 import { useState } from 'react'
 import type { WorkoutSessionLog } from '@/api/types'
 import { rpeLabel } from '@/lib/rpe'
+import EditWorkoutLogButton from './EditWorkoutLogButton'
 
-export default function SessionHistoryRow({ session }: { session: WorkoutSessionLog }) {
-  const [expanded, setExpanded] = useState(false)
+export default function SessionHistoryRow({
+  session,
+  defaultExpanded = false,
+  editable = false,
+}: {
+  session: WorkoutSessionLog
+  defaultExpanded?: boolean
+  /** Shows an "Edit" action (behind a confirmation) when expanded - only for the
+   * trainee's own history, never a trainer viewing a trainee's. */
+  editable?: boolean
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded)
   const exerciseCount = session.logged_exercises.length
   const setCount = session.logged_exercises.reduce((sum, le) => sum + le.sets.length, 0)
 
@@ -75,6 +86,9 @@ export default function SessionHistoryRow({ session }: { session: WorkoutSession
                 </li>
               ))}
           </ul>
+          {editable && session.plan_session !== null && (
+            <EditWorkoutLogButton date={session.date} planSessionId={session.plan_session} />
+          )}
         </div>
       )}
     </li>

@@ -160,6 +160,7 @@ export default function TrainingStrengthPanel({ range, traineeId }: Props) {
             range={range}
             prEvents={prEvents}
             traineeId={traineeId}
+            editable={traineeId === undefined}
             showVolume
             currentPr={currentPr ?? undefined}
             goalWeightKg={(() => {

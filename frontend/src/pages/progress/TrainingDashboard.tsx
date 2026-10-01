@@ -49,7 +49,8 @@ export default function TrainingDashboard({ range, traineeId, trainee }: Props) 
 
   return (
     <div className="flex flex-col gap-3">
-      <SessionHistoryCard sessions={sessions} />
+      {/* Edit only for your own history - never a trainer viewing a trainee's. */}
+      <SessionHistoryCard sessions={sessions} editable={traineeId === undefined} />
 
       <Card>
         <CardHeader>

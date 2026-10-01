@@ -16,7 +16,13 @@ export type LoggedExerciseOption = { exerciseId: number; exerciseName: string }
  * corners) once the list got taller than the card. Picking one shows its
  * history inline (same chart/list as the Log-time popup, via
  * ExerciseHistoryContent). */
-export default function ExerciseHistoryCard({ exercises }: { exercises: LoggedExerciseOption[] }) {
+export default function ExerciseHistoryCard({
+  exercises,
+  editable,
+}: {
+  exercises: LoggedExerciseOption[]
+  editable?: boolean
+}) {
   const [expanded, setExpanded] = useState(false)
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<LoggedExerciseOption | null>(null)
@@ -54,7 +60,7 @@ export default function ExerciseHistoryCard({ exercises }: { exercises: LoggedEx
               >
                 <ChevronLeft className="size-4" /> {selected.exerciseName}
               </button>
-              <ExerciseHistoryContent exerciseId={selected.exerciseId} />
+              <ExerciseHistoryContent exerciseId={selected.exerciseId} editable={editable} />
             </>
           ) : (
             <DropdownMenu onOpenChange={(open) => !open && setSearch('')}>
