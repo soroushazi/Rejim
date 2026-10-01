@@ -92,6 +92,7 @@ class ProgressTrainingView(APIView):
                 logged_exercise__session__trainee=trainee,
                 logged_exercise__session__date__range=(start, end),
                 is_warmup=False,
+                is_dropset=False,
             )
             .values(
                 "logged_exercise__plan_exercise__exercise_id",
@@ -149,6 +150,7 @@ class ProgressTrainingVolumeView(APIView):
             logged_exercise__session__trainee=trainee,
             logged_exercise__session__date__range=(start, end),
             is_warmup=False,
+            is_dropset=False,
         ).values("weight", "weight_unit", "reps_done", "logged_exercise__session__date")
 
         volume_by_week = {}
