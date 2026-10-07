@@ -13,6 +13,7 @@ export default function ExerciseCard({
   isTrainer,
   editRequests,
   onEdit,
+  onDelete,
   onRequestEdit,
   onResolveRequest,
 }: {
@@ -22,6 +23,7 @@ export default function ExerciseCard({
   isTrainer: boolean
   editRequests: ExerciseEditRequest[]
   onEdit: () => void
+  onDelete: () => void
   onRequestEdit: () => void
   onResolveRequest: (id: number) => void
 }) {
@@ -111,9 +113,16 @@ export default function ExerciseCard({
           )}
 
           <div className="flex flex-col gap-2 border-t border-border pt-3">
-            <Button type="button" variant="outline" size="sm" className="self-start" onClick={isTrainer ? onEdit : onRequestEdit}>
-              {isTrainer ? 'Edit exercise' : 'Request edit'}
-            </Button>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={isTrainer ? onEdit : onRequestEdit}>
+                {isTrainer ? 'Edit exercise' : 'Request edit'}
+              </Button>
+              {isTrainer && (
+                <Button type="button" variant="ghost" size="sm" className="text-destructive" onClick={onDelete}>
+                  Delete
+                </Button>
+              )}
+            </div>
 
             {isTrainer && pendingRequests.length > 0 && (
               <div className="flex flex-col gap-2">

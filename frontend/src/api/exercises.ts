@@ -1,5 +1,5 @@
 import { apiFetch } from './client'
-import type { Exercise, ExerciseEditRequest, MuscleGroup, NewExercise, NewExerciseEditRequest } from './types'
+import type { Exercise, ExerciseEditRequest, ExerciseUsage, MuscleGroup, NewExercise, NewExerciseEditRequest } from './types'
 
 /** Fetches the entire exercise bank (~100 rows) in one call - small enough that
  * search/filtering happens client-side, same shape as the food bank's
@@ -24,6 +24,17 @@ export function updateExercise(id: number, data: NewExercise): Promise<Exercise>
     method: 'PATCH',
     body: JSON.stringify(data),
   })
+}
+
+export function getExerciseUsage(id: number): Promise<ExerciseUsage> {
+  return apiFetch<ExerciseUsage>(`/workouts/exercises/${id}/usage/`)
+}
+
+/** Trainer-only. An exercise that's in use needs `replaceWithId` - every plan,
+ * logged workout, and goal referencing it moves to that exercise first. */
+export function deleteExercise(id: number, replaceWithId?: number): Promise<void> {
+  const query = replaceWithId !== undefined ? `?replace_with=${replaceWithId}` : ''
+  return apiFetch<void>(`/workouts/exercises/${id}/${query}`, { method: 'DELETE' })
 }
 
 /** Fetched in full alongside the bank (trainers see every request, trainees only

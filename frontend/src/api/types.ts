@@ -364,6 +364,17 @@ export type Exercise = {
   alternatives: number[]
 }
 
+/** What references an exercise - see ExerciseViewSet.usage. Anything in use
+ * can only be deleted by naming a replacement exercise. */
+export type ExerciseUsage = {
+  logged_count: number
+  logged_trainee_count: number
+  plan_count: number
+  plan_trainee_count: number
+  goal_count: number
+  in_use: boolean
+}
+
 export type NewExercise = {
   name: string
   description: string

@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import MultiSelectDropdown from '@/components/MultiSelectDropdown'
 import RequestEditDialog from '@/components/RequestEditDialog'
 import AddExerciseDialog from './AddExerciseDialog'
+import DeleteExerciseDialog from './DeleteExerciseDialog'
 import ExerciseCard from './ExerciseCard'
 
 const DIFFICULTY_OPTIONS: { id: number; name: string; value: ExerciseDifficulty }[] = [
@@ -35,6 +36,7 @@ export default function ExerciseBankPage() {
   const [selectedDifficulties, setSelectedDifficulties] = useState<string[]>([])
   const [addOpen, setAddOpen] = useState(false)
   const [editingExercise, setEditingExercise] = useState<Exercise | null>(null)
+  const [deletingExercise, setDeletingExercise] = useState<Exercise | null>(null)
   const [requestEditExercise, setRequestEditExercise] = useState<Exercise | null>(null)
 
   useEffect(() => {
@@ -148,6 +150,7 @@ export default function ExerciseBankPage() {
               isTrainer={!!user?.is_trainer}
               editRequests={editRequestsByExercise.get(exercise.id) ?? []}
               onEdit={() => setEditingExercise(exercise)}
+              onDelete={() => setDeletingExercise(exercise)}
               onRequestEdit={() => setRequestEditExercise(exercise)}
               onResolveRequest={handleResolveRequest}
             />
@@ -186,6 +189,22 @@ export default function ExerciseBankPage() {
               setEditingExercise(null)
             }}
           />
+
+          {deletingExercise && (
+            <DeleteExerciseDialog
+              key={deletingExercise.id}
+              exercise={deletingExercise}
+              exercises={exercises}
+              onOpenChange={(open) => !open && setDeletingExercise(null)}
+              onDeleted={(id) =>
+                // The deleted exercise also drops out of every other one's
+                // alternatives (the replacement takes its place server-side).
+                listExercises()
+                  .then(setExercises)
+                  .catch(() => setExercises((prev) => prev.filter((e) => e.id !== id)))
+              }
+            />
+          )}
         </>
       )}
 

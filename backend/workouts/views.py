@@ -35,6 +35,7 @@ from .serializers import (
     WorkoutPlanSerializer,
     WorkoutSessionSerializer,
 )
+from .services import exercise_usage, replace_exercise
 
 
 class MuscleGroupViewSet(viewsets.ModelViewSet):
@@ -47,6 +48,36 @@ class ExerciseViewSet(viewsets.ModelViewSet):
     queryset = Exercise.objects.all()
     serializer_class = ExerciseSerializer
     permission_classes = [IsTrainerWriteTraineeReadOnly]
+
+    @action(detail=True, methods=["get"])
+    def usage(self, request, pk=None):
+        return Response(exercise_usage(self.get_object()))
+
+    def destroy(self, request, *args, **kwargs):
+        """An exercise nothing references is deleted outright. One that's in
+        a plan, a logged workout, or a goal needs `?replace_with=<id>`:
+        everything is moved over to that exercise first (see
+        services.replace_exercise), so no history is ever lost."""
+        exercise = self.get_object()
+        replace_with = request.query_params.get("replace_with")
+        replacement = None
+        if replace_with:
+            replacement = Exercise.objects.filter(pk=replace_with).exclude(pk=exercise.pk).first()
+            if replacement is None:
+                return Response(
+                    {"detail": "Pick a different, existing exercise to replace it with."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        elif exercise_usage(exercise)["in_use"]:
+            return Response(
+                {"detail": "This exercise is in use - pick an exercise to replace it with first."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        with transaction.atomic():
+            if replacement is not None:
+                replace_exercise(exercise, replacement)
+            exercise.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class ExerciseEditRequestViewSet(viewsets.ModelViewSet):
