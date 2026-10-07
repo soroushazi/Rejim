@@ -147,19 +147,40 @@ class ProgressTrainingVolumeView(APIView):
     def get(self, request):
         trainee = _resolve_trainee(request)
         start, end = _resolve_range(request)
+        # Widen to the Monday of the start's week: these are weekly buckets,
+        # so a range starting mid-week (e.g. "Last 7 days" from a Thursday)
+        # would otherwise show that first week with only part of its sessions.
+        start = monday_of(start)
 
         sets = LoggedSet.objects.filter(
             logged_exercise__session__trainee=trainee,
             logged_exercise__session__date__range=(start, end),
             is_warmup=False,
             is_dropset=False,
-        ).values("weight", "weight_unit", "reps_done", "logged_exercise__session__date")
+        ).values(
+            "weight",
+            "weight_unit",
+            "reps_done",
+            "weight_left",
+            "reps_done_left",
+            "weight_right",
+            "reps_done_right",
+            "logged_exercise__session__date",
+        )
 
         volume_by_week = {}
         for s in sets:
             week = monday_of(s["logged_exercise__session__date"])
-            weight_kg = to_kg(s["weight"], s["weight_unit"]) or 0
-            volume_by_week[week] = volume_by_week.get(week, 0) + weight_kg * s["reps_done"]
+            # A per-side (unilateral) set fills the _left/_right fields instead
+            # of weight/reps_done - its volume is both sides' added together.
+            volume = 0
+            for weight, reps in (
+                (s["weight"], s["reps_done"]),
+                (s["weight_left"], s["reps_done_left"]),
+                (s["weight_right"], s["reps_done_right"]),
+            ):
+                volume += (to_kg(weight, s["weight_unit"]) or 0) * (reps or 0)
+            volume_by_week[week] = volume_by_week.get(week, 0) + volume
 
         session_dates = WorkoutSession.objects.filter(trainee=trainee, date__range=(start, end)).values_list(
             "date", flat=True
