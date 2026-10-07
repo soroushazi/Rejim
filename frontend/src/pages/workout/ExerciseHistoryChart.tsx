@@ -3,6 +3,7 @@ import { useState } from 'react'
 import type { ExerciseHistorySet } from '@/api/types'
 import ZoomableChart, { ChartEmptyState } from '@/components/charts/ZoomableChart'
 import type { PrEvent } from '@/lib/personalRecord'
+import { averagedWeightReps } from '@/lib/setMeasure'
 import { cn } from '@/lib/utils'
 
 type DayPoint = { date: string; maxWeight: number; avgReps: number; volume: number; weightUnit: string }
@@ -79,27 +80,24 @@ export default function ExerciseHistoryChart({
   // instead of pointing at a now-unrelated day.
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
 
-  // A per-side (Exercise.is_unilateral) exercise's history has a null
-  // weight/reps_done - this chart doesn't plot per-side data yet, so those
-  // rows are excluded (ExerciseHistoryContent skips rendering this chart
-  // altogether once every row for an exercise is shaped this way).
-  const working = history.filter(
-    (s): s is ExerciseHistorySet & { weight: string; reps_done: number } =>
-      !s.is_warmup && !s.is_dropset && s.weight !== null && s.reps_done !== null,
-  )
-  const byDate = new Map<string, typeof working>()
-  for (const s of working) {
+  // A per-side (Exercise.is_unilateral) set is plotted as the average of
+  // its two sides (lib/setMeasure.ts).
+  const byDate = new Map<string, { weight: number; reps: number; weightUnit: string }[]>()
+  for (const s of history) {
+    if (s.is_warmup || s.is_dropset) continue
+    const measured = averagedWeightReps(s)
+    if (measured === null) continue
     const arr = byDate.get(s.session_date) ?? []
-    arr.push(s)
+    arr.push({ ...measured, weightUnit: s.weight_unit })
     byDate.set(s.session_date, arr)
   }
   const days: DayPoint[] = [...byDate.entries()]
     .map(([date, sets]) => ({
       date,
-      maxWeight: Math.max(...sets.map((s) => Number(s.weight))),
-      avgReps: sets.reduce((sum, s) => sum + s.reps_done, 0) / sets.length,
-      volume: sets.reduce((sum, s) => sum + Number(s.weight) * s.reps_done, 0),
-      weightUnit: sets[0].weight_unit,
+      maxWeight: Math.max(...sets.map((s) => s.weight)),
+      avgReps: sets.reduce((sum, s) => sum + s.reps, 0) / sets.length,
+      volume: sets.reduce((sum, s) => sum + s.weight * s.reps, 0),
+      weightUnit: sets[0].weightUnit,
     }))
     .sort((a, b) => a.date.localeCompare(b.date))
 

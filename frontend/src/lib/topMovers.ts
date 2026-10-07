@@ -1,4 +1,5 @@
 import type { LoggedExerciseEntry, WorkoutSessionLog } from '@/api/types'
+import { averagedWeightReps } from './setMeasure'
 
 export type PlanExerciseInfo = { exerciseId: number; exerciseName: string }
 
@@ -15,15 +16,15 @@ export type ExerciseMover = {
  * Warm-up and drop sets are excluded, same convention as weight suggestions/PRs
  * and the exercise-history chart. */
 function sessionScore(logged: LoggedExerciseEntry): number | null {
-  // A per-side (Exercise.is_unilateral) exercise's sets have a null weight/
-  // reps_done - not yet supported here, so they're excluded from the score
-  // rather than coerced into a misleading 0.
-  const working = logged.sets.filter(
-    (s): s is typeof s & { weight: string; reps_done: number } => !s.is_warmup && !s.is_dropset && s.weight !== null && s.reps_done !== null,
-  )
+  // A per-side (Exercise.is_unilateral) set counts as the average of its
+  // two sides (lib/setMeasure.ts).
+  const working = logged.sets
+    .filter((s) => !s.is_warmup && !s.is_dropset)
+    .map(averagedWeightReps)
+    .filter((m) => m !== null)
   if (working.length === 0) return null
-  const maxWeight = Math.max(...working.map((s) => Number(s.weight)))
-  const avgReps = working.reduce((sum, s) => sum + s.reps_done, 0) / working.length
+  const maxWeight = Math.max(...working.map((s) => s.weight))
+  const avgReps = working.reduce((sum, s) => sum + s.reps, 0) / working.length
   return maxWeight * avgReps
 }
 

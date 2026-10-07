@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { computePrTimeline, type PrEvent } from '@/lib/personalRecord'
+import { averagedWeightReps } from '@/lib/setMeasure'
 import { toKg } from '@/lib/weightUnits'
 import ExerciseHistoryContent from '@/pages/workout/ExerciseHistoryContent'
 
@@ -72,20 +73,21 @@ export default function TrainingStrengthPanel({ range, traineeId }: Props) {
       .then((history) => {
         if (cancelled) return
         setPrEvents(computePrTimeline(history))
-        // A per-side (Exercise.is_unilateral) exercise's history has a null
-        // weight/reps_done, not yet supported by this all-time PR summary -
-        // excluded rather than coerced into a misleading "PR: 0".
-        const working = history.filter(
-          (s): s is typeof s & { weight: string; reps_done: number } =>
-            !s.is_warmup && !s.is_dropset && s.weight !== null && s.reps_done !== null,
-        )
+        // A per-side (Exercise.is_unilateral) set counts as the average of
+        // its two sides (lib/setMeasure.ts).
+        const working = history
+          .filter((s) => !s.is_warmup && !s.is_dropset)
+          .flatMap((s) => {
+            const measured = averagedWeightReps(s)
+            return measured ? [{ ...measured, unit: s.weight_unit }] : []
+          })
         if (working.length === 0) {
           setCurrentPr(null)
           return
         }
-        const maxWeight = Math.max(...working.map((s) => Number(s.weight)))
-        const maxReps = Math.max(...working.filter((s) => Number(s.weight) === maxWeight).map((s) => s.reps_done))
-        setCurrentPr({ weight: maxWeight, reps: maxReps, unit: working[0].weight_unit })
+        const maxWeight = Math.max(...working.map((s) => s.weight))
+        const maxReps = Math.max(...working.filter((s) => s.weight === maxWeight).map((s) => s.reps))
+        setCurrentPr({ weight: maxWeight, reps: maxReps, unit: working[0].unit })
       })
       .catch(() => {
         if (!cancelled) {

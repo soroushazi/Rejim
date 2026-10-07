@@ -292,12 +292,15 @@ export default function SessionLogForm({
               weight: s.weight ?? '',
               reps_done: s.reps_done !== null ? String(s.reps_done) : '',
               rpe: s.rpe !== null ? String(s.rpe) : '',
-              weight_left: s.weight_left ?? '',
-              weight_right: s.weight_right ?? '',
-              reps_done_left: s.reps_done_left !== null ? String(s.reps_done_left) : '',
-              reps_done_right: s.reps_done_right !== null ? String(s.reps_done_right) : '',
-              rpe_left: s.rpe_left !== null ? String(s.rpe_left) : '',
-              rpe_right: s.rpe_right !== null ? String(s.rpe_right) : '',
+              // A set logged before its exercise was switched to per-side
+              // only has the single weight/reps/rpe - prefill both sides from
+              // it so re-saving this log doesn't mean retyping every set.
+              weight_left: s.weight_left ?? s.weight ?? '',
+              weight_right: s.weight_right ?? s.weight ?? '',
+              reps_done_left: String(s.reps_done_left ?? s.reps_done ?? ''),
+              reps_done_right: String(s.reps_done_right ?? s.reps_done ?? ''),
+              rpe_left: String(s.rpe_left ?? s.rpe ?? ''),
+              rpe_right: String(s.rpe_right ?? s.rpe ?? ''),
               confirmed: true,
             })
             nextDrafts[pe.id] = {

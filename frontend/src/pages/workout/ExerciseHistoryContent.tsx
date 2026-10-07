@@ -88,11 +88,6 @@ export default function ExerciseHistoryContent({
     )
   }
 
-  // A per-side (Exercise.is_unilateral) exercise's sets all have a null
-  // `weight` (see ExerciseHistorySet) - the chart doesn't plot per-side data
-  // yet, so it's skipped entirely in favor of just the set list below.
-  const isUnilateral = history.every((s) => s.weight === null)
-
   const byDate = new Map<string, ExerciseHistorySet[]>()
   for (const s of history) {
     const arr = byDate.get(s.session_date) ?? []
@@ -105,15 +100,13 @@ export default function ExerciseHistoryContent({
 
   return (
     <div className="flex flex-col gap-4">
-      {!isUnilateral && (
-        <ExerciseHistoryChart
-          history={history}
-          prEvents={prEvents}
-          goalWeight={goalWeight}
-          showVolume={showVolume}
-          currentPr={currentPr}
-        />
-      )}
+      <ExerciseHistoryChart
+        history={history}
+        prEvents={prEvents}
+        goalWeight={goalWeight}
+        showVolume={showVolume}
+        currentPr={currentPr}
+      />
       <div className="flex flex-col gap-2 border-t border-border pt-3">
         {days.map(([date, sets]) => (
           <div key={date} className="rounded-lg border border-border p-2.5">

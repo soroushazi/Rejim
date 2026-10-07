@@ -5,7 +5,7 @@ import type { Exercise, ExerciseHistorySet, PlanExerciseDetail, WeightUnit } fro
 import { Badge } from '@/components/ui/badge'
 import CollapsibleSection from '@/components/CollapsibleSection'
 import { Button } from '@/components/ui/button'
-import { checkPersonalRecord } from '@/lib/personalRecord'
+import { checkDraftSetPersonalRecord } from '@/lib/personalRecord'
 import {
   suggestedDropsetWeight,
   suggestedWarmupWeight,
@@ -346,12 +346,8 @@ export default function SupersetLogBlock({ entries, weightUnit }: Props) {
             )
           }
           if (bothConfirmed) {
-            const prA = isUnilateralA
-              ? null
-              : checkPersonalRecord(historyA, Number(setA.weight), Number(setA.reps_done), setA.is_warmup, setA.is_dropset)
-            const prB = isUnilateralB
-              ? null
-              : checkPersonalRecord(historyB, Number(setB.weight), Number(setB.reps_done), setB.is_warmup, setB.is_dropset)
+            const prA = checkDraftSetPersonalRecord(historyA, setA, isUnilateralA)
+            const prB = checkDraftSetPersonalRecord(historyB, setB, isUnilateralB)
             return (
               <div key={i} className="flex items-center gap-2 rounded-md bg-muted px-2.5 py-1.5 text-sm">
                 <button

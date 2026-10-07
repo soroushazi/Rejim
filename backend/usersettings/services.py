@@ -4,7 +4,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.utils import timezone
 
-from progress.services import to_kg
+from progress.services import averaged_weight_reps, to_kg
 from tracker.models import DailyMetric
 from workouts.models import LoggedSet
 
@@ -101,21 +101,27 @@ def _weight_goal_reached(goal):
 
 
 def _strength_goal_reached(goal):
-    best = (
-        LoggedSet.objects.filter(
-            logged_exercise__plan_exercise__exercise=goal.exercise,
-            logged_exercise__session__trainee=goal.trainee,
-            is_warmup=False,
-            is_dropset=False,
-        )
-        .order_by("-weight")
-        .first()
+    # Compared in Python rather than via order_by("-weight"): a per-side
+    # (Exercise.is_unilateral) set has a null weight and counts as the average
+    # of its two sides instead - and Postgres sorts NULLs first on a
+    # descending order, so the old query could pick one as the "best" set.
+    sets = LoggedSet.objects.filter(
+        logged_exercise__plan_exercise__exercise=goal.exercise,
+        logged_exercise__session__trainee=goal.trainee,
+        is_warmup=False,
+        is_dropset=False,
     )
-    if best is None:
+    weights_kg = []
+    for s in sets:
+        measured = averaged_weight_reps(
+            s.weight, s.reps_done, s.weight_left, s.weight_right, s.reps_done_left, s.reps_done_right
+        )
+        if measured is not None:
+            weights_kg.append(to_kg(measured[0], s.weight_unit))
+    if not weights_kg:
         return False
-    best_kg = to_kg(best.weight, best.weight_unit)
     target_kg = to_kg(goal.target_value, goal.target_value_unit)
-    return best_kg >= target_kg
+    return max(weights_kg) >= target_kg
 
 
 def _goal_description(goal):

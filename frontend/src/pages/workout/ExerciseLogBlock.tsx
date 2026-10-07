@@ -3,7 +3,7 @@ import { listExerciseHistory } from '@/api/loggedSets'
 import type { Exercise, ExerciseHistorySet, PlanExerciseDetail, WeightUnit } from '@/api/types'
 import CollapsibleSection from '@/components/CollapsibleSection'
 import { Button } from '@/components/ui/button'
-import { checkPersonalRecord, type PersonalRecordKind } from '@/lib/personalRecord'
+import { checkDraftSetPersonalRecord, type PersonalRecordKind } from '@/lib/personalRecord'
 import {
   suggestedDropsetWeight,
   suggestedWarmupWeight,
@@ -97,8 +97,7 @@ export default function ExerciseLogBlock({
   const allWorkingConfirmed = workingSets.length > 0 && workingSets.every((s) => s.confirmed)
 
   function prFor(set: DraftSet): PersonalRecordKind {
-    if (isUnilateral || set.weight.trim() === '' || set.reps_done.trim() === '') return null
-    return checkPersonalRecord(history, Number(set.weight), Number(set.reps_done), set.is_warmup, set.is_dropset)
+    return checkDraftSetPersonalRecord(history, set, isUnilateral)
   }
 
   function updateWarmup(index: number, patch: Partial<DraftSet>) {

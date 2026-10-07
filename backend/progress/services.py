@@ -20,6 +20,18 @@ def to_kg(value, unit):
     return value * LB_TO_KG if unit == "lb" else value
 
 
+def averaged_weight_reps(weight, reps_done, weight_left, weight_right, reps_done_left, reps_done_right):
+    """One LoggedSet's (weight, reps) for strength math: a normal set's own
+    values, or - for a per-side (Exercise.is_unilateral) set - the average
+    of its left and right sides. None when neither shape is complete.
+    Mirrors frontend/src/lib/setMeasure.ts::averagedWeightReps."""
+    if weight is not None and reps_done is not None:
+        return Decimal(weight), Decimal(reps_done)
+    if None in (weight_left, weight_right, reps_done_left, reps_done_right):
+        return None
+    return (Decimal(weight_left) + Decimal(weight_right)) / 2, Decimal(reps_done_left + reps_done_right) / 2
+
+
 def monday_of(d):
     """The Monday of d's ISO week - same definition frontend/src/lib/workoutStreak.ts's
     mondayOf() uses client-side, so this dashboard's week boundaries never

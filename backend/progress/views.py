@@ -14,7 +14,7 @@ from tracker.services import calculate_tdee
 from tracker.views import _parse_date, _resolve_trainee
 from workouts.models import LoggedSet, WorkoutSession
 
-from .services import diet_adherence_pct, food_logs_by_day, monday_of, to_kg
+from .services import averaged_weight_reps, diet_adherence_pct, food_logs_by_day, monday_of, to_kg
 
 
 def _resolve_range(request):
@@ -171,16 +171,19 @@ class ProgressTrainingVolumeView(APIView):
         volume_by_week = {}
         for s in sets:
             week = monday_of(s["logged_exercise__session__date"])
-            # A per-side (unilateral) set fills the _left/_right fields instead
-            # of weight/reps_done - its volume is both sides' added together.
-            volume = 0
-            for weight, reps in (
-                (s["weight"], s["reps_done"]),
-                (s["weight_left"], s["reps_done_left"]),
-                (s["weight_right"], s["reps_done_right"]),
-            ):
-                volume += (to_kg(weight, s["weight_unit"]) or 0) * (reps or 0)
-            volume_by_week[week] = volume_by_week.get(week, 0) + volume
+            # A per-side (Exercise.is_unilateral) set counts as the average of its two sides.
+            measured = averaged_weight_reps(
+                s["weight"],
+                s["reps_done"],
+                s["weight_left"],
+                s["weight_right"],
+                s["reps_done_left"],
+                s["reps_done_right"],
+            )
+            if measured is None:
+                continue
+            weight, reps = measured
+            volume_by_week[week] = volume_by_week.get(week, 0) + to_kg(weight, s["weight_unit"]) * reps
 
         session_dates = WorkoutSession.objects.filter(trainee=trainee, date__range=(start, end)).values_list(
             "date", flat=True
